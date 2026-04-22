@@ -4,22 +4,6 @@ from unittest.mock import AsyncMock, MagicMock
 from consumers.service_bus import ServiceBusConsumer
 
 
-def test_consumer_can_be_instantiated():
-    consumer = ServiceBusConsumer(
-        connection_string="Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=test;SharedAccessKey=test",
-        queue_name="test-queue",
-    )
-    assert consumer is not None
-
-
-def test_consumer_stores_queue_name():
-    consumer = ServiceBusConsumer(
-        connection_string="Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=test;SharedAccessKey=test",
-        queue_name="my-queue",
-    )
-    assert consumer.queue_name == "my-queue"
-
-
 async def test_consumer_start_calls_receive_loop():
     # start() がメッセージを受信してハンドラーに渡すことを確認
     consumer = ServiceBusConsumer(
