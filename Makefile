@@ -1,11 +1,16 @@
-.PHONY: install dev lint test format migrate
+.PHONY: install dev dev-native lint test format migrate
 
 install:
 	pnpm install
 	cd services/ai && uv sync
 
+# 全サービスを Docker Compose で起動する
 dev:
-	docker compose up -d
+	docker compose up
+
+# インフラ（db / servicebus）のみ Docker で起動し、アプリは overmind（Procfile）で起動する
+dev-native:
+	docker compose up -d db servicebus-db servicebus
 	overmind start
 
 lint:
