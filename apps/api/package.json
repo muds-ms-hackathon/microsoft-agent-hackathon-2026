@@ -2,11 +2,28 @@
   "name": "api",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "echo 'api: not yet implemented'",
-    "build": "echo 'api: not yet implemented'",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit && tsc -p tsconfig.build.json",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "echo 'api: not yet implemented'"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@prisma/client": "^6.6.0",
+    "hono": "^4.7.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "@vitest/coverage-v8": "^3.1.1",
+    "prisma": "^6.6.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
   }
 }
