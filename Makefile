@@ -1,4 +1,4 @@
-.PHONY: install dev lint test migrate
+.PHONY: install dev lint test format migrate
 
 install:
 	pnpm install
@@ -15,6 +15,10 @@ lint:
 test:
 	pnpm turbo run test
 	cd services/ai && uv run pytest
+
+format:
+	pnpm turbo run format
+	cd services/ai && uv run ruff format .
 
 migrate:
 	pnpm --filter api prisma migrate dev
