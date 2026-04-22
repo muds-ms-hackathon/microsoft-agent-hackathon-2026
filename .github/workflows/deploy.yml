@@ -1,0 +1,136 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint-typecheck-ts:
+    name: Lint & TypeCheck (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: 依存関係インストール
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm turbo run lint
+
+      - name: 型チェック (tsc)
+        run: pnpm turbo run build
+
+  lint-typecheck-py:
+    name: Lint & TypeCheck (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v5
+
+      - name: 依存関係インストール
+        run: uv sync
+
+      - name: Lint (Ruff)
+        run: uv run ruff check .
+
+      - name: 型チェック (mypy)
+        run: uv run mypy .
+
+  test-ts:
+    name: Test (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: 依存関係インストール
+        run: pnpm install --frozen-lockfile
+
+      - name: テスト (Vitest)
+        run: pnpm turbo run test
+
+  test-py:
+    name: Test (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v5
+
+      - name: 依存関係インストール
+        run: uv sync
+
+      - name: テスト (pytest)
+        # exit code 5 = テストファイルが存在しない場合（エラーではない）
+        run: uv run pytest || [ $? -eq 5 ]
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs:
+      - lint-typecheck-ts
+      - lint-typecheck-py
+      - test-ts
+      - test-py
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: 依存関係インストール
+        run: pnpm install --frozen-lockfile
+
+      - name: ビルド
+        run: pnpm turbo run build
+
+  # TODO: Azure 環境構築後に実装
+  # deploy:
+  #   name: Deploy to Azure Container Apps
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Azure へデプロイ
+  #       run: echo "TODO: azure/container-apps-deploy-action を使用"
