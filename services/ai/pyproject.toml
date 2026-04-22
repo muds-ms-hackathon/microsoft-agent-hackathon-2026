@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
   "azure-servicebus>=7.14.3",
-  "fastapi[standard]>=0.115.0",
+  "fastapi[standard]>=0.136.0",
 ]
 
 [dependency-groups]
