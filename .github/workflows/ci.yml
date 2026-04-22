@@ -136,5 +136,4 @@ jobs:
         run: uv sync --frozen
 
       - name: テスト (pytest)
-        # exit code 5 = テストファイルが存在しない場合（エラーではない）
-        run: uv run pytest || [ $? -eq 5 ]
+        run: uv run pytest
