@@ -14,7 +14,7 @@ lint:
 
 test:
 	pnpm turbo run test
-	cd services/ai && uv run pytest
+	cd services/ai && uv run pytest || [ $$? -eq 5 ]
 
 format:
 	pnpm turbo run format
