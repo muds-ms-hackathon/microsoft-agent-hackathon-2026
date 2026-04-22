@@ -6,7 +6,7 @@ install:
 
 dev:
 	docker compose up -d
-	pnpm dev
+	overmind start
 
 lint:
 	pnpm turbo run lint
