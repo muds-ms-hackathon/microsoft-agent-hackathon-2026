@@ -36,15 +36,8 @@ flowchart LR
 ## Getting Started
 
 ```bash
-# 依存関係のインストール
-pnpm install
-cd services/ai && uv sync
-
-# ローカル環境の起動（DB・Service Bus エミュレーターを含む）
-docker compose up -d
-
-# 全サービスの開発サーバー起動
-pnpm dev
+make install   # 依存関係のインストール（pnpm install + uv sync）
+make dev       # 全サービス起動（Docker Compose + 開発サーバー）
 ```
 
 ## Development
