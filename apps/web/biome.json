@@ -2,6 +2,11 @@
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "extends": ["../../biome.json"],
   "files": {
-    "ignore": ["coverage/**", "dist/**", "node_modules/**", "src/routeTree.gen.ts"]
+    "ignore": [
+      "coverage/**",
+      "dist/**",
+      "node_modules/**",
+      "src/routeTree.gen.ts"
+    ]
   }
 }

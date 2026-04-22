@@ -1,6 +1,6 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -37,7 +37,10 @@ describe("React Hook Form + Zod", () => {
     render(<TestForm onSubmit={onSubmit} />);
 
     await user.type(screen.getByPlaceholderText("名前"), "田中太郎");
-    await user.type(screen.getByPlaceholderText("メールアドレス"), "test@example.com");
+    await user.type(
+      screen.getByPlaceholderText("メールアドレス"),
+      "test@example.com",
+    );
     await user.click(screen.getByRole("button", { name: "送信" }));
 
     // handleSubmit は第2引数に event を渡すため objectContaining で検証
@@ -61,9 +64,14 @@ describe("React Hook Form + Zod", () => {
     render(<TestForm onSubmit={vi.fn()} />);
 
     await user.type(screen.getByPlaceholderText("名前"), "田中太郎");
-    await user.type(screen.getByPlaceholderText("メールアドレス"), "invalid-email");
+    await user.type(
+      screen.getByPlaceholderText("メールアドレス"),
+      "invalid-email",
+    );
     await user.click(screen.getByRole("button", { name: "送信" }));
 
-    expect(await screen.findByText("有効なメールアドレスを入力してください")).toBeInTheDocument();
+    expect(
+      await screen.findByText("有効なメールアドレスを入力してください"),
+    ).toBeInTheDocument();
   });
 });

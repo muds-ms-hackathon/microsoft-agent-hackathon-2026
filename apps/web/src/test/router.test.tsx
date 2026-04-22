@@ -1,5 +1,12 @@
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
-import { Outlet, RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { describe, expect, it } from "vitest";
 
 const rootRoute = createRootRoute({
