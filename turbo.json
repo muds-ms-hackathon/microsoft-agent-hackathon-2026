@@ -8,6 +8,9 @@
     "build": {
       "outputs": ["dist/**"]
     },
+    "typecheck": {
+      "outputs": []
+    },
     "lint": {
       "outputs": []
     },

@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      ts: ${{ steps.filter.outputs.ts }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ts:
+              - 'apps/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'turbo.json'
+            python:
+              - 'services/ai/**'
+
+  lint-typecheck-ts:
+    name: Lint & TypeCheck (TypeScript)
+    needs: [changes]
+    # changes ジョブがスキップされた場合（workflow_call）は常に実行、PR では ts 変更時のみ実行
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.ts == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: 依存関係インストール
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm turbo run lint
+
+      - name: 型チェック (tsc)
+        run: pnpm turbo run typecheck
+
+  lint-typecheck-py:
+    name: Lint & TypeCheck (Python)
+    needs: [changes]
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.python == 'true')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "services/ai/uv.lock"
+
+      - name: 依存関係インストール
+        run: uv sync --frozen
+
+      - name: Lint (Ruff)
+        run: uv run ruff check .
+
+      - name: 型チェック (mypy)
+        run: uv run mypy .
+
+  test-ts:
+    name: Test (TypeScript)
+    needs: [changes]
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.ts == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: 依存関係インストール
+        run: pnpm install --frozen-lockfile
+
+      - name: テスト (Vitest)
+        run: pnpm turbo run test
+
+  test-py:
+    name: Test (Python)
+    needs: [changes]
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.python == 'true')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "services/ai/uv.lock"
+
+      - name: 依存関係インストール
+        run: uv sync --frozen
+
+      - name: テスト (pytest)
+        # exit code 5 = テストファイルが存在しない場合（エラーではない）
+        run: uv run pytest || [ $? -eq 5 ]
