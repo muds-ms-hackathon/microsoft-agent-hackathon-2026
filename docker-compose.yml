@@ -40,6 +40,12 @@ services:
     depends_on:
       servicebus-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/5672' 2>/dev/null && echo ok || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   # アプリサービス（コメントアウトするとネイティブ起動 / overmind に切り替え可能）
   web:
@@ -67,6 +73,9 @@ services:
     volumes:
       - ./apps/api/src:/app/apps/api/src
       - ./apps/api/prisma:/app/apps/api/prisma
+    environment:
+      # Docker 内では db コンテナ名で解決する（.env.local の localhost 指定を上書き）
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/decision_loop"
     env_file:
       - path: .env.local
         required: false
@@ -81,13 +90,19 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./services/ai:/app
+      - ./services/ai/main.py:/app/main.py
+      - ./services/ai/consumers:/app/consumers
+      - ./services/ai/routers:/app/routers
+    environment:
+      # Docker 内では servicebus コンテナ名で解決する（.env.local の localhost 指定を上書き）
+      AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
     env_file:
       - path: .env.local
         required: false
+    restart: on-failure
     depends_on:
       servicebus:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:
