@@ -40,12 +40,8 @@ services:
     depends_on:
       servicebus-db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/5672' 2>/dev/null && echo ok || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 60s
+    # distroless .NET イメージのためシェルが存在せず healthcheck 不可。
+    # ai サービスは restart: on-failure で接続失敗を再試行する。
 
   # アプリサービス（コメントアウトするとネイティブ起動 / overmind に切り替え可能）
   web:
@@ -55,14 +51,17 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ./apps/web/src:/app/apps/web/src
-      - ./apps/web/index.html:/app/apps/web/index.html
-      - ./apps/web/vite.config.ts:/app/apps/web/vite.config.ts
+      - ./apps/web:/app/apps/web
+      # コンテナ内の node_modules をホストの空ディレクトリで上書きしないよう保護
+      - /app/apps/web/node_modules
     environment:
       CHOKIDAR_USEPOLLING: "true"
     env_file:
       - path: .env.local
         required: false
+    depends_on:
+      api:
+        condition: service_started
 
   api:
     build:
@@ -79,6 +78,8 @@ services:
     env_file:
       - path: .env.local
         required: false
+    # db 起動タイミング依存の接続失敗に備えたフォールバック
+    restart: on-failure
     depends_on:
       db:
         condition: service_healthy
@@ -99,10 +100,11 @@ services:
     env_file:
       - path: .env.local
         required: false
+    # servicebus は healthcheck 不可のため service_started + restart: on-failure で再試行
     restart: on-failure
     depends_on:
       servicebus:
-        condition: service_healthy
+        condition: service_started
 
 volumes:
   postgres_data:
