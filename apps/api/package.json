@@ -1,0 +1,11 @@
+{
+  "name": "api",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "echo 'api: not yet implemented'",
+    "build": "echo 'api: not yet implemented'",
+    "lint": "biome check .",
+    "test": "echo 'api: not yet implemented'"
+  }
+}
