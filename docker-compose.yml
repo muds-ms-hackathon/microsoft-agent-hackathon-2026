@@ -15,5 +15,79 @@ services:
       timeout: 5s
       retries: 5
 
+  servicebus-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Emulator@P@ssw0rd"
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    environment:
+      SQL_SERVER: servicebus-db
+      MSSQL_SA_PASSWORD: "Emulator@P@ssw0rd"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5672:5672"
+    volumes:
+      - ./servicebus-config.json:/ServiceBus_Emulator/ConfigFiles/Config.json
+    depends_on:
+      servicebus-db:
+        condition: service_healthy
+
+  # アプリサービス（コメントアウトするとネイティブ起動 / overmind に切り替え可能）
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./apps/web/index.html:/app/apps/web/index.html
+      - ./apps/web/vite.config.ts:/app/apps/web/vite.config.ts
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - path: .env.local
+        required: false
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./apps/api/prisma:/app/apps/api/prisma
+    env_file:
+      - path: .env.local
+        required: false
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./services/ai:/app
+    env_file:
+      - path: .env.local
+        required: false
+    depends_on:
+      servicebus:
+        condition: service_started
+
 volumes:
   postgres_data:
