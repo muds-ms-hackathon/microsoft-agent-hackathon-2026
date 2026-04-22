@@ -2,11 +2,46 @@
   "name": "web",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "echo 'web: not yet implemented'",
-    "build": "echo 'web: not yet implemented'",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "echo 'web: not yet implemented'"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@tanstack/react-query": "^5.74.4",
+    "@tanstack/react-router": "^1.114.23",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "jotai": "^2.12.3",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.56.3",
+    "tailwind-merge": "^3.3.0",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.6",
+    "@tanstack/router-plugin": "^1.114.23",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.3",
+    "@vitejs/plugin-react": "^4.5.0",
+    "@vitest/coverage-v8": "^3.1.3",
+    "jsdom": "^26.1.0",
+    "tailwindcss": "^4.1.6",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.1.3"
   }
 }
