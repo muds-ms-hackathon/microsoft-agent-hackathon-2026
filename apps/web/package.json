@@ -1,0 +1,12 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "echo 'web: not yet implemented'",
+    "build": "echo 'web: not yet implemented'",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "echo 'web: not yet implemented'"
+  }
+}
