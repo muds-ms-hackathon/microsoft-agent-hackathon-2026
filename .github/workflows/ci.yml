@@ -11,8 +11,31 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      ts: ${{ steps.filter.outputs.ts }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ts:
+              - 'apps/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'turbo.json'
+            python:
+              - 'services/ai/**'
+
   lint-typecheck-ts:
     name: Lint & TypeCheck (TypeScript)
+    needs: [changes]
+    # changes ジョブがスキップされた場合（workflow_call）は常に実行、PR では ts 変更時のみ実行
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.ts == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,10 +56,12 @@ jobs:
         run: pnpm turbo run lint
 
       - name: 型チェック (tsc)
-        run: pnpm turbo run build
+        run: pnpm turbo run typecheck
 
   lint-typecheck-py:
     name: Lint & TypeCheck (Python)
+    needs: [changes]
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.python == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,6 +90,8 @@ jobs:
 
   test-ts:
     name: Test (TypeScript)
+    needs: [changes]
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.ts == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +113,8 @@ jobs:
 
   test-py:
     name: Test (Python)
+    needs: [changes]
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.python == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
