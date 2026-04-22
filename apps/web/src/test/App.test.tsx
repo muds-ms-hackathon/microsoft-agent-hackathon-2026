@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import App from "../App";
 
 describe("App", () => {
-  it("描画エラーなくレンダリングされる", () => {
+  it("描画エラーなくルートページが表示される", async () => {
     render(<App />);
-    expect(screen.getByText("Decision Loop")).toBeInTheDocument();
+    expect(await screen.findByText("Decision Loop")).toBeInTheDocument();
   });
 });
