@@ -11,8 +11,8 @@ class ServiceBusConsumer:
     def __init__(self, connection_string: str, queue_name: str) -> None:
         self.connection_string = connection_string
         self.queue_name = queue_name
-        # テスト時にモック注入できるよう factory を属性として持つ
-        self._client_factory = ServiceBusClient.from_connection_string
+        # テスト時にモック注入できるよう factory を属性として持つ（注入可能にするため Any）
+        self._client_factory: Any = ServiceBusClient.from_connection_string
 
     async def start(self, handler: Callable[..., Coroutine[Any, Any, None]]) -> None:
         """キューからメッセージを受信してハンドラーに渡す受信ループを起動する。
