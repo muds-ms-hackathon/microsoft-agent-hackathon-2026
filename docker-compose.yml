@@ -15,5 +15,96 @@ services:
       timeout: 5s
       retries: 5
 
+  servicebus-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Emulator@P@ssw0rd"
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    environment:
+      SQL_SERVER: servicebus-db
+      MSSQL_SA_PASSWORD: "Emulator@P@ssw0rd"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5672:5672"
+    volumes:
+      - ./servicebus-config.json:/ServiceBus_Emulator/ConfigFiles/Config.json
+    depends_on:
+      servicebus-db:
+        condition: service_healthy
+    # distroless .NET イメージのためシェルが存在せず healthcheck 不可。
+    # ai サービスは restart: on-failure で接続失敗を再試行する。
+
+  # アプリサービス（コメントアウトするとネイティブ起動 / overmind に切り替え可能）
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web:/app/apps/web
+      # コンテナ内の node_modules をホストの空ディレクトリで上書きしないよう保護
+      - /app/apps/web/node_modules
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - path: .env.local
+        required: false
+    depends_on:
+      api:
+        condition: service_started
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./apps/api/prisma:/app/apps/api/prisma
+    environment:
+      # Docker 内では db コンテナ名で解決する（.env.local の localhost 指定を上書き）
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/decision_loop"
+    env_file:
+      - path: .env.local
+        required: false
+    # db 起動タイミング依存の接続失敗に備えたフォールバック
+    restart: on-failure
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./services/ai/main.py:/app/main.py
+      - ./services/ai/consumers:/app/consumers
+      - ./services/ai/routers:/app/routers
+    environment:
+      # Docker 内では servicebus コンテナ名で解決する（.env.local の localhost 指定を上書き）
+      AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+    env_file:
+      - path: .env.local
+        required: false
+    # servicebus は healthcheck 不可のため service_started + restart: on-failure で再試行
+    restart: on-failure
+    depends_on:
+      servicebus:
+        condition: service_started
+
 volumes:
   postgres_data:
