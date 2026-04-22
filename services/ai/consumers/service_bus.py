@@ -26,4 +26,6 @@ class ServiceBusConsumer:
                         await receiver.complete_message(message)
                     except Exception:
                         # 1件の処理失敗でループを止めない
-                        logger.exception("メッセージ処理中にエラーが発生しました: %s", message)
+                        logger.exception(
+                            "メッセージ処理中にエラーが発生しました: %s", message
+                        )
