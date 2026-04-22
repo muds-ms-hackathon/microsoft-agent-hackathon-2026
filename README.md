@@ -31,7 +31,30 @@ flowchart LR
 - Node.js 20+
 - pnpm 9+
 - Python 3.12+
+- uv
 - Docker / Docker Compose
+
+### インストール（Mac）
+
+```bash
+# Homebrew（未インストールの場合）
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Node.js
+brew install node
+
+# pnpm
+brew install pnpm
+
+# Python 3.12
+brew install python@3.12
+
+# uv
+brew install uv
+
+# Docker Desktop
+brew install --cask docker
+```
 
 ## Getting Started
 
