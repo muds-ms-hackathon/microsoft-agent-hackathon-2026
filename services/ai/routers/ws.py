@@ -1,10 +1,11 @@
 from fastapi import APIRouter, WebSocket
+from starlette.websockets import WebSocketDisconnect
 
 router = APIRouter()
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     await websocket.send_json({"type": "connected"})
 
@@ -13,5 +14,5 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_json()
             message = data.get("message", "")
             await websocket.send_json({"echo": message})
-    except Exception:
+    except WebSocketDisconnect:
         pass
