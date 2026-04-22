@@ -35,16 +35,17 @@ flowchart LR
 | Python | 3.12+ | https://www.python.org |
 | uv | 最新 | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | Docker / Docker Compose | 最新 | https://www.docker.com |
-| overmind | 最新 | `brew install overmind` |
-
-> **overmind** は複数プロセスを一括管理するツールです。`make dev` で Backend・Frontend・AI Service・WebSocket を同時起動するために使用します。
+| overmind | 最新（`make dev-native` のみ） | `brew install overmind` |
 
 ## Getting Started
 
 ```bash
-make install   # 依存関係のインストール（pnpm install + uv sync）
-make dev       # 全サービス起動（Docker + overmind）
+cp .env.example .env.local  # 環境変数を設定
+make install                # 依存関係のインストール（pnpm install + uv sync）
+make dev                    # 全サービスを Docker Compose で起動
 ```
+
+> アプリサービスをネイティブ起動したい場合は `docker-compose.yml` の web / api / ai をコメントアウトして `make dev-native` を使用してください（overmind が必要）。
 
 ### 起動されるサービス
 
