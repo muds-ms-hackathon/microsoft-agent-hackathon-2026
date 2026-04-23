@@ -1,4 +1,4 @@
-.PHONY: install dev dev-native lint test format migrate
+.PHONY: install dev dev-native lint test format migrate migrate-status db-shell
 
 install:
 	pnpm install
@@ -27,3 +27,12 @@ format:
 
 migrate:
 	@set -a; . apps/api/.env; set +a; pnpm --filter api exec prisma migrate dev --name $(if $(NAME),$(NAME),migration)
+
+# マイグレーションの適用状況を確認する
+migrate-status:
+	@set -a; . apps/api/.env; set +a; pnpm --filter api exec prisma migrate status
+
+# psql でDBに直接接続する
+db-shell:
+	@set -a; . apps/api/.env; set +a; \
+	  psql "$${DATABASE_URL}"
