@@ -2,7 +2,7 @@
   "UserConfig": {
     "Namespaces": [
       {
-        "Name": "sbemulator",
+        "Name": "sbemulatorns",
         "Queues": [
           {
             "Name": "decision-loop",
@@ -21,7 +21,7 @@
         ]
       }
     ],
-    "LoggingConfig": {
+    "Logging": {
       "Type": "File"
     }
   }

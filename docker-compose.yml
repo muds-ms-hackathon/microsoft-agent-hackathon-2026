@@ -17,6 +17,7 @@ services:
 
   servicebus-db:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "Emulator@P@ssw0rd"
@@ -29,6 +30,7 @@ services:
 
   servicebus:
     image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    platform: linux/amd64
     environment:
       SQL_SERVER: servicebus-db
       MSSQL_SA_PASSWORD: "Emulator@P@ssw0rd"
