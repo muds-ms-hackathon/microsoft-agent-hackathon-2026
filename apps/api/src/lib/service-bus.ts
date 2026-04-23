@@ -1,6 +1,14 @@
-import { ServiceBusClient } from "@azure/service-bus";
+import { ServiceBusClient, type ServiceBusSender } from "@azure/service-bus";
 
 const QUEUE_NAME = "decision-loop";
+
+// AMQP 接続確立コストを避けるため、センダーをモジュールスコープでキャッシュする
+let sender: ServiceBusSender | undefined;
+
+function getOrCreateSender(connectionString: string): ServiceBusSender {
+  sender ??= new ServiceBusClient(connectionString).createSender(QUEUE_NAME);
+  return sender;
+}
 
 export async function sendMeetingCreatedEvent(payload: {
   meetingId: string;
@@ -13,15 +21,7 @@ export async function sendMeetingCreatedEvent(payload: {
     );
     return;
   }
-
-  const client = new ServiceBusClient(connectionString);
-  const sender = client.createSender(QUEUE_NAME);
-  try {
-    await sender.sendMessages({
-      body: { type: "meeting.created", ...payload },
-    });
-  } finally {
-    await sender.close();
-    await client.close();
-  }
+  await getOrCreateSender(connectionString).sendMessages({
+    body: { type: "meeting.created", ...payload },
+  });
 }

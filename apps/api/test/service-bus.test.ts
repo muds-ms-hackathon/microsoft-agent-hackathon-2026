@@ -2,16 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendMeetingCreatedEvent } from "../src/lib/service-bus.js";
 
 const mockSendMessages = vi.fn();
-const mockSenderClose = vi.fn();
-const mockClientClose = vi.fn();
 
 vi.mock("@azure/service-bus", () => ({
   ServiceBusClient: vi.fn().mockImplementation(() => ({
     createSender: vi.fn().mockReturnValue({
       sendMessages: mockSendMessages,
-      close: mockSenderClose,
     }),
-    close: mockClientClose,
   })),
 }));
 
@@ -21,7 +17,8 @@ describe("sendMeetingCreatedEvent", () => {
   });
 
   afterEach(() => {
-    process.env.AZURE_SERVICE_BUS_CONNECTION_STRING = undefined;
+    // biome-ignore lint/performance/noDelete: process.env に = undefined を使うと文字列 "undefined" になるため delete が必要
+    delete process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
   });
 
   it("接続文字列未設定時はスキップしてログ出力のみ", async () => {
@@ -39,7 +36,5 @@ describe("sendMeetingCreatedEvent", () => {
     expect(mockSendMessages).toHaveBeenCalledWith({
       body: { type: "meeting.created", meetingId: "id1", title: "定例" },
     });
-    expect(mockSenderClose).toHaveBeenCalled();
-    expect(mockClientClose).toHaveBeenCalled();
   });
 });
