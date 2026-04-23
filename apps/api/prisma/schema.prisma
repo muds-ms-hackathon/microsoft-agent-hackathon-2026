@@ -4,5 +4,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+model Meeting {
+  id        String   @id @default(cuid())
+  title     String
+  heldAt    DateTime
+  createdAt DateTime @default(now())
 }
