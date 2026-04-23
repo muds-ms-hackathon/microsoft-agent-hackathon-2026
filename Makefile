@@ -1,4 +1,4 @@
-.PHONY: install dev dev-build dev-fresh dev-native docker-clean lint test format migrate migrate-status db-shell
+.PHONY: install dev dev-build dev-fresh dev-reset dev-native docker-clean lint test format migrate migrate-status db-shell
 
 install:
 	pnpm install
@@ -12,12 +12,16 @@ dev:
 dev-build:
 	docker compose up --build
 
-# anonymous volume を削除してイメージを再ビルドし起動する（node_modules が壊れたとき）
+# node_modules の anonymous volume のみリセットして起動する（DB データは維持）
 dev-fresh:
+	docker compose up --build --renew-anon-volumes
+
+# 全 volume（DB 含む）をリセットして起動する（起動後に make migrate が必要）
+dev-reset:
 	docker compose down -v
 	docker compose up --build
 
-# コンテナと anonymous volume を削除する
+# コンテナと全 volume を削除する
 docker-clean:
 	docker compose down -v --remove-orphans
 
