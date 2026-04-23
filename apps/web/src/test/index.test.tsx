@@ -18,6 +18,11 @@ vi.mock("@/lib/api", () => ({
 
 import { api } from "@/lib/api";
 
+// hono/client のレスポンス型が複雑なため、モックの戻り値はヘルパー経由でキャスト
+function mockJson<T>(data: T) {
+  return { json: async () => data } as never;
+}
+
 const mockMeetings: Meeting[] = [
   {
     id: "1",
@@ -57,7 +62,10 @@ beforeEach(() => {
     onclose: null,
     onerror: null,
   };
-  MockWebSocket = Object.assign(vi.fn(() => mockWs), { OPEN: 1 });
+  MockWebSocket = Object.assign(
+    vi.fn(() => mockWs),
+    { OPEN: 1 },
+  );
   vi.stubGlobal("WebSocket", MockWebSocket);
 });
 
@@ -70,9 +78,7 @@ afterEach(() => {
 
 describe("meetings 一覧表示", () => {
   it("meetings の一覧が表示される", async () => {
-    vi.mocked(api.meetings.$get).mockResolvedValue({
-      json: async () => mockMeetings,
-    } as never);
+    vi.mocked(api.meetings.$get).mockResolvedValue(mockJson(mockMeetings));
 
     renderWithQuery(<Index />);
 
@@ -81,9 +87,7 @@ describe("meetings 一覧表示", () => {
   });
 
   it("meetings が空のとき会議一覧に項目がない", async () => {
-    vi.mocked(api.meetings.$get).mockResolvedValue({
-      json: async () => [],
-    } as never);
+    vi.mocked(api.meetings.$get).mockResolvedValue(mockJson([]));
 
     renderWithQuery(<Index />);
 
@@ -96,9 +100,7 @@ describe("meetings 一覧表示", () => {
 
 describe("meeting 作成フォーム", () => {
   beforeEach(() => {
-    vi.mocked(api.meetings.$get).mockResolvedValue({
-      json: async () => [],
-    } as never);
+    vi.mocked(api.meetings.$get).mockResolvedValue(mockJson([]));
   });
 
   it("title が空のとき送信できない", async () => {
@@ -130,12 +132,10 @@ describe("meeting 作成フォーム", () => {
       heldAt: "2026-04-23T10:00:00.000Z",
       createdAt: "2026-04-23T00:00:00.000Z",
     };
-    vi.mocked(api.meetings.$post).mockResolvedValue({
-      json: async () => newMeeting,
-    } as never);
+    vi.mocked(api.meetings.$post).mockResolvedValue(mockJson(newMeeting));
     vi.mocked(api.meetings.$get)
-      .mockResolvedValueOnce({ json: async () => [] } as never)
-      .mockResolvedValueOnce({ json: async () => [newMeeting] } as never);
+      .mockResolvedValueOnce(mockJson([]))
+      .mockResolvedValueOnce(mockJson([newMeeting]));
 
     renderWithQuery(<Index />);
 
@@ -154,9 +154,7 @@ describe("meeting 作成フォーム", () => {
 
 describe("WebSocket チャット", () => {
   beforeEach(() => {
-    vi.mocked(api.meetings.$get).mockResolvedValue({
-      json: async () => [],
-    } as never);
+    vi.mocked(api.meetings.$get).mockResolvedValue(mockJson([]));
   });
 
   it("マウント時に /ws へ接続する", async () => {

@@ -3,7 +3,7 @@ import type { Meeting } from "@/types/meeting";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -166,16 +166,19 @@ function WsChat() {
     };
   }, []);
 
-  function sendMessage() {
+  const sendMessage = useCallback(() => {
     if (!input.trim() || wsRef.current?.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({ message: input }));
     setInput("");
-  }
+  }, [input]);
 
   return (
     <section>
       <h2 className="text-xl font-semibold mb-2">WebSocket チャット</h2>
-      <ul className="border rounded p-2 h-32 overflow-y-auto mb-2 space-y-1">
+      <ul
+        aria-label="チャットメッセージ"
+        className="border rounded p-2 h-32 overflow-y-auto mb-2 space-y-1"
+      >
         {messages.map((msg) => (
           <li key={msg.id} className="text-sm">
             {msg.text}
