@@ -52,6 +52,9 @@ jobs:
       - name: 依存関係インストール
         run: pnpm install --frozen-lockfile
 
+      - name: Prisma クライアント生成
+        run: pnpm --filter api exec prisma generate
+
       - name: Lint (Biome)
         run: pnpm turbo run lint
 
@@ -107,6 +110,9 @@ jobs:
 
       - name: 依存関係インストール
         run: pnpm install --frozen-lockfile
+
+      - name: Prisma クライアント生成
+        run: pnpm --filter api exec prisma generate
 
       - name: テスト (Vitest)
         run: pnpm turbo run test

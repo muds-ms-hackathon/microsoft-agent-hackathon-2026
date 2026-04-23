@@ -59,9 +59,11 @@ make dev                    # 全サービスを Docker Compose で起動
 ## Development
 
 ```bash
-make lint      # Biome (TS) + Ruff (Python)
-make test      # Vitest + pytest
-make migrate   # prisma migrate dev
+make lint             # Biome (TS) + Ruff (Python)
+make test             # Vitest + pytest
+make migrate          # prisma migrate dev（NAME=xxx でマイグレーション名を指定可）
+make migrate-status   # マイグレーションの適用状況を確認
+make db-shell         # psql で decision_loop DB に直接接続
 ```
 
 ## Contributing
