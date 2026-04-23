@@ -1,12 +1,25 @@
-.PHONY: install dev dev-native lint test format migrate migrate-status db-shell
+.PHONY: install dev dev-build dev-fresh dev-native docker-clean lint test format migrate migrate-status db-shell
 
 install:
 	pnpm install
 	cd services/ai && uv sync
 
-# 全サービスを Docker Compose で起動する
+# 全サービスを Docker Compose で起動する（イメージ再ビルドなし）
 dev:
 	docker compose up
+
+# イメージを再ビルドしてから起動する（package.json / Dockerfile 変更後）
+dev-build:
+	docker compose up --build
+
+# anonymous volume を削除してイメージを再ビルドし起動する（node_modules が壊れたとき）
+dev-fresh:
+	docker compose down -v
+	docker compose up --build
+
+# コンテナと anonymous volume を削除する
+docker-clean:
+	docker compose down -v --remove-orphans
 
 # インフラ（db / servicebus）のみ Docker で起動し、アプリは overmind（Procfile）で起動する
 dev-native:
