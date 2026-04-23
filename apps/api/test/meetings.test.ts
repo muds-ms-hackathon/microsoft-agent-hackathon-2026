@@ -109,4 +109,18 @@ describe("POST /meetings", () => {
     expect(res.status).toBe(400);
     expect(mockCreate).not.toHaveBeenCalled();
   });
+
+  it("Service Bus 送信失敗時も 201 を返す", async () => {
+    mockCreate.mockResolvedValue(sampleMeeting);
+    mockSend.mockRejectedValue(new Error("connection error"));
+    const res = await app.request("/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例",
+        heldAt: "2026-04-23T10:00:00Z",
+      }),
+    });
+    expect(res.status).toBe(201);
+  });
 });

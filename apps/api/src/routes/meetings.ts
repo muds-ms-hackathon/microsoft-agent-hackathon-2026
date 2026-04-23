@@ -23,10 +23,15 @@ meetingsRoute.post("/", zValidator("json", createSchema), async (c) => {
   const meeting = await prisma.meeting.create({
     data: { title, heldAt: new Date(heldAt) },
   });
-  await sendMeetingCreatedEvent({
-    meetingId: meeting.id,
-    title: meeting.title,
-  });
+  // SB 送信はベストエフォート。失敗しても meeting は保存済みなので 201 を返す
+  try {
+    await sendMeetingCreatedEvent({
+      meetingId: meeting.id,
+      title: meeting.title,
+    });
+  } catch (err) {
+    console.error("[meetings] Service Bus 送信失敗 (meeting は保存済み):", err);
+  }
   return c.json(meeting, 201);
 });
 
