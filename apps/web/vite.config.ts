@@ -15,11 +15,13 @@ export default defineConfig({
       "/api": {
         // Docker 内では API_URL 環境変数でサービス名に切り替える
         target: process.env.API_URL ?? "http://localhost:3001",
+        changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
       "/ws": {
         // Docker 内では AI_WS_URL 環境変数でサービス名に切り替える
         target: process.env.AI_WS_URL ?? "ws://localhost:8001",
+        changeOrigin: true,
         ws: true,
       },
     },
