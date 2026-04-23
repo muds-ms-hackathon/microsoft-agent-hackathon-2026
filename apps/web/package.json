@@ -30,6 +30,8 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
+    "api": "workspace:*",
+    "hono": "^4.7.7",
     "@tailwindcss/vite": "^4.1.6",
     "@tanstack/router-plugin": "^1.114.23",
     "@testing-library/jest-dom": "^6.6.3",
