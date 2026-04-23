@@ -11,4 +11,6 @@ model Meeting {
   title     String
   heldAt    DateTime
   createdAt DateTime @default(now())
+
+  @@index([heldAt])
 }
