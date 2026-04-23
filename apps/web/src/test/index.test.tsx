@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import type { Meeting } from "@/types/meeting";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Index } from "../routes/index";
+import { renderWithQuery } from "./test-utils";
 
 // hono/client api モジュールをモック
 vi.mock("@/lib/api", () => ({
@@ -16,13 +17,6 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { api } from "@/lib/api";
-
-type Meeting = {
-  id: string;
-  title: string;
-  heldAt: string;
-  createdAt: string;
-};
 
 const mockMeetings: Meeting[] = [
   {
@@ -38,16 +32,6 @@ const mockMeetings: Meeting[] = [
     createdAt: "2026-04-13T00:00:00.000Z",
   },
 ];
-
-function renderWithQuery(ui: React.ReactElement) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return {
-    client,
-    ...render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>),
-  };
-}
 
 // WebSocket モック（WsChat テストで send/onmessage を検証するため外部参照可能にする）
 type MockWs = {
@@ -73,7 +57,7 @@ beforeEach(() => {
     onclose: null,
     onerror: null,
   };
-  MockWebSocket = vi.fn(() => mockWs);
+  MockWebSocket = Object.assign(vi.fn(() => mockWs), { OPEN: 1 });
   vi.stubGlobal("WebSocket", MockWebSocket);
 });
 
@@ -96,16 +80,15 @@ describe("meetings 一覧表示", () => {
     expect(await screen.findByText("月次レビュー")).toBeInTheDocument();
   });
 
-  it("meetings が空のとき空リストを表示する", async () => {
+  it("meetings が空のとき会議一覧に項目がない", async () => {
     vi.mocked(api.meetings.$get).mockResolvedValue({
       json: async () => [],
     } as never);
 
     renderWithQuery(<Index />);
 
-    await waitFor(() => {
-      expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
-    });
+    const list = await screen.findByRole("list", { name: "会議一覧" });
+    expect(within(list).queryAllByRole("listitem")).toHaveLength(0);
   });
 });
 
@@ -156,7 +139,7 @@ describe("meeting 作成フォーム", () => {
 
     renderWithQuery(<Index />);
 
-    await user.type(screen.getByPlaceholderText("タイトル"), "テスト会議");
+    await user.type(screen.getByLabelText("タイトル"), "テスト会議");
     await user.type(screen.getByLabelText("開催日時"), "2026-04-23T10:00");
     await user.click(screen.getByRole("button", { name: "作成" }));
 
