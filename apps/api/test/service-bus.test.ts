@@ -21,7 +21,7 @@ describe("sendMeetingCreatedEvent", () => {
   });
 
   afterEach(() => {
-    delete process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
+    process.env.AZURE_SERVICE_BUS_CONNECTION_STRING = undefined;
   });
 
   it("接続文字列未設定時はスキップしてログ出力のみ", async () => {

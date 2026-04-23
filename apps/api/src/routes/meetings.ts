@@ -18,17 +18,16 @@ const createSchema = z.object({
   heldAt: z.string().datetime(),
 });
 
-meetingsRoute.post(
-  "/",
-  zValidator("json", createSchema),
-  async (c) => {
-    const { title, heldAt } = c.req.valid("json");
-    const meeting = await prisma.meeting.create({
-      data: { title, heldAt: new Date(heldAt) },
-    });
-    await sendMeetingCreatedEvent({ meetingId: meeting.id, title: meeting.title });
-    return c.json(meeting, 201);
-  },
-);
+meetingsRoute.post("/", zValidator("json", createSchema), async (c) => {
+  const { title, heldAt } = c.req.valid("json");
+  const meeting = await prisma.meeting.create({
+    data: { title, heldAt: new Date(heldAt) },
+  });
+  await sendMeetingCreatedEvent({
+    meetingId: meeting.id,
+    title: meeting.title,
+  });
+  return c.json(meeting, 201);
+});
 
 export { meetingsRoute };
