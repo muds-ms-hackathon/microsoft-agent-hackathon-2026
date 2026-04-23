@@ -26,4 +26,4 @@ format:
 	cd services/ai && uv run ruff format .
 
 migrate:
-	pnpm --filter api prisma migrate dev
+	@set -a; . apps/api/.env; set +a; pnpm --filter api exec prisma migrate dev --name $(if $(NAME),$(NAME),migration)
