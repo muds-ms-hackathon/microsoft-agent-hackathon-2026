@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import type { Meeting } from "@/types/meeting";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -10,19 +11,14 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-// ===== 型定義 =====
-
-type Meeting = {
-  id: string;
-  title: string;
-  heldAt: string;
-  createdAt: string;
-};
-
 // ===== meetings 一覧 =====
 
 function MeetingsList() {
-  const { data: meetings = [], isLoading } = useQuery<Meeting[]>({
+  const {
+    data: meetings = [],
+    isLoading,
+    isError,
+  } = useQuery<Meeting[]>({
     queryKey: ["meetings"],
     queryFn: async () => {
       const res = await api.meetings.$get();
@@ -31,11 +27,12 @@ function MeetingsList() {
   });
 
   if (isLoading) return <p>読み込み中...</p>;
+  if (isError) return <p>取得に失敗しました</p>;
 
   return (
     <section>
       <h2 className="text-xl font-semibold mb-2">会議一覧</h2>
-      <ul className="space-y-1">
+      <ul aria-label="会議一覧" className="space-y-1">
         {meetings.map((m) => (
           <li key={m.id} className="border rounded p-2">
             <span className="font-medium">{m.title}</span>
@@ -93,6 +90,7 @@ function CreateMeetingForm() {
       >
         <input
           {...register("title")}
+          aria-label="タイトル"
           placeholder="タイトル"
           className="border rounded px-2 py-1"
         />
@@ -143,17 +141,22 @@ function WsChat() {
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${proto}://${window.location.host}/ws`);
 
+    const pushMessage = (text: string) =>
+      setMessages((prev) =>
+        [...prev, { id: crypto.randomUUID(), text }].slice(-100),
+      );
+
     ws.onmessage = (event: MessageEvent) => {
       try {
         const data: WsMessage = JSON.parse(event.data as string);
-        const text = data.echo ?? data.type ?? JSON.stringify(data);
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), text }]);
+        pushMessage(data.echo ?? data.type ?? JSON.stringify(data));
       } catch {
-        setMessages((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), text: String(event.data) },
-        ]);
+        pushMessage(String(event.data));
       }
+    };
+
+    ws.onerror = () => {
+      pushMessage("接続エラーが発生しました");
     };
 
     wsRef.current = ws;
@@ -164,7 +167,7 @@ function WsChat() {
   }, []);
 
   function sendMessage() {
-    if (!input.trim() || !wsRef.current) return;
+    if (!input.trim() || wsRef.current?.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({ message: input }));
     setInput("");
   }
