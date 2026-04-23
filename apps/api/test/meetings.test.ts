@@ -52,3 +52,55 @@ describe("GET /meetings", () => {
     expect(body).toEqual([]);
   });
 });
+
+describe("POST /meetings", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("201 と作成した meeting を返す", async () => {
+    mockCreate.mockResolvedValue(sampleMeeting);
+    const res = await app.request("/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "週次定例", heldAt: "2026-04-23T10:00:00Z" }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.id).toBe("cuid1");
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: { title: "週次定例", heldAt: new Date("2026-04-23T10:00:00Z") },
+    });
+  });
+
+  it("POST 成功時に Service Bus にイベントを送信する", async () => {
+    mockCreate.mockResolvedValue(sampleMeeting);
+    await app.request("/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "週次定例", heldAt: "2026-04-23T10:00:00Z" }),
+    });
+    expect(mockSend).toHaveBeenCalledWith({
+      meetingId: "cuid1",
+      title: "週次定例",
+    });
+  });
+
+  it("title が空の場合は 400 を返す", async () => {
+    const res = await app.request("/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "", heldAt: "2026-04-23T10:00:00Z" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("heldAt が ISO 8601 でない場合は 400 を返す", async () => {
+    const res = await app.request("/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "週次定例", heldAt: "not-a-date" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
