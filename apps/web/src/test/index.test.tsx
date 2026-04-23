@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Index } from "../routes/index";
 
@@ -93,5 +94,63 @@ describe("meetings 一覧表示", () => {
 		await waitFor(() => {
 			expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
 		});
+	});
+});
+
+// ===== meeting 作成フォーム =====
+
+describe("meeting 作成フォーム", () => {
+	beforeEach(() => {
+		vi.mocked(api.meetings.$get).mockResolvedValue({
+			json: async () => [],
+		} as never);
+	});
+
+	it("title が空のとき送信できない", async () => {
+		const user = userEvent.setup();
+		renderWithQuery(<Index />);
+
+		await user.click(screen.getByRole("button", { name: "作成" }));
+
+		expect(await screen.findByText("タイトルは必須です")).toBeInTheDocument();
+		expect(api.meetings.$post).not.toHaveBeenCalled();
+	});
+
+	it("heldAt が空のとき送信できない", async () => {
+		const user = userEvent.setup();
+		renderWithQuery(<Index />);
+
+		await user.type(screen.getByPlaceholderText("タイトル"), "テスト会議");
+		await user.click(screen.getByRole("button", { name: "作成" }));
+
+		expect(await screen.findByText("開催日時は必須です")).toBeInTheDocument();
+		expect(api.meetings.$post).not.toHaveBeenCalled();
+	});
+
+	it("正常送信で api.$post が呼ばれ一覧が再取得される", async () => {
+		const user = userEvent.setup();
+		const newMeeting: Meeting = {
+			id: "3",
+			title: "テスト会議",
+			heldAt: "2026-04-23T10:00:00.000Z",
+			createdAt: "2026-04-23T00:00:00.000Z",
+		};
+		vi.mocked(api.meetings.$post).mockResolvedValue({
+			json: async () => newMeeting,
+		} as never);
+		vi.mocked(api.meetings.$get)
+			.mockResolvedValueOnce({ json: async () => [] } as never)
+			.mockResolvedValueOnce({ json: async () => [newMeeting] } as never);
+
+		renderWithQuery(<Index />);
+
+		await user.type(screen.getByPlaceholderText("タイトル"), "テスト会議");
+		await user.type(screen.getByLabelText("開催日時"), "2026-04-23T10:00");
+		await user.click(screen.getByRole("button", { name: "作成" }));
+
+		await waitFor(() => {
+			expect(api.meetings.$post).toHaveBeenCalled();
+		});
+		expect(await screen.findByText("テスト会議")).toBeInTheDocument();
 	});
 });
