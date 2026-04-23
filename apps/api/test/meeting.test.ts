@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 const connectionString =
   process.env.DATABASE_URL ??
@@ -9,6 +9,10 @@ const connectionString =
 // Prisma 7 は接続にアダプターが必要
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
+
+afterAll(async () => {
+  await prisma.$disconnect();
+});
 
 describe("Meeting モデル", () => {
   it("PrismaClient に meeting プロパティが存在する", () => {
