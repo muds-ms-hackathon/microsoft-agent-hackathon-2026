@@ -65,3 +65,28 @@ async def test_lifespan_cancels_task_on_shutdown():
                 await asyncio.sleep(0)
 
     assert cancelled.is_set()
+
+
+async def test_lifespan_logs_error_on_consumer_failure(caplog):
+    """コンシューマーが予期せず例外で終了した場合に ERROR をログに残す"""
+    import main
+
+    async def fake_start(handler):
+        raise RuntimeError("接続失敗")
+
+    mock_consumer = MagicMock()
+    mock_consumer.start = fake_start
+
+    env = {_SB_CONN_KEY: "fake://conn"}
+    with patch.dict(os.environ, env):
+        with patch("main.ServiceBusConsumer", return_value=mock_consumer):
+            with caplog.at_level(logging.ERROR, logger="main"):
+                async with main.lifespan(main.app):
+                    await asyncio.sleep(0)  # タスクを実行させる
+                    # done callback は call_soon で遅延するため 2 ティック必要
+                    await asyncio.sleep(0)
+
+    assert any(
+        r.levelno == logging.ERROR and "予期せず終了" in r.message
+        for r in caplog.records
+    )
