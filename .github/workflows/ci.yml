@@ -18,7 +18,7 @@ jobs:
       ts: ${{ steps.filter.outputs.ts }}
       python: ${{ steps.filter.outputs.python }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -38,7 +38,7 @@ jobs:
     if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.ts == 'true')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6
         with:
@@ -67,7 +67,7 @@ jobs:
       run:
         working-directory: services/ai
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
@@ -94,7 +94,7 @@ jobs:
     if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.ts == 'true')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6
         with:
@@ -120,7 +120,7 @@ jobs:
       run:
         working-directory: services/ai
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
