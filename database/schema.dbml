@@ -196,8 +196,6 @@ Table audit_logs {
   before_value  json
   after_value   json
   created_at    timestamp
-  updated_at    timestamp
-  deleted_at    timestamp
 }
 
 Table read_logs {
@@ -207,6 +205,4 @@ Table read_logs {
   resource_id   uuid
   read_at       timestamp
   created_at    timestamp
-  updated_at    timestamp
-  deleted_at    timestamp
 }
