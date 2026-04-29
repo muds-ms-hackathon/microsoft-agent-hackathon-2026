@@ -134,37 +134,41 @@ Table meeting_materials {
   deleted_at  timestamp
 }
 
-Table issues {
-  Note: '会議から抽出された課題。ドラフト→レビュー→オープン→解決/却下のライフサイクルを持つ'
-  id         uuid [pk]
-  meeting_id uuid [ref: > meetings.id]
-  title      varchar
-  body       text
-  status     varchar [note: 'draft / reviewing / open / rejected / resolved / cancelled']
-  created_at timestamp
-  updated_at timestamp
-  deleted_at timestamp
+Table decision_items {
+  Note: '会議から抽出された決定事項・未決事項。open（未決）⇔ decided（決定）のサイクルを持ち、再開も表現できる。決定期限・予定会議を持つことで未決事項の追跡も可能'
+  id                   uuid [pk]
+  meeting_id           uuid [ref: > meetings.id, note: '発生元の会議']
+  title                varchar
+  body                 text
+  status               varchar [note: 'draft / reviewing / open / decided / cancelled']
+  decision_deadline    timestamp [note: 'いつまでに決めるか。status = open のときに使用']
+  planned_meeting_id   uuid [ref: > meetings.id, note: 'どの会議で議題に上げるか。status = open のときに使用']
+  decided_at           timestamp [note: 'status = decided になった日時']
+  decided_by           uuid [ref: > users.id, note: '最後に decided に変更したユーザー']
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
 }
 
-Table issue_assignees {
-  Note: '課題の担当者。1つの課題に複数の担当者を紐づけられるよう中間テーブルとして管理する'
-  id         uuid [pk]
-  issue_id   uuid [ref: > issues.id]
-  user_id    uuid [ref: > users.id]
-  created_at timestamp
-  updated_at timestamp
-  deleted_at timestamp
+Table decision_item_assignees {
+  Note: '決定事項・未決事項の担当者。1つのdecision_itemに複数の担当者を紐づけられるよう中間テーブルとして管理する'
+  id                 uuid [pk]
+  decision_item_id   uuid [ref: > decision_items.id]
+  user_id            uuid [ref: > users.id]
+  created_at         timestamp
+  updated_at         timestamp
+  deleted_at         timestamp
 
   indexes {
-    (issue_id, user_id) [unique]
+    (decision_item_id, user_id) [unique]
   }
 }
 
 Table tasks {
-  Note: '会議から抽出されたタスク。issueに紐づく場合と、issueに紐づかない独立したタスクの両方を表現できる'
-  id         uuid [pk]
-  meeting_id uuid [ref: > meetings.id]
-  issue_id   uuid [ref: > issues.id, note: 'NULLの場合は課題に紐づかない独立したタスク']
+  Note: '会議から抽出されたタスク。decision_itemに紐づく場合と、紐づかない独立したタスクの両方を表現できる'
+  id                 uuid [pk]
+  meeting_id         uuid [ref: > meetings.id]
+  decision_item_id   uuid [ref: > decision_items.id, note: 'NULLの場合はdecision_itemに紐づかない独立したタスク']
   title      varchar
   body       text
   status     varchar [note: 'draft / reviewing / todo / in_progress / done / rejected']
@@ -189,14 +193,14 @@ Table task_assignees {
 }
 
 Table ambiguous_info {
-  Note: '会議中に発生した曖昧な情報。resolution_typeによってタスク・課題への解消、または対応不要の棄却を管理する'
-  id                   uuid [pk]
-  meeting_id           uuid [ref: > meetings.id]
-  body                 text
-  status               varchar [note: 'draft / reviewing / resolved / rejected']
-  resolution_type      varchar [note: 'null = 未解決 / task / issue / discarded']
-  resolved_to_task_id  uuid [ref: > tasks.id, note: 'resolution_type = task のときのみ値が入る']
-  resolved_to_issue_id uuid [ref: > issues.id, note: 'resolution_type = issue のときのみ値が入る']
+  Note: '会議中に発生した曖昧な情報。resolution_typeによってタスク・決定事項未決事項への解消、または対応不要の棄却を管理する'
+  id                           uuid [pk]
+  meeting_id                   uuid [ref: > meetings.id]
+  body                         text
+  status                       varchar [note: 'draft / reviewing / resolved / rejected']
+  resolution_type              varchar [note: 'null = 未解消 / task / decision_item / discarded']
+  resolved_to_task_id          uuid [ref: > tasks.id, note: 'resolution_type = task のときのみ値が入る']
+  resolved_to_decision_item_id uuid [ref: > decision_items.id, note: 'resolution_type = decision_item のときのみ値が入る']
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
@@ -206,7 +210,7 @@ Table audit_logs {
   Note: '各リソースへの操作履歴。変更前後の値をJSONで保持する追記専用の不変ログ'
   id            uuid [pk]
   actor_id      uuid [ref: > users.id]
-  resource_type varchar [note: 'task / issue / ambiguous_info など']
+  resource_type varchar [note: 'task / decision_item / ambiguous_info など']
   resource_id   uuid
   action        varchar [note: 'create / update / delete']
   before_value  json
@@ -218,7 +222,7 @@ Table read_logs {
   Note: 'ユーザーによるリソースの既読履歴。未読バッジ表示などの既読管理に使用する追記専用の不変ログ'
   id            uuid [pk]
   user_id       uuid [ref: > users.id]
-  resource_type varchar [note: 'task / issue / ambiguous_info など']
+  resource_type varchar [note: 'task / decision_item / ambiguous_info など']
   resource_id   uuid
   read_at       timestamp
   created_at    timestamp
