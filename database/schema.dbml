@@ -56,8 +56,9 @@ Table recurring_meetings {
   team_id       uuid [ref: > teams.id]
   title         varchar
   description   text
-  schedule_cron varchar [note: '例: 0 10 * * 2 = 毎週火曜10時']
-  created_at    timestamp
+  schedule_cron     varchar [note: '例: 0 10 * * 2 = 毎週火曜10時']
+  agenda_lead_days  int [note: 'アジェンダを何日前に自動生成するか。デフォルト3']
+  created_at        timestamp
   updated_at    timestamp
   deleted_at    timestamp
 }
