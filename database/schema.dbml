@@ -1,3 +1,28 @@
+Table teams {
+  Note: 'チーム。複数の定例会議を束ねる単位。将来的にOrganizationを上位に追加できるよう team_id 経由で参照する設計にしている'
+  id         uuid [pk]
+  name       varchar
+  created_by uuid [ref: > users.id]
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table team_members {
+  Note: 'チームのメンバー管理。role により閲覧・編集・管理の権限を制御する'
+  id         uuid [pk]
+  team_id    uuid [ref: > teams.id]
+  user_id    uuid [ref: > users.id]
+  role       varchar [note: 'owner / member / viewer']
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+
+  indexes {
+    (team_id, user_id) [unique]
+  }
+}
+
 Table users {
   Note: 'システムのユーザー。認証はEntra IDに移譲し、外部IDとプロバイダー情報を保持する'
   id          uuid [pk]
@@ -11,22 +36,24 @@ Table users {
 }
 
 Table user_roles {
-  Note: 'ユーザーのロール。1ユーザーが複数のロールを持てるよう中間テーブルとして管理する'
+  Note: 'ユーザーのロール。team_idがNULLの場合はグローバルロール、値がある場合はチームスコープのロールとして機能する'
   id         uuid [pk]
   user_id    uuid [ref: > users.id]
+  team_id    uuid [ref: > teams.id, note: 'NULLの場合はグローバルロール']
   role       varchar [note: 'admin / member / guest など']
   created_at timestamp
   updated_at timestamp
   deleted_at timestamp
 
   indexes {
-    (user_id, role) [unique]
+    (user_id, team_id, role) [unique]
   }
 }
 
 Table recurring_meetings {
-  Note: '定例会議の定義。cron形式のスケジュールを持ち、個別のmeetingを繰り返し生成する元になる'
+  Note: '定例会議の定義。cron形式のスケジュールを持ち、個別のmeetingを繰り返し生成する元になる。チームに複数の定例を持てる'
   id            uuid [pk]
+  team_id       uuid [ref: > teams.id]
   title         varchar
   description   text
   schedule_cron varchar [note: '例: 0 10 * * 2 = 毎週火曜10時']
@@ -36,10 +63,11 @@ Table recurring_meetings {
 }
 
 Table recurring_meeting_members {
-  Note: '定例会議のデフォルトメンバー。この一覧をもとにmeeting_attendeesが自動生成される'
+  Note: '定例会議のデフォルトメンバー。roleにより閲覧・編集・管理を制御し、この一覧をもとにmeeting_attendeesが自動生成される'
   id                   uuid [pk]
   recurring_meeting_id uuid [ref: > recurring_meetings.id]
   user_id              uuid [ref: > users.id]
+  role                 varchar [note: 'owner / member / viewer']
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
