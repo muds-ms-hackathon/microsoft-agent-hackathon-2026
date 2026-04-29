@@ -182,6 +182,8 @@ Table decision_items {
   meeting_id           uuid [ref: > meetings.id, note: '発生元の会議']
   title                varchar
   body                 text
+  source_quote         text [note: 'AIが根拠とした発話1文。レビュー画面のデフォルト表示に使用']
+  source_context       text [note: '根拠周辺の文脈。展開表示用。NULLの場合は未取得']
   status               varchar [note: 'draft / reviewing / open / decided / cancelled']
   decision_deadline    timestamp [note: 'いつまでに決めるか。status = open のときに使用']
   planned_meeting_id   uuid [ref: > meetings.id, note: 'どの会議で議題に上げるか。status = open のときに使用']
@@ -213,6 +215,8 @@ Table tasks {
   decision_item_id   uuid [ref: > decision_items.id, note: 'NULLの場合はdecision_itemに紐づかない独立したタスク']
   title          varchar
   body           text
+  source_quote   text [note: 'AIが根拠とした発話1文。レビュー画面のデフォルト表示に使用']
+  source_context text [note: '根拠周辺の文脈。展開表示用。NULLの場合は未取得']
   status         varchar [note: 'draft / reviewing / todo / in_progress / done / rejected']
   due_date       timestamp [note: '完了期限']
   start_date     timestamp [note: '着手予定日。NULLの場合は未設定']
@@ -241,6 +245,8 @@ Table ambiguous_info {
   id                           uuid [pk]
   meeting_id                   uuid [ref: > meetings.id]
   body                         text
+  source_quote                 text [note: 'AIが根拠とした発話1文。レビュー画面のデフォルト表示に使用']
+  source_context               text [note: '根拠周辺の文脈。展開表示用。NULLの場合は未取得']
   status                       varchar [note: 'draft / reviewing / resolved / rejected']
   resolution_type              varchar [note: 'null = 未解消 / task / decision_item / discarded']
   resolved_to_task_id          uuid [ref: > tasks.id, note: 'resolution_type = task のときのみ値が入る']
