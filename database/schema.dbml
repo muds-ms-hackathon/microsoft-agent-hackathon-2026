@@ -91,6 +91,11 @@ Table meetings {
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
+
+  indexes {
+    recurring_meeting_id
+    scheduled_at
+  }
 }
 
 Table meeting_attendees {
@@ -121,6 +126,11 @@ Table topic_requests {
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
+
+  indexes {
+    meeting_id
+    recurring_meeting_id
+  }
 }
 
 Table agenda_generation_batches {
@@ -131,6 +141,11 @@ Table agenda_generation_batches {
   generated_by         varchar [note: 'ai / human']
   created_by           uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
   created_at           timestamp
+
+  indexes {
+    meeting_id
+    recurring_meeting_id
+  }
 }
 
 Table agenda_items {
@@ -148,6 +163,10 @@ Table agenda_items {
   created_at              timestamp
   updated_at              timestamp
   deleted_at              timestamp
+
+  indexes {
+    generation_batch_id
+  }
 }
 
 Table meeting_agenda_items {
@@ -175,6 +194,10 @@ Table meeting_materials {
   created_at  timestamp
   updated_at  timestamp
   deleted_at  timestamp
+
+  indexes {
+    meeting_id
+  }
 }
 
 Table decision_items {
@@ -193,6 +216,11 @@ Table decision_items {
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
+
+  indexes {
+    meeting_id
+    status
+  }
 }
 
 Table decision_item_assignees {
@@ -225,6 +253,13 @@ Table tasks {
   created_at     timestamp
   updated_at     timestamp
   deleted_at     timestamp
+
+  indexes {
+    meeting_id
+    decision_item_id
+    due_date
+    start_date
+  }
 }
 
 Table task_assignees {
@@ -255,6 +290,11 @@ Table ambiguous_info {
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
+
+  indexes {
+    meeting_id
+    status
+  }
 }
 
 Table audit_logs {
@@ -267,6 +307,11 @@ Table audit_logs {
   before_value  json
   after_value   json
   created_at    timestamp
+
+  indexes {
+    (resource_type, resource_id)
+    actor_id
+  }
 }
 
 Table read_logs {
