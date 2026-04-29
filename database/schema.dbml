@@ -214,6 +214,7 @@ Table decision_items {
   planned_meeting_id   uuid [ref: > meetings.id, note: 'どの会議で議題に上げるか。status = open のときに使用']
   decided_at           timestamp [note: 'status = decided になった日時']
   decided_by           uuid [ref: > users.id, note: '最後に decided に変更したユーザー']
+  version              int [not null, default: 0, note: '楽観的ロック用バージョン番号。更新のたびにインクリメント']
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
@@ -251,6 +252,7 @@ Table tasks {
   due_date       timestamp [note: '完了期限']
   start_date     timestamp [note: '着手予定日。NULLの場合は未設定']
   follow_up_date timestamp [note: '再検討日。期限が決められない場合にいつ期限を決め直すかを記録']
+  version        int [not null, default: 0, note: '楽観的ロック用バージョン番号。更新のたびにインクリメント']
   created_at     timestamp
   updated_at     timestamp
   deleted_at     timestamp
@@ -288,6 +290,7 @@ Table ambiguous_info {
   resolution_type              varchar [note: 'null = 未解消 / task / decision_item / discarded']
   resolved_to_task_id          uuid [ref: > tasks.id, note: 'resolution_type = task のときのみ値が入る']
   resolved_to_decision_item_id uuid [ref: > decision_items.id, note: 'resolution_type = decision_item のときのみ値が入る']
+  version                      int [not null, default: 0, note: '楽観的ロック用バージョン番号。更新のたびにインクリメント']
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
