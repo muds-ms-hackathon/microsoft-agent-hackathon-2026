@@ -84,6 +84,7 @@ Table meetings {
   title                varchar
   scheduled_at         timestamp
   status               varchar [note: 'scheduled / done / canceled']
+  processing_status    varchar [note: 'pending / analyzing / review_waiting / completed / failed']
   transcription        text [note: '文字起こし本文']
   created_at           timestamp
   updated_at           timestamp
@@ -108,31 +109,43 @@ Table meeting_attendees {
 }
 
 Table topic_requests {
-  Note: '人間が会議に対して入力する議題リクエスト。AIによるagenda_items生成のインプットになる'
-  id           uuid [pk]
-  meeting_id   uuid [ref: > meetings.id]
-  requested_by uuid [ref: > users.id]
-  title        varchar
-  body         text
-  created_at   timestamp
-  updated_at   timestamp
-  deleted_at   timestamp
+  Note: '人間が会議に対して入力する議題リクエスト。AIによるagenda_items生成のインプットになる。meeting_idとrecurring_meeting_idのどちらか一方が必須'
+  id                   uuid [pk]
+  meeting_id           uuid [ref: > meetings.id, note: 'NULLの場合はrecurring_meeting向けリクエスト']
+  recurring_meeting_id uuid [ref: > recurring_meetings.id, note: 'NULLの場合は特定会議向けリクエスト']
+  requested_by         uuid [ref: > users.id]
+  title                varchar
+  body                 text
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+}
+
+Table agenda_generation_batches {
+  Note: 'アジェンダの生成バッチ。再生成のたびに1レコード追加され、最新バッチ（created_at最大）が現在のアジェンダとなる。過去バッチを参照することで履歴閲覧・復元が可能'
+  id                   uuid [pk]
+  meeting_id           uuid [ref: > meetings.id, note: 'NULLの場合はrecurring_meeting向けバッチ']
+  recurring_meeting_id uuid [ref: > recurring_meetings.id, note: 'NULLの場合は特定会議向けバッチ']
+  generated_by         varchar [note: 'ai / human']
+  created_by           uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
+  created_at           timestamp
 }
 
 Table agenda_items {
-  Note: 'AIまたは人間が作成するアジェンダ。会議をまたいで持ち越しが可能で、meeting_agenda_itemsで会議と紐づく'
-  id                 uuid [pk]
-  title              varchar
-  body               text
-  source_type        varchar [note: 'ai / human / carried_over']
-  status             varchar [note: 'pending / approved / rejected']
-  topic_request_id   uuid [ref: > topic_requests.id, note: 'NULLの場合はtopic_requestに基づかない生成']
-  origin_meeting_id  uuid [ref: > meetings.id, note: '持ち越し元の会議ID。持ち越しでない場合はNULL']
-  created_by         uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
-  modified_by        uuid [ref: > users.id, note: 'NULLの場合は修正なし']
-  created_at         timestamp
-  updated_at         timestamp
-  deleted_at         timestamp
+  Note: 'AIまたは人間が作成するアジェンダ。generation_batch_idで生成バッチと紐づき、会議をまたいで持ち越しが可能'
+  id                      uuid [pk]
+  generation_batch_id     uuid [ref: > agenda_generation_batches.id, note: 'NULLの場合はバッチに属さない手動作成']
+  title                   varchar
+  body                    text
+  source_type             varchar [note: 'ai / human / carried_over']
+  status                  varchar [note: 'pending / approved / rejected']
+  topic_request_id        uuid [ref: > topic_requests.id, note: 'NULLの場合はtopic_requestに基づかない生成']
+  origin_meeting_id       uuid [ref: > meetings.id, note: '持ち越し元の会議ID。持ち越しでない場合はNULL']
+  created_by              uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
+  modified_by             uuid [ref: > users.id, note: 'NULLの場合は修正なし']
+  created_at              timestamp
+  updated_at              timestamp
+  deleted_at              timestamp
 }
 
 Table meeting_agenda_items {
@@ -197,13 +210,15 @@ Table tasks {
   id                 uuid [pk]
   meeting_id         uuid [ref: > meetings.id]
   decision_item_id   uuid [ref: > decision_items.id, note: 'NULLの場合はdecision_itemに紐づかない独立したタスク']
-  title      varchar
-  body       text
-  status     varchar [note: 'draft / reviewing / todo / in_progress / done / rejected']
-  due_date   timestamp
-  created_at timestamp
-  updated_at timestamp
-  deleted_at timestamp
+  title          varchar
+  body           text
+  status         varchar [note: 'draft / reviewing / todo / in_progress / done / rejected']
+  due_date       timestamp [note: '完了期限']
+  start_date     timestamp [note: '着手予定日。NULLの場合は未設定']
+  follow_up_date timestamp [note: '再検討日。期限が決められない場合にいつ期限を決め直すかを記録']
+  created_at     timestamp
+  updated_at     timestamp
+  deleted_at     timestamp
 }
 
 Table task_assignees {
