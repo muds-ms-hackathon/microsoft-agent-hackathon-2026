@@ -16,6 +16,10 @@ Table user_roles {
   created_at timestamp
   updated_at timestamp
   deleted_at timestamp
+
+  indexes {
+    (user_id, role) [unique]
+  }
 }
 
 Table recurring_meetings {
@@ -35,6 +39,10 @@ Table recurring_meeting_members {
   created_at           timestamp
   updated_at           timestamp
   deleted_at           timestamp
+
+  indexes {
+    (recurring_meeting_id, user_id) [unique]
+  }
 }
 
 Table meetings {
@@ -59,6 +67,10 @@ Table meeting_attendees {
   created_at timestamp
   updated_at timestamp
   deleted_at timestamp
+
+  indexes {
+    (meeting_id, user_id) [unique]
+  }
 }
 
 Table topic_requests {
@@ -94,6 +106,10 @@ Table meeting_agenda_items {
   created_at     timestamp
   updated_at     timestamp
   deleted_at     timestamp
+
+  indexes {
+    (meeting_id, agenda_item_id) [unique]
+  }
 }
 
 Table meeting_materials {
@@ -126,6 +142,10 @@ Table issue_assignees {
   created_at timestamp
   updated_at timestamp
   deleted_at timestamp
+
+  indexes {
+    (issue_id, user_id) [unique]
+  }
 }
 
 Table tasks {
@@ -148,6 +168,10 @@ Table task_assignees {
   created_at timestamp
   updated_at timestamp
   deleted_at timestamp
+
+  indexes {
+    (task_id, user_id) [unique]
+  }
 }
 
 Table ambiguous_info {
