@@ -85,17 +85,18 @@ Table topic_requests {
 }
 
 Table agenda_items {
-  id                uuid [pk]
-  title             varchar
-  body              text
-  source_type       varchar [note: 'ai / human / carried_over']
-  status            varchar [note: 'pending / approved / rejected']
-  origin_meeting_id uuid [ref: > meetings.id, note: '持ち越し元の会議ID。持ち越しでない場合はNULL']
-  created_by        uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
-  modified_by       uuid [ref: > users.id, note: 'NULLの場合は修正なし']
-  created_at        timestamp
-  updated_at        timestamp
-  deleted_at        timestamp
+  id                 uuid [pk]
+  title              varchar
+  body               text
+  source_type        varchar [note: 'ai / human / carried_over']
+  status             varchar [note: 'pending / approved / rejected']
+  topic_request_id   uuid [ref: > topic_requests.id, note: 'NULLの場合はtopic_requestに基づかない生成']
+  origin_meeting_id  uuid [ref: > meetings.id, note: '持ち越し元の会議ID。持ち越しでない場合はNULL']
+  created_by         uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
+  modified_by        uuid [ref: > users.id, note: 'NULLの場合は修正なし']
+  created_at         timestamp
+  updated_at         timestamp
+  deleted_at         timestamp
 }
 
 Table meeting_agenda_items {
