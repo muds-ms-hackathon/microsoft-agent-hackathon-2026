@@ -118,7 +118,6 @@ Table meeting_materials {
   uploaded_by uuid [ref: > users.id]
   file_name   varchar
   file_url    varchar
-  uploaded_at timestamp
   created_at  timestamp
   updated_at  timestamp
   deleted_at  timestamp
