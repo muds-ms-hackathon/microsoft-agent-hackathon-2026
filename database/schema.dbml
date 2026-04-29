@@ -1,4 +1,5 @@
 Table users {
+  Note: 'システムのユーザー。認証はEntra IDに移譲し、外部IDとプロバイダー情報を保持する'
   id          uuid [pk]
   external_id varchar [unique, note: 'Entra IDのユーザーID']
   provider    varchar [note: 'microsoft など']
@@ -10,6 +11,7 @@ Table users {
 }
 
 Table user_roles {
+  Note: 'ユーザーのロール。1ユーザーが複数のロールを持てるよう中間テーブルとして管理する'
   id         uuid [pk]
   user_id    uuid [ref: > users.id]
   role       varchar [note: 'admin / member / guest など']
@@ -23,6 +25,7 @@ Table user_roles {
 }
 
 Table recurring_meetings {
+  Note: '定例会議の定義。cron形式のスケジュールを持ち、個別のmeetingを繰り返し生成する元になる'
   id            uuid [pk]
   title         varchar
   description   text
@@ -33,6 +36,7 @@ Table recurring_meetings {
 }
 
 Table recurring_meeting_members {
+  Note: '定例会議のデフォルトメンバー。この一覧をもとにmeeting_attendeesが自動生成される'
   id                   uuid [pk]
   recurring_meeting_id uuid [ref: > recurring_meetings.id]
   user_id              uuid [ref: > users.id]
@@ -46,6 +50,7 @@ Table recurring_meeting_members {
 }
 
 Table meetings {
+  Note: '個別の会議。定例会議から生成される場合もあれば、単発で作成される場合もある。文字起こし本文を直接保持する'
   id                   uuid [pk]
   recurring_meeting_id uuid [ref: > recurring_meetings.id, note: 'NULLの場合は単発の会議']
   title                varchar
@@ -58,6 +63,7 @@ Table meetings {
 }
 
 Table meeting_attendees {
+  Note: '会議ごとの参加者。AIによる提案・人間による招待から始まり、承認/辞退/参加/欠席へと状態遷移する'
   id         uuid [pk]
   meeting_id uuid [ref: > meetings.id]
   user_id    uuid [ref: > users.id]
@@ -74,6 +80,7 @@ Table meeting_attendees {
 }
 
 Table topic_requests {
+  Note: '人間が会議に対して入力する議題リクエスト。AIによるagenda_items生成のインプットになる'
   id           uuid [pk]
   meeting_id   uuid [ref: > meetings.id]
   requested_by uuid [ref: > users.id]
@@ -85,6 +92,7 @@ Table topic_requests {
 }
 
 Table agenda_items {
+  Note: 'AIまたは人間が作成するアジェンダ。会議をまたいで持ち越しが可能で、meeting_agenda_itemsで会議と紐づく'
   id                 uuid [pk]
   title              varchar
   body               text
@@ -100,6 +108,7 @@ Table agenda_items {
 }
 
 Table meeting_agenda_items {
+  Note: 'agenda_itemsとmeetingsの中間テーブル。order_indexで表示順を管理する'
   id             uuid [pk]
   meeting_id     uuid [ref: > meetings.id]
   agenda_item_id uuid [ref: > agenda_items.id]
@@ -114,6 +123,7 @@ Table meeting_agenda_items {
 }
 
 Table meeting_materials {
+  Note: '会議に添付された資料ファイル。ファイル本体はストレージに保存し、URLのみDBで管理する'
   id          uuid [pk]
   meeting_id  uuid [ref: > meetings.id]
   uploaded_by uuid [ref: > users.id]
@@ -125,6 +135,7 @@ Table meeting_materials {
 }
 
 Table issues {
+  Note: '会議から抽出された課題。ドラフト→レビュー→オープン→解決/却下のライフサイクルを持つ'
   id         uuid [pk]
   meeting_id uuid [ref: > meetings.id]
   title      varchar
@@ -136,6 +147,7 @@ Table issues {
 }
 
 Table issue_assignees {
+  Note: '課題の担当者。1つの課題に複数の担当者を紐づけられるよう中間テーブルとして管理する'
   id         uuid [pk]
   issue_id   uuid [ref: > issues.id]
   user_id    uuid [ref: > users.id]
@@ -149,6 +161,7 @@ Table issue_assignees {
 }
 
 Table tasks {
+  Note: '会議から抽出されたタスク。issueに紐づく場合と、issueに紐づかない独立したタスクの両方を表現できる'
   id         uuid [pk]
   meeting_id uuid [ref: > meetings.id]
   issue_id   uuid [ref: > issues.id, note: 'NULLの場合は課題に紐づかない独立したタスク']
@@ -162,6 +175,7 @@ Table tasks {
 }
 
 Table task_assignees {
+  Note: 'タスクの担当者。1つのタスクに複数の担当者を紐づけられるよう中間テーブルとして管理する'
   id         uuid [pk]
   task_id    uuid [ref: > tasks.id]
   user_id    uuid [ref: > users.id]
@@ -175,6 +189,7 @@ Table task_assignees {
 }
 
 Table ambiguous_info {
+  Note: '会議中に発生した曖昧な情報。resolution_typeによってタスク・課題への解消、または対応不要の棄却を管理する'
   id                   uuid [pk]
   meeting_id           uuid [ref: > meetings.id]
   body                 text
@@ -188,6 +203,7 @@ Table ambiguous_info {
 }
 
 Table audit_logs {
+  Note: '各リソースへの操作履歴。変更前後の値をJSONで保持する追記専用の不変ログ'
   id            uuid [pk]
   actor_id      uuid [ref: > users.id]
   resource_type varchar [note: 'task / issue / ambiguous_info など']
@@ -199,6 +215,7 @@ Table audit_logs {
 }
 
 Table read_logs {
+  Note: 'ユーザーによるリソースの既読履歴。未読バッジ表示などの既読管理に使用する追記専用の不変ログ'
   id            uuid [pk]
   user_id       uuid [ref: > users.id]
   resource_type varchar [note: 'task / issue / ambiguous_info など']
