@@ -86,6 +86,7 @@ Table meetings {
   scheduled_at         timestamp
   status               varchar [note: 'scheduled / done / canceled']
   processing_status    varchar [note: 'pending / analyzing / review_waiting / completed / failed']
+  processing_error     text [note: 'processing_status = failed のときのエラー詳細。NULLの場合は正常']
   summary              text [note: 'AIが生成した会議要約。NULLの場合は未生成']
   transcription        text [note: '文字起こし本文']
   created_at           timestamp
