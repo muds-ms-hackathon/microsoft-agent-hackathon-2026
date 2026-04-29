@@ -1,0 +1,188 @@
+Table users {
+  id          uuid [pk]
+  external_id varchar [unique, note: 'Entra IDのユーザーID']
+  provider    varchar [note: 'microsoft など']
+  name        varchar
+  email       varchar [unique]
+  created_at  timestamp
+  updated_at  timestamp
+  deleted_at  timestamp
+}
+
+Table user_roles {
+  id         uuid [pk]
+  user_id    uuid [ref: > users.id]
+  role       varchar [note: 'admin / member / guest など']
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table recurring_meetings {
+  id            uuid [pk]
+  title         varchar
+  description   text
+  schedule_cron varchar [note: '例: 0 10 * * 2 = 毎週火曜10時']
+  created_at    timestamp
+  updated_at    timestamp
+  deleted_at    timestamp
+}
+
+Table recurring_meeting_members {
+  id                   uuid [pk]
+  recurring_meeting_id uuid [ref: > recurring_meetings.id]
+  user_id              uuid [ref: > users.id]
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+}
+
+Table meetings {
+  id                   uuid [pk]
+  recurring_meeting_id uuid [ref: > recurring_meetings.id, note: 'NULLの場合は単発の会議']
+  title                varchar
+  scheduled_at         timestamp
+  status               varchar [note: 'scheduled / done / canceled']
+  transcription        text [note: '文字起こし本文']
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+}
+
+Table meeting_attendees {
+  id         uuid [pk]
+  meeting_id uuid [ref: > meetings.id]
+  user_id    uuid [ref: > users.id]
+  status     varchar [note: 'proposed / invited / accepted / declined / attended / absent']
+  is_default boolean [note: 'true = 定例メンバー / false = 今回だけの参加']
+  invited_by uuid [ref: > users.id, note: 'NULLの場合はAIによる提案']
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table topic_requests {
+  id           uuid [pk]
+  meeting_id   uuid [ref: > meetings.id]
+  requested_by uuid [ref: > users.id]
+  title        varchar
+  body         text
+  created_at   timestamp
+  updated_at   timestamp
+  deleted_at   timestamp
+}
+
+Table agenda_items {
+  id                uuid [pk]
+  title             varchar
+  body              text
+  source_type       varchar [note: 'ai / human / carried_over']
+  status            varchar [note: 'pending / approved / rejected']
+  origin_meeting_id uuid [ref: > meetings.id, note: '持ち越し元の会議ID。持ち越しでない場合はNULL']
+  created_by        uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
+  modified_by       uuid [ref: > users.id, note: 'NULLの場合は修正なし']
+  created_at        timestamp
+  updated_at        timestamp
+  deleted_at        timestamp
+}
+
+Table meeting_agenda_items {
+  id             uuid [pk]
+  meeting_id     uuid [ref: > meetings.id]
+  agenda_item_id uuid [ref: > agenda_items.id]
+  order_index    int
+  created_at     timestamp
+  updated_at     timestamp
+  deleted_at     timestamp
+}
+
+Table meeting_materials {
+  id          uuid [pk]
+  meeting_id  uuid [ref: > meetings.id]
+  uploaded_by uuid [ref: > users.id]
+  file_name   varchar
+  file_url    varchar
+  uploaded_at timestamp
+  created_at  timestamp
+  updated_at  timestamp
+  deleted_at  timestamp
+}
+
+Table issues {
+  id         uuid [pk]
+  meeting_id uuid [ref: > meetings.id]
+  title      varchar
+  body       text
+  status     varchar [note: 'draft / reviewing / open / rejected / resolved / cancelled']
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table issue_assignees {
+  id         uuid [pk]
+  issue_id   uuid [ref: > issues.id]
+  user_id    uuid [ref: > users.id]
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table tasks {
+  id         uuid [pk]
+  meeting_id uuid [ref: > meetings.id]
+  issue_id   uuid [ref: > issues.id, note: 'NULLの場合は課題に紐づかない独立したタスク']
+  title      varchar
+  body       text
+  status     varchar [note: 'draft / reviewing / todo / in_progress / done / rejected']
+  due_date   timestamp
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table task_assignees {
+  id         uuid [pk]
+  task_id    uuid [ref: > tasks.id]
+  user_id    uuid [ref: > users.id]
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table ambiguous_info {
+  id                   uuid [pk]
+  meeting_id           uuid [ref: > meetings.id]
+  body                 text
+  status               varchar [note: 'draft / reviewing / resolved / rejected']
+  resolution_type      varchar [note: 'null = 未解決 / task / issue / discarded']
+  resolved_to_task_id  uuid [ref: > tasks.id, note: 'resolution_type = task のときのみ値が入る']
+  resolved_to_issue_id uuid [ref: > issues.id, note: 'resolution_type = issue のときのみ値が入る']
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+}
+
+Table audit_logs {
+  id            uuid [pk]
+  actor_id      uuid [ref: > users.id]
+  resource_type varchar [note: 'task / issue / ambiguous_info など']
+  resource_id   uuid
+  action        varchar [note: 'create / update / delete']
+  before_value  json
+  after_value   json
+  created_at    timestamp
+  updated_at    timestamp
+  deleted_at    timestamp
+}
+
+Table read_logs {
+  id            uuid [pk]
+  user_id       uuid [ref: > users.id]
+  resource_type varchar [note: 'task / issue / ambiguous_info など']
+  resource_id   uuid
+  read_at       timestamp
+  created_at    timestamp
+  updated_at    timestamp
+  deleted_at    timestamp
+}
