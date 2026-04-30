@@ -1,0 +1,329 @@
+Table teams {
+  Note: 'チーム。複数の定例会議を束ねる単位。将来的にOrganizationを上位に追加できるよう team_id 経由で参照する設計にしている'
+  id         uuid [pk]
+  name       varchar
+  created_by uuid [ref: > users.id]
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+}
+
+Table team_members {
+  Note: 'チームのメンバー管理。role により閲覧・編集・管理の権限を制御する'
+  id         uuid [pk]
+  team_id    uuid [ref: > teams.id]
+  user_id    uuid [ref: > users.id]
+  role       varchar [note: 'owner / member / viewer']
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+
+  indexes {
+    (team_id, user_id) [unique]
+  }
+}
+
+Table users {
+  Note: 'システムのユーザー。認証はEntra IDに移譲し、外部IDとプロバイダー情報を保持する'
+  id          uuid [pk]
+  external_id varchar [unique, note: 'Entra IDのユーザーID']
+  provider    varchar [note: 'microsoft など']
+  name        varchar
+  email       varchar [unique]
+  created_at  timestamp
+  updated_at  timestamp
+  deleted_at  timestamp
+}
+
+Table user_roles {
+  Note: 'ユーザーのロール。team_idがNULLの場合はグローバルロール、値がある場合はチームスコープのロールとして機能する'
+  id         uuid [pk]
+  user_id    uuid [ref: > users.id]
+  team_id    uuid [ref: > teams.id, note: 'NULLの場合はグローバルロール']
+  role       varchar [note: 'admin / member / guest など']
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+
+  indexes {
+    (user_id, team_id, role) [unique]
+  }
+}
+
+Table recurring_meetings {
+  Note: '定例会議の定義。cron形式のスケジュールを持ち、個別のmeetingを繰り返し生成する元になる。チームに複数の定例を持てる'
+  id            uuid [pk]
+  team_id       uuid [ref: > teams.id]
+  title         varchar
+  description   text
+  schedule_cron     varchar [note: '例: 0 10 * * 2 = 毎週火曜10時']
+  agenda_lead_days  int [note: 'アジェンダを何日前に自動生成するか。デフォルト3']
+  created_at        timestamp
+  updated_at    timestamp
+  deleted_at    timestamp
+}
+
+Table recurring_meeting_members {
+  Note: '定例会議のデフォルトメンバー。roleにより閲覧・編集・管理を制御し、この一覧をもとにmeeting_attendeesが自動生成される'
+  id                   uuid [pk]
+  recurring_meeting_id uuid [ref: > recurring_meetings.id]
+  user_id              uuid [ref: > users.id]
+  role                 varchar [note: 'owner / member / viewer']
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+
+  indexes {
+    (recurring_meeting_id, user_id) [unique]
+  }
+}
+
+Table meetings {
+  Note: '個別の会議。定例会議から生成される場合もあれば、単発で作成される場合もある。文字起こし本文を直接保持する'
+  id                   uuid [pk]
+  recurring_meeting_id uuid [ref: > recurring_meetings.id, note: 'NULLの場合は単発の会議']
+  title                varchar
+  scheduled_at         timestamp
+  status               varchar [note: 'scheduled / done / canceled']
+  processing_status    varchar [note: 'pending / analyzing / review_waiting / completed / failed']
+  processing_error     text [note: 'processing_status = failed のときのエラー詳細。NULLの場合は正常']
+  summary              text [note: 'AIが生成した会議要約。NULLの場合は未生成']
+  transcription        text [note: '文字起こし本文']
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+
+  indexes {
+    recurring_meeting_id
+    scheduled_at
+  }
+}
+
+Table meeting_attendees {
+  Note: '会議ごとの参加者。AIによる提案・人間による招待から始まり、承認/辞退/参加/欠席へと状態遷移する'
+  id         uuid [pk]
+  meeting_id uuid [ref: > meetings.id]
+  user_id    uuid [ref: > users.id]
+  status     varchar [note: 'proposed / invited / accepted / declined / attended / absent']
+  is_default boolean [note: 'true = 定例メンバー / false = 今回だけの参加']
+  invited_by uuid [ref: > users.id, note: 'NULLの場合はAIによる提案']
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+
+  indexes {
+    (meeting_id, user_id) [unique]
+  }
+}
+
+Table topic_requests {
+  Note: '人間が会議に対して入力する議題リクエスト。AIによるagenda_items生成のインプットになる。meeting_idとrecurring_meeting_idのどちらか一方が必須'
+  id                   uuid [pk]
+  meeting_id           uuid [ref: > meetings.id, note: 'NULLの場合はrecurring_meeting向けリクエスト']
+  recurring_meeting_id uuid [ref: > recurring_meetings.id, note: 'NULLの場合は特定会議向けリクエスト']
+  requested_by         uuid [ref: > users.id]
+  title                varchar
+  body                 text
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+
+  indexes {
+    meeting_id
+    recurring_meeting_id
+  }
+}
+
+Table agenda_generation_batches {
+  Note: 'アジェンダの生成バッチ。再生成のたびに1レコード追加され、最新バッチ（created_at最大）が現在のアジェンダとなる。過去バッチを参照することで履歴閲覧・復元が可能'
+  id                   uuid [pk]
+  meeting_id           uuid [ref: > meetings.id, note: 'NULLの場合はrecurring_meeting向けバッチ']
+  recurring_meeting_id uuid [ref: > recurring_meetings.id, note: 'NULLの場合は特定会議向けバッチ']
+  generated_by         varchar [note: 'ai / human']
+  created_by           uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
+  created_at           timestamp
+
+  indexes {
+    meeting_id
+    recurring_meeting_id
+  }
+}
+
+Table agenda_items {
+  Note: 'AIまたは人間が作成するアジェンダ。generation_batch_idで生成バッチと紐づき、会議をまたいで持ち越しが可能'
+  id                      uuid [pk]
+  generation_batch_id     uuid [ref: > agenda_generation_batches.id, note: 'NULLの場合はバッチに属さない手動作成']
+  title                   varchar
+  body                    text
+  source_type             varchar [note: 'ai / human / carried_over']
+  status                  varchar [note: 'pending / approved / rejected']
+  topic_request_id        uuid [ref: > topic_requests.id, note: 'NULLの場合はtopic_requestに基づかない生成']
+  origin_meeting_id       uuid [ref: > meetings.id, note: '持ち越し元の会議ID。持ち越しでない場合はNULL']
+  created_by              uuid [ref: > users.id, note: 'NULLの場合はAIが生成']
+  modified_by             uuid [ref: > users.id, note: 'NULLの場合は修正なし']
+  created_at              timestamp
+  updated_at              timestamp
+  deleted_at              timestamp
+
+  indexes {
+    generation_batch_id
+  }
+}
+
+Table meeting_agenda_items {
+  Note: 'agenda_itemsとmeetingsの中間テーブル。order_indexで表示順を管理する'
+  id             uuid [pk]
+  meeting_id     uuid [ref: > meetings.id]
+  agenda_item_id uuid [ref: > agenda_items.id]
+  order_index    int
+  created_at     timestamp
+  updated_at     timestamp
+  deleted_at     timestamp
+
+  indexes {
+    (meeting_id, agenda_item_id) [unique]
+  }
+}
+
+Table meeting_materials {
+  Note: '会議に添付された資料ファイル。ファイル本体はストレージに保存し、URLのみDBで管理する'
+  id          uuid [pk]
+  meeting_id  uuid [ref: > meetings.id]
+  uploaded_by uuid [ref: > users.id]
+  file_name   varchar
+  file_url    varchar
+  created_at  timestamp
+  updated_at  timestamp
+  deleted_at  timestamp
+
+  indexes {
+    meeting_id
+  }
+}
+
+Table decision_items {
+  Note: '会議から抽出された決定事項・未決事項。open（未決）⇔ decided（決定）のサイクルを持ち、再開も表現できる。決定期限・予定会議を持つことで未決事項の追跡も可能'
+  id                   uuid [pk]
+  meeting_id           uuid [ref: > meetings.id, note: '発生元の会議']
+  title                varchar
+  body                 text
+  source_quote         text [note: 'AIが根拠とした発話1文。レビュー画面のデフォルト表示に使用']
+  source_context       text [note: '根拠周辺の文脈。展開表示用。NULLの場合は未取得']
+  status               varchar [note: 'draft / reviewing / open / decided / cancelled']
+  decision_deadline    timestamp [note: 'いつまでに決めるか。status = open のときに使用']
+  planned_meeting_id   uuid [ref: > meetings.id, note: 'どの会議で議題に上げるか。status = open のときに使用']
+  decided_at           timestamp [note: 'status = decided になった日時']
+  decided_by           uuid [ref: > users.id, note: '最後に decided に変更したユーザー']
+  version              int [not null, default: 0, note: '楽観的ロック用バージョン番号。更新のたびにインクリメント']
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+
+  indexes {
+    meeting_id
+    status
+  }
+}
+
+Table decision_item_assignees {
+  Note: '決定事項・未決事項の担当者。1つのdecision_itemに複数の担当者を紐づけられるよう中間テーブルとして管理する'
+  id                 uuid [pk]
+  decision_item_id   uuid [ref: > decision_items.id]
+  user_id            uuid [ref: > users.id]
+  created_at         timestamp
+  updated_at         timestamp
+  deleted_at         timestamp
+
+  indexes {
+    (decision_item_id, user_id) [unique]
+  }
+}
+
+Table tasks {
+  Note: '会議から抽出されたタスク。decision_itemに紐づく場合と、紐づかない独立したタスクの両方を表現できる'
+  id                 uuid [pk]
+  meeting_id         uuid [ref: > meetings.id]
+  decision_item_id   uuid [ref: > decision_items.id, note: 'NULLの場合はdecision_itemに紐づかない独立したタスク']
+  title          varchar
+  body           text
+  source_quote   text [note: 'AIが根拠とした発話1文。レビュー画面のデフォルト表示に使用']
+  source_context text [note: '根拠周辺の文脈。展開表示用。NULLの場合は未取得']
+  status         varchar [note: 'draft / reviewing / todo / in_progress / done / rejected']
+  due_date       timestamp [note: '完了期限']
+  start_date     timestamp [note: '着手予定日。NULLの場合は未設定']
+  follow_up_date timestamp [note: '再検討日。期限が決められない場合にいつ期限を決め直すかを記録']
+  version        int [not null, default: 0, note: '楽観的ロック用バージョン番号。更新のたびにインクリメント']
+  created_at     timestamp
+  updated_at     timestamp
+  deleted_at     timestamp
+
+  indexes {
+    meeting_id
+    decision_item_id
+    due_date
+    start_date
+  }
+}
+
+Table task_assignees {
+  Note: 'タスクの担当者。1つのタスクに複数の担当者を紐づけられるよう中間テーブルとして管理する'
+  id         uuid [pk]
+  task_id    uuid [ref: > tasks.id]
+  user_id    uuid [ref: > users.id]
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp
+
+  indexes {
+    (task_id, user_id) [unique]
+  }
+}
+
+Table ambiguous_info {
+  Note: '会議中に発生した曖昧な情報。resolution_typeによってタスク・決定事項未決事項への解消、または対応不要の棄却を管理する'
+  id                           uuid [pk]
+  meeting_id                   uuid [ref: > meetings.id]
+  body                         text
+  source_quote                 text [note: 'AIが根拠とした発話1文。レビュー画面のデフォルト表示に使用']
+  source_context               text [note: '根拠周辺の文脈。展開表示用。NULLの場合は未取得']
+  status                       varchar [note: 'draft / reviewing / resolved / rejected']
+  resolution_type              varchar [note: 'null = 未解消 / task / decision_item / discarded']
+  resolved_to_task_id          uuid [ref: > tasks.id, note: 'resolution_type = task のときのみ値が入る']
+  resolved_to_decision_item_id uuid [ref: > decision_items.id, note: 'resolution_type = decision_item のときのみ値が入る']
+  version                      int [not null, default: 0, note: '楽観的ロック用バージョン番号。更新のたびにインクリメント']
+  created_at           timestamp
+  updated_at           timestamp
+  deleted_at           timestamp
+
+  indexes {
+    meeting_id
+    status
+  }
+}
+
+Table audit_logs {
+  Note: '各リソースへの操作履歴。変更前後の値をJSONで保持する追記専用の不変ログ'
+  id            uuid [pk]
+  actor_id      uuid [ref: > users.id]
+  resource_type varchar [note: 'task / decision_item / ambiguous_info など']
+  resource_id   uuid
+  action        varchar [note: 'create / update / delete']
+  before_value  json
+  after_value   json
+  created_at    timestamp
+
+  indexes {
+    (resource_type, resource_id)
+    actor_id
+  }
+}
+
+Table read_logs {
+  Note: 'ユーザーによるリソースの既読履歴。未読バッジ表示などの既読管理に使用する追記専用の不変ログ'
+  id            uuid [pk]
+  user_id       uuid [ref: > users.id]
+  resource_type varchar [note: 'task / decision_item / ambiguous_info など']
+  resource_id   uuid
+  read_at       timestamp
+  created_at    timestamp
+}
