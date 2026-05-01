@@ -44,6 +44,10 @@ export function getAllUsers(): [string, FakeUser][] {
   return Object.entries(users);
 }
 
+export function getUserByEmail(email: string): FakeUser | undefined {
+  return Object.values(users).find((u) => u.email === email);
+}
+
 export interface CreateUserInput {
   email: string;
   name: string;
