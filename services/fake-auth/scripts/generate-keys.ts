@@ -1,6 +1,6 @@
-import { generateKeyPair, exportPKCS8, exportSPKI } from "jose";
-import { writeFileSync } from "fs";
-import { join } from "path";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { exportPKCS8, exportSPKI, generateKeyPair } from "jose";
 
 async function main() {
   const keysDir = join(import.meta.dirname, "..", "keys");

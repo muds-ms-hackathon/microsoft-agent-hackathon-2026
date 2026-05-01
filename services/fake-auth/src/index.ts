@@ -1,8 +1,8 @@
-import { serve } from "@hono/node-server";
-import { Hono } from "hono";
-import { SignJWT, importPKCS8, importSPKI, exportJWK } from "jose";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+import { SignJWT, exportJWK, importPKCS8, importSPKI } from "jose";
 import { getAllUsers, getUserByKey } from "./users.js";
 
 const app = new Hono();
@@ -61,7 +61,7 @@ app.get("/authorize", (c) => {
   const usersList = getAllUsers()
     .map(
       ([key, user]) =>
-        `<option value="${key}">${user.displayName} (${user.email})</option>`
+        `<option value="${key}">${user.displayName} (${user.email})</option>`,
     )
     .join("");
 
