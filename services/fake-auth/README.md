@@ -9,6 +9,8 @@ Entra IDのローカルシミュレータとして動作します。
 - JWKS (`/.well-known/jwks.json`)
 - Authorization Endpoint (`/authorize`)
 - ID Token発行 (RS256署名)
+- アカウント作成 API (`POST /users`)
+- ユーザー一覧 API (`GET /users`)
 
 ## 開発サーバー起動
 
@@ -33,6 +35,27 @@ pnpm dev
 1. ブラウザで `http://localhost:3007/authorize?redirect_uri=http://localhost:5173/callback&state=xxx&nonce=yyy` にアクセス
 2. ユーザーを選択してログイン
 3. `redirect_uri#id_token=xxx&state=xxx` にリダイレクト
+
+## アカウント作成 API
+
+`POST /users` でユーザーを動的に作成できます。作成したユーザーはログイン画面の選択肢に追加されます。
+
+```bash
+# アカウント作成
+curl -X POST http://localhost:3007/users \
+  -H "Content-Type: application/json" \
+  -d '{"email": "taro@example.com", "name": "taro", "displayName": "太郎", "roles": ["member"]}'
+
+# ユーザー一覧取得
+curl http://localhost:3007/users
+```
+
+| フィールド | 必須 | デフォルト | 説明 |
+|-----------|------|-----------|------|
+| email | o | - | メールアドレス（重複不可） |
+| name | o | - | ユーザー名（キーとしても使用） |
+| displayName | - | name と同値 | 表示名 |
+| roles | - | `["member"]` | ロール配列 |
 
 ## APIとの連携
 

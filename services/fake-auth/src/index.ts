@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { SignJWT, exportJWK, importPKCS8, importSPKI } from "jose";
-import { getAllUsers, getUserByKey } from "./users.js";
+import { createUser, getAllUsers, getUserByKey } from "./users.js";
 
 const app = new Hono();
 
@@ -157,6 +157,40 @@ app.post("/authorize", async (c) => {
   redirectUrl.hash = hash.toString();
 
   return c.redirect(redirectUrl.toString());
+});
+
+// ユーザー一覧
+app.get("/users", (c) => {
+  const usersList = getAllUsers().map(([key, user]) => ({ key, ...user }));
+  return c.json(usersList);
+});
+
+// アカウント作成
+app.post("/users", async (c) => {
+  const body = await c.req.json<{
+    email?: string;
+    name?: string;
+    displayName?: string;
+    roles?: string[];
+  }>();
+
+  if (!body.email || !body.name) {
+    return c.json({ error: "email と name は必須です" }, 400);
+  }
+
+  try {
+    const { key, user } = createUser({
+      email: body.email,
+      name: body.name,
+      displayName: body.displayName,
+      roles: body.roles,
+    });
+    return c.json({ key, ...user }, 201);
+  } catch (e) {
+    const message =
+      e instanceof Error ? e.message : "アカウント作成に失敗しました";
+    return c.json({ error: message }, 409);
+  }
 });
 
 const port = Number.parseInt(process.env.PORT ?? "3007");
