@@ -9,6 +9,7 @@ flowchart LR
     FE["Frontend\nVite + React"]
     API["App Server\nHono / TypeScript"]
     AI["AI Service\nFastAPI / Python"]
+    AUTH["FakeAuth\nOIDC Provider"]
     DB[(PostgreSQL)]
     SB[Azure Service Bus]
     WP[Azure Web PubSub]
@@ -16,6 +17,7 @@ flowchart LR
     AIS[Azure AI Search]
 
     FE <-->|REST| API
+    FE -->|OIDC| AUTH
     API --> DB
     API -->|ジョブ投入| SB
     SB -->|Consumer| AI
@@ -42,6 +44,7 @@ flowchart LR
 ```bash
 cp .env.example .env.local  # 環境変数を設定
 make install                # 依存関係のインストール（pnpm install + uv sync）
+make fake-auth-keys         # fake-authのRSA鍵ペアを生成（初回のみ）
 make dev                    # 全サービスを Docker Compose で起動
 make migrate                # DB マイグレーションを適用（初回起動時）
 ```
@@ -56,6 +59,7 @@ make migrate                # DB マイグレーションを適用（初回起�
 | Backend (Hono API) | http://localhost:3001 |
 | AI Service (FastAPI + WebSocket) | http://localhost:8001 |
 | AI Service docs | http://localhost:8001/docs |
+| **FakeAuth (OIDC Provider)** | http://localhost:3007 |
 
 ### Docker 起動コマンドの使い分け
 

@@ -13,7 +13,8 @@
 │   ├── web/        # Frontend（Vite + React / TypeScript）
 │   └── api/        # App Server（Hono / TypeScript + Prisma）
 ├── services/
-│   └── ai/         # AI Service（FastAPI / Python）
+│   ├── ai/         # AI Service（FastAPI / Python）
+│   └── fake-auth/  # FakeAuth（OIDC Provider / TypeScript + Hono）
 ├── docs/           # 要件定義・設計ドキュメント
 └── tmp/            # 議論ログ（コミット不要なメモ）
 ```
@@ -23,6 +24,7 @@
 - Frontend: Vite + React / TanStack Router / shadcn/ui + Tailwind / TanStack Query / Jotai / React Hook Form + Zod
 - App Server: Hono (TypeScript) + Prisma + PostgreSQL
 - AI Service: FastAPI (Python) + uv
+- **認証: FakeAuth（ローカル開発用 OIDC Provider）→ 本番: Entra ID**
 - インフラ: Azure Container Apps / Service Bus / Web PubSub / OpenAI / AI Search
 
 ## 開発ルール

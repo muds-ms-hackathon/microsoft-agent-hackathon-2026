@@ -25,10 +25,14 @@ dev-reset:
 docker-clean:
 	docker compose down -v --remove-orphans
 
-# インフラ（db / servicebus）のみ Docker で起動し、アプリは overmind（Procfile）で起動する
+# インフラ（db / servicebus / fake-auth）のみ Docker で起動し、アプリは overmind（Procfile）で起動する
 dev-native:
-	docker compose up -d db servicebus-db servicebus
+	docker compose up -d db servicebus-db servicebus fake-auth
 	overmind start
+
+# fake-authのRSA鍵ペアを生成（初回のみ）
+fake-auth-keys:
+	cd services/fake-auth && pnpm install && pnpm generate-keys
 
 lint:
 	pnpm turbo run lint
