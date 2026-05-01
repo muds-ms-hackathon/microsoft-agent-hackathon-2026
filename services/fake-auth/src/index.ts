@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { SignJWT, importPKCS8, exportJWK } from "jose";
+import { SignJWT, importPKCS8, importSPKI, exportJWK } from "jose";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAllUsers, getUserByKey } from "./users.js";
@@ -32,7 +32,7 @@ app.get("/.well-known/openid-configuration", (c) => {
 
 // JWKS
 app.get("/.well-known/jwks.json", async (c) => {
-  const publicKey = await importPKCS8(publicKeyPem, "RS256");
+  const publicKey = await importSPKI(publicKeyPem, "RS256");
   const jwk = await exportJWK(publicKey);
 
   return c.json({
