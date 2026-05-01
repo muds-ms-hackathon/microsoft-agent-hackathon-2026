@@ -111,5 +111,23 @@ services:
       servicebus:
         condition: service_started
 
+  fake-auth:
+    build:
+      context: .
+      dockerfile: services/fake-auth/Dockerfile
+    ports:
+      - "3007:3007"
+    volumes:
+      - ./services/fake-auth/src:/app/services/fake-auth/src
+      - ./services/fake-auth/keys:/app/services/fake-auth/keys
+      # コンテナ内の node_modules をホストの空ディレクトリで上書きしないよう保護
+      - /app/services/fake-auth/node_modules
+    environment:
+      PORT: "3007"
+      ISSUER: "http://localhost:3007"
+    env_file:
+      - path: .env.local
+        required: false
+
 volumes:
   postgres_data:
