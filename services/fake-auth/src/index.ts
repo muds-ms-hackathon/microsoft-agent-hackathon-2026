@@ -61,7 +61,7 @@ app.get("/authorize", (c) => {
   const usersList = getAllUsers()
     .map(
       ([key, user]) =>
-        `<option value="${key}">${user.displayName} (${user.email})</option>`
+        `<option value="${key}">${user.displayName} (${user.email})</option>`,
     )
     .join("");
 
