@@ -7,7 +7,8 @@ export const Route = createFileRoute("/login")({
   component: Login,
 });
 
-const FAKE_AUTH_URL = import.meta.env.VITE_FAKE_AUTH_URL ?? "http://localhost:3007";
+const FAKE_AUTH_URL =
+  import.meta.env.VITE_FAKE_AUTH_URL ?? "http://localhost:3007";
 
 function Login() {
   const navigate = useNavigate();

@@ -14,6 +14,11 @@ vi.mock("@/lib/api", () => ({
 }));
 
 beforeEach(() => {
+  // 認証ガード（beforeLoad）をパスするためダミートークンをセット
+  localStorage.setItem(
+    "id_token",
+    "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIiwibmFtZSI6InRlc3QifQ.",
+  );
   vi.stubGlobal(
     "WebSocket",
     Object.assign(
@@ -32,6 +37,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
