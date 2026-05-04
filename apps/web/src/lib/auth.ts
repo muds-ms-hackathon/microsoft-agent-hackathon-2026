@@ -58,30 +58,24 @@ function getInitialState(): AuthState {
 
 export const authAtom = atom<AuthState>(getInitialState());
 
-export const loginAtom = atom(
-  null,
-  (_get, set, token: string) => {
-    setStoredToken(token);
-    const user = parseToken(token);
-    set(authAtom, {
-      isAuthenticated: !!user,
-      idToken: token,
-      user,
-    });
-  }
-);
+export const loginAtom = atom(null, (_get, set, token: string) => {
+  setStoredToken(token);
+  const user = parseToken(token);
+  set(authAtom, {
+    isAuthenticated: !!user,
+    idToken: token,
+    user,
+  });
+});
 
-export const logoutAtom = atom(
-  null,
-  (_get, set) => {
-    setStoredToken(null);
-    set(authAtom, {
-      isAuthenticated: false,
-      idToken: null,
-      user: null,
-    });
-  }
-);
+export const logoutAtom = atom(null, (_get, set) => {
+  setStoredToken(null);
+  set(authAtom, {
+    isAuthenticated: false,
+    idToken: null,
+    user: null,
+  });
+});
 
 export function getIdToken(): string | null {
   return getStoredToken();
