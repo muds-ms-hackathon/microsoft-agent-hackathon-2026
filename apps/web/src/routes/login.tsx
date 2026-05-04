@@ -1,4 +1,4 @@
-import { loginAtom } from "@/lib/auth";
+import { getIdToken, loginAtom } from "@/lib/auth";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
 import { useEffect } from "react";
@@ -24,6 +24,12 @@ function Login() {
       setLogin(idToken);
       // hashを消してクリーンなURLに
       window.history.replaceState(null, "", window.location.pathname);
+      navigate({ to: "/" });
+      return;
+    }
+
+    // StrictModeの二重実行等で既にlocalStorageにトークンがある場合は/に遷移
+    if (getIdToken()) {
       navigate({ to: "/" });
       return;
     }
