@@ -3,7 +3,13 @@ import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { SignJWT, exportJWK, importPKCS8, importSPKI } from "jose";
-import { createUser, getAllUsers, getUserByKey } from "./users.js";
+import {
+  createUser,
+  getAllUsers,
+  getUserByEmail,
+  getUserByKey,
+  type FakeUser,
+} from "./users.js";
 
 const app = new Hono();
 
@@ -16,6 +22,27 @@ const ISSUER = process.env.ISSUER ?? "http://localhost:3007";
 
 async function getPrivateKey() {
   return await importPKCS8(privateKeyPem, "RS256");
+}
+
+async function generateIdToken(
+  user: FakeUser,
+  nonce: string,
+): Promise<string> {
+  const privateKey = await getPrivateKey();
+
+  return await new SignJWT({
+    sub: user.id,
+    email: user.email,
+    email_verified: user.emailVerified,
+    name: user.name,
+    nonce: nonce,
+  })
+    .setProtectedHeader({ alg: "RS256", kid: KEY_ID })
+    .setIssuedAt()
+    .setIssuer(ISSUER)
+    .setAudience("fake-auth-client")
+    .setExpirationTime("24h")
+    .sign(privateKey);
 }
 
 // OIDC Discovery
@@ -133,21 +160,7 @@ app.post("/authorize", async (c) => {
     return c.text("Invalid user", 400);
   }
 
-  const privateKey = await getPrivateKey();
-
-  const idToken = await new SignJWT({
-    sub: user.id,
-    email: user.email,
-    email_verified: user.emailVerified,
-    name: user.name,
-    nonce: nonce,
-  })
-    .setProtectedHeader({ alg: "RS256", kid: KEY_ID })
-    .setIssuedAt()
-    .setIssuer(ISSUER)
-    .setAudience("fake-auth-client")
-    .setExpirationTime("24h")
-    .sign(privateKey);
+  const idToken = await generateIdToken(user, nonce);
 
   // Redirect with fragment (implicit flow style)
   const redirectUrl = new URL(redirectUri);
@@ -163,6 +176,33 @@ app.post("/authorize", async (c) => {
 app.get("/users", (c) => {
   const usersList = getAllUsers().map(([key, user]) => ({ key, ...user }));
   return c.json(usersList);
+});
+
+// ログイン（API用）
+app.post("/login", async (c) => {
+  const body = await c.req.json<{
+    userKey?: string;
+    email?: string;
+  }>();
+
+  if (!body.userKey && !body.email) {
+    return c.json({ error: "userKey または email が必要です" }, 400);
+  }
+
+  const user = body.userKey
+    ? getUserByKey(body.userKey)
+    : getUserByEmail(body.email!);
+
+  if (!user) {
+    return c.json({ error: "ユーザーが見つかりません" }, 404);
+  }
+
+  const idToken = await generateIdToken(user, "");
+
+  return c.json({
+    id_token: idToken,
+    expires_in: 86400, // 24時間（秒）
+  });
 });
 
 // アカウント作成
