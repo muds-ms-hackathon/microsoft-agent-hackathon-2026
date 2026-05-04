@@ -2,13 +2,21 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { SignJWT, exportJWK, importPKCS8, importSPKI } from "jose";
+import {
+  SignJWT,
+  exportJWK,
+  importJWK,
+  importPKCS8,
+  importSPKI,
+  jwtVerify,
+} from "jose";
 import {
   createUser,
   getAllUsers,
   getUserByEmail,
   getUserByKey,
   type FakeUser,
+  users,
 } from "./users.js";
 
 const app = new Hono();
@@ -22,6 +30,18 @@ const ISSUER = process.env.ISSUER ?? "http://localhost:3007";
 
 async function getPrivateKey() {
   return await importPKCS8(privateKeyPem, "RS256");
+}
+
+async function getPublicJWK() {
+  const publicKey = await importSPKI(publicKeyPem, "RS256");
+  const jwk = await exportJWK(publicKey);
+  return {
+    ...jwk,
+    kid: KEY_ID,
+    use: "sig",
+    alg: "RS256",
+    kty: "RSA",
+  };
 }
 
 async function generateIdToken(
@@ -59,20 +79,8 @@ app.get("/.well-known/openid-configuration", (c) => {
 
 // JWKS
 app.get("/.well-known/jwks.json", async (c) => {
-  const publicKey = await importSPKI(publicKeyPem, "RS256");
-  const jwk = await exportJWK(publicKey);
-
-  return c.json({
-    keys: [
-      {
-        ...jwk,
-        kid: KEY_ID,
-        use: "sig",
-        alg: "RS256",
-        kty: "RSA",
-      },
-    ],
-  });
+  const jwk = await getPublicJWK();
+  return c.json({ keys: [jwk] });
 });
 
 // Authorize - GET (login form)
@@ -203,6 +211,71 @@ app.post("/login", async (c) => {
     id_token: idToken,
     expires_in: 86400, // 24時間（秒）
   });
+});
+
+// トークン検証（開発支援用）
+app.post("/verify", async (c) => {
+  const body = await c.req.json<{ id_token?: string }>();
+
+  if (!body.id_token) {
+    return c.json({ valid: false, error: "id_token が必要です" }, 400);
+  }
+
+  try {
+    const jwk = await getPublicJWK();
+    const { payload, protectedHeader } = await jwtVerify(
+      body.id_token,
+      await importJWK(jwk, "RS256"),
+      {
+        issuer: ISSUER,
+        audience: "fake-auth-client",
+      },
+    );
+
+    return c.json({
+      valid: true,
+      payload,
+      header: protectedHeader,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "トークン検証に失敗しました";
+    return c.json({ valid: false, error: message }, 401);
+  }
+});
+
+// 現在のユーザー情報取得（開発支援用）
+app.get("/me", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Authorization: Bearer <token> ヘッダーが必要です" }, 401);
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    const jwk = await getPublicJWK();
+    const { payload } = await jwtVerify(token, await importJWK(jwk, "RS256"), {
+      issuer: ISSUER,
+      audience: "fake-auth-client",
+    });
+
+    const userId = payload.sub;
+    if (!userId) {
+      return c.json({ error: "トークンにsub（ユーザーID）が含まれていません" }, 401);
+    }
+
+    // user.id で検索
+    const userEntry = Object.entries(users).find(([, u]) => u.id === userId);
+    if (!userEntry) {
+      return c.json({ error: "ユーザーが見つかりません" }, 404);
+    }
+
+    const [key, user] = userEntry;
+    return c.json({ key, ...user });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "トークンの検証に失敗しました";
+    return c.json({ error: message }, 401);
+  }
 });
 
 // アカウント作成
