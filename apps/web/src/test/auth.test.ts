@@ -24,4 +24,30 @@ describe("parseToken", () => {
   it("不正な形式のトークンは null を返す", () => {
     expect(parseToken("not-a-jwt")).toBeNull();
   });
+
+  it("exp が現在時刻より過去のトークンは null を返す（期限切れ）", () => {
+    const expiredToken = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+
+    expect(parseToken(expiredToken)).toBeNull();
+  });
+
+  it("exp が未来のトークンはユーザー情報を返す", () => {
+    const validToken = makeFakeIdToken({
+      sub: "u2",
+      email: "u2@example.com",
+      name: "u2",
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
+
+    expect(parseToken(validToken)).toEqual({
+      sub: "u2",
+      email: "u2@example.com",
+      name: "u2",
+    });
+  });
 });
