@@ -1,3 +1,16 @@
+// 認証状態の管理（ローカル fake-auth 連携用の暫定実装）。
+//
+// 保存方式: id_token を localStorage に保存する。XSS 経由で盗取される
+// リスクがあるため、本番 (Entra ID) 切替時には httpOnly Cookie + BFF
+// 構成へ移行する。本ファイルの公開 API（getIdToken / loginAtom 等）は
+// 移行後も呼び出し側に閉じた変更だけで済むよう、保存実装を内部に隠蔽
+// しておく。
+//
+// 真実源: localStorage を真実源、authAtom を UI 用キャッシュとして扱う。
+// 初期化時のみ getInitialState() で localStorage から復元する設計のため、
+// 他タブからの変更や直接の localStorage 操作で両者が乖離する余地は残る。
+// atomWithStorage 等で根本解消する作業は別途 Issue (#80) で進める。
+
 import { atom } from "jotai";
 
 const ID_TOKEN_KEY = "id_token";
