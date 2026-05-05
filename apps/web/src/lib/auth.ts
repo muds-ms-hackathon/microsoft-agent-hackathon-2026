@@ -148,8 +148,26 @@ export interface AuthCallbackVerification {
 }
 
 export function verifyAndConsumeAuthParams(
-  _actualState: string | null,
-  _idToken: string,
+  actualState: string | null,
+  idToken: string,
 ): AuthCallbackVerification {
-  return { ok: false, reason: "no_expected_params" };
+  if (typeof window === "undefined") {
+    return { ok: false, reason: "no_expected_params" };
+  }
+  const expectedState = sessionStorage.getItem(EXPECTED_STATE_KEY);
+  const expectedNonce = sessionStorage.getItem(EXPECTED_NONCE_KEY);
+  // 検証は 1 回限り。リプレイ防止のため成否によらず期待値は破棄する。
+  sessionStorage.removeItem(EXPECTED_STATE_KEY);
+  sessionStorage.removeItem(EXPECTED_NONCE_KEY);
+
+  if (!expectedState || !expectedNonce) {
+    return { ok: false, reason: "no_expected_params" };
+  }
+  if (actualState !== expectedState) {
+    return { ok: false, reason: "state_mismatch" };
+  }
+  if (getTokenNonce(idToken) !== expectedNonce) {
+    return { ok: false, reason: "nonce_mismatch" };
+  }
+  return { ok: true };
 }
