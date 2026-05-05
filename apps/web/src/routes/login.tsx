@@ -6,7 +6,7 @@ import {
 } from "@/lib/auth";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -18,8 +18,15 @@ const FAKE_AUTH_URL =
 function Login() {
   const navigate = useNavigate();
   const setLogin = useSetAtom(loginAtom);
+  // state/nonce の検証は消費型（1 回限り）。React StrictMode の二重実行や
+  // 親の再レンダリングによる useEffect 再実行で 2 回目に no_expected_params
+  // と判定されないよう、明示的に 1 度だけハンドラを走らせる。
+  const handledRef = useRef(false);
 
   useEffect(() => {
+    if (handledRef.current) return;
+    handledRef.current = true;
+
     // URLのhashからid_tokenを取得（fake-authのimplicit flow）
     const hash = window.location.hash.slice(1);
     const params = new URLSearchParams(hash);
@@ -39,7 +46,7 @@ function Login() {
       console.error("[login] OIDC コールバック検証失敗:", verification.reason);
     }
 
-    // StrictModeの二重実行等で既にlocalStorageにトークンがある場合は/に遷移
+    // 既にログイン済みのユーザーが /login に直接アクセスした場合は / に戻す
     if (getIdToken()) {
       navigate({ to: "/" });
       return;
