@@ -57,7 +57,7 @@ export function parseToken(token: string): AuthState["user"] {
   }
 }
 
-function getInitialState(): AuthState {
+export function getInitialState(): AuthState {
   const token = getStoredToken();
   if (token) {
     const user = parseToken(token);

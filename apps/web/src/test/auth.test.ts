@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { parseToken } from "../lib/auth";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getInitialState, parseToken } from "../lib/auth";
 import { makeFakeIdToken } from "./helpers/auth";
 
 describe("parseToken", () => {
@@ -49,5 +49,59 @@ describe("parseToken", () => {
       email: "u2@example.com",
       name: "u2",
     });
+  });
+});
+
+describe("getInitialState", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("有効なトークンが localStorage にある場合、認証済み状態を返す", () => {
+    const valid = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+    });
+    localStorage.setItem("id_token", valid);
+
+    const state = getInitialState();
+
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.idToken).toBe(valid);
+    expect(state.user).toEqual({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+    });
+  });
+
+  it("期限切れトークンが localStorage にある場合、未認証状態を返し localStorage をクリアする", () => {
+    const expired = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+    localStorage.setItem("id_token", expired);
+
+    const state = getInitialState();
+
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.idToken).toBeNull();
+    expect(state.user).toBeNull();
+    expect(localStorage.getItem("id_token")).toBeNull();
+  });
+
+  it("トークンが無い場合、未認証状態を返す", () => {
+    const state = getInitialState();
+
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.idToken).toBeNull();
+    expect(state.user).toBeNull();
   });
 });
