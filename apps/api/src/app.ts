@@ -4,8 +4,9 @@ import { meetingsRoute } from "./routes/meetings.js";
 
 const app = new Hono();
 
-app.route("/health", healthRoute);
-app.route("/meetings", meetingsRoute);
+const routes = app
+  .route("/health", healthRoute)
+  .route("/meetings", meetingsRoute);
 
 export { app };
-export type AppType = typeof app;
+export type AppType = typeof routes;
