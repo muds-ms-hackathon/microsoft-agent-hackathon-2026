@@ -46,7 +46,13 @@ export function parseToken(token: string): AuthState["user"] {
       sub: string;
       email: string;
       name: string;
+      exp?: number;
     };
+    // OIDC 仕様で exp は ID トークンの必須クレーム。
+    // 欠落 or 期限切れの場合はトークン全体を無効とみなす。
+    if (typeof payload.exp !== "number" || payload.exp <= Date.now() / 1000) {
+      return null;
+    }
     return {
       sub: payload.sub,
       email: payload.email,
@@ -61,11 +67,16 @@ export function getInitialState(): AuthState {
   const token = getStoredToken();
   if (token) {
     const user = parseToken(token);
-    return {
-      isAuthenticated: !!user,
-      idToken: token,
-      user,
-    };
+    if (user) {
+      return {
+        isAuthenticated: true,
+        idToken: token,
+        user,
+      };
+    }
+    // 期限切れ等で復元できないトークンはここで破棄しておくと
+    // 次回以降のガードがログインループに陥らない。
+    setStoredToken(null);
   }
   return {
     isAuthenticated: false,
