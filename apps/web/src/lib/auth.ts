@@ -109,3 +109,47 @@ export const logoutAtom = atom(null, (_get, set) => {
 export function getIdToken(): string | null {
   return getStoredToken();
 }
+
+// ---- OIDC implicit flow の state / nonce 検証 ----------------------------
+//
+// /authorize リクエスト発行直前に saveExpectedAuthParams で sessionStorage に
+// 期待値を退避し、コールバック側で verifyAndConsumeAuthParams により照合する。
+// 別タブで /login を同時に開いた場合は最後の値で上書きされる前提（ローカル
+// fake-auth 用途では実害が小さく、Entra ID 移行時に再設計予定）。
+
+const EXPECTED_STATE_KEY = "expected_state";
+const EXPECTED_NONCE_KEY = "expected_nonce";
+
+export function saveExpectedAuthParams(state: string, nonce: string): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(EXPECTED_STATE_KEY, state);
+  sessionStorage.setItem(EXPECTED_NONCE_KEY, nonce);
+}
+
+export function getTokenNonce(token: string): string | null {
+  try {
+    const payload = decodeBase64UrlJson(token.split(".")[1]) as {
+      nonce?: string;
+    };
+    return typeof payload.nonce === "string" ? payload.nonce : null;
+  } catch {
+    return null;
+  }
+}
+
+export type AuthCallbackVerificationReason =
+  | "no_expected_params"
+  | "state_mismatch"
+  | "nonce_mismatch";
+
+export interface AuthCallbackVerification {
+  ok: boolean;
+  reason?: AuthCallbackVerificationReason;
+}
+
+export function verifyAndConsumeAuthParams(
+  _actualState: string | null,
+  _idToken: string,
+): AuthCallbackVerification {
+  return { ok: false, reason: "no_expected_params" };
+}

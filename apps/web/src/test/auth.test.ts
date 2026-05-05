@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getInitialState, parseToken } from "../lib/auth";
+import {
+  getInitialState,
+  getTokenNonce,
+  parseToken,
+  saveExpectedAuthParams,
+  verifyAndConsumeAuthParams,
+} from "../lib/auth";
 import { makeFakeIdToken } from "./helpers/auth";
 
 describe("parseToken", () => {
@@ -103,5 +109,101 @@ describe("getInitialState", () => {
     expect(state.isAuthenticated).toBe(false);
     expect(state.idToken).toBeNull();
     expect(state.user).toBeNull();
+  });
+});
+
+describe("getTokenNonce", () => {
+  it("ペイロード内の nonce を返す", () => {
+    const token = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+      nonce: "n-abc",
+    });
+
+    expect(getTokenNonce(token)).toBe("n-abc");
+  });
+
+  it("nonce が無いトークンは null を返す", () => {
+    const token = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+    });
+
+    expect(getTokenNonce(token)).toBeNull();
+  });
+
+  it("不正な形式は null を返す", () => {
+    expect(getTokenNonce("not-a-jwt")).toBeNull();
+  });
+});
+
+describe("verifyAndConsumeAuthParams", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("期待値が sessionStorage に無い場合は no_expected_params を返す", () => {
+    const token = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+      nonce: "n-1",
+    });
+
+    const result = verifyAndConsumeAuthParams("s-1", token);
+
+    expect(result).toEqual({ ok: false, reason: "no_expected_params" });
+  });
+
+  it("state 不一致では state_mismatch を返し、sessionStorage を消費する", () => {
+    saveExpectedAuthParams("s-expected", "n-expected");
+    const token = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+      nonce: "n-expected",
+    });
+
+    const result = verifyAndConsumeAuthParams("s-different", token);
+
+    expect(result).toEqual({ ok: false, reason: "state_mismatch" });
+    expect(sessionStorage.getItem("expected_state")).toBeNull();
+    expect(sessionStorage.getItem("expected_nonce")).toBeNull();
+  });
+
+  it("nonce 不一致では nonce_mismatch を返す", () => {
+    saveExpectedAuthParams("s-expected", "n-expected");
+    const token = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+      nonce: "n-different",
+    });
+
+    const result = verifyAndConsumeAuthParams("s-expected", token);
+
+    expect(result).toEqual({ ok: false, reason: "nonce_mismatch" });
+  });
+
+  it("state と nonce が一致すれば ok: true を返し、期待値は消費される", () => {
+    saveExpectedAuthParams("s-expected", "n-expected");
+    const token = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+      nonce: "n-expected",
+    });
+
+    const result = verifyAndConsumeAuthParams("s-expected", token);
+
+    expect(result).toEqual({ ok: true });
+    expect(sessionStorage.getItem("expected_state")).toBeNull();
+    expect(sessionStorage.getItem("expected_nonce")).toBeNull();
   });
 });
