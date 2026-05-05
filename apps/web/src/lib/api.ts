@@ -2,8 +2,7 @@ import type { AppType } from "api/types";
 import { hc } from "hono/client";
 import { getIdToken } from "./auth";
 
-type ClientType = ReturnType<typeof hc<AppType>>;
-export const api = hc("/api") as unknown as ClientType;
+export const api = hc<AppType>("/api");
 
 export function authHeaders(): { headers: Record<string, string> } {
   const token = getIdToken();
