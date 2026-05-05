@@ -1,4 +1,9 @@
-import { getIdToken, loginAtom } from "@/lib/auth";
+import {
+  getIdToken,
+  loginAtom,
+  saveExpectedAuthParams,
+  verifyAndConsumeAuthParams,
+} from "@/lib/auth";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
 import { useEffect } from "react";
@@ -19,14 +24,19 @@ function Login() {
     const hash = window.location.hash.slice(1);
     const params = new URLSearchParams(hash);
     const idToken = params.get("id_token");
+    const actualState = params.get("state");
 
     if (idToken) {
-      // トークンを保存してリダイレクト
-      setLogin(idToken);
-      // hashを消してクリーンなURLに
+      // hash は成功・失敗にかかわらず即座にクリアする（漏洩・二重消費防止）
       window.history.replaceState(null, "", window.location.pathname);
-      navigate({ to: "/" });
-      return;
+      const verification = verifyAndConsumeAuthParams(actualState, idToken);
+      if (verification.ok) {
+        setLogin(idToken);
+        navigate({ to: "/" });
+        return;
+      }
+      // 検証失敗時はトークンを採用せず、再度 /authorize に流す
+      console.error("[login] OIDC コールバック検証失敗:", verification.reason);
     }
 
     // StrictModeの二重実行等で既にlocalStorageにトークンがある場合は/に遷移
@@ -41,10 +51,14 @@ function Login() {
     currentUrl.hash = "";
     const redirectUri = currentUrl.toString();
 
+    const state = crypto.randomUUID();
+    const nonce = crypto.randomUUID();
+    saveExpectedAuthParams(state, nonce);
+
     const authUrl = new URL(`${FAKE_AUTH_URL}/authorize`);
     authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("state", crypto.randomUUID());
-    authUrl.searchParams.set("nonce", crypto.randomUUID());
+    authUrl.searchParams.set("state", state);
+    authUrl.searchParams.set("nonce", nonce);
 
     window.location.href = authUrl.toString();
   }, [navigate, setLogin]);
