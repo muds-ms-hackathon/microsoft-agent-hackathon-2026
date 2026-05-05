@@ -56,6 +56,8 @@ services:
       - ./apps/web:/app/apps/web
       # コンテナ内の node_modules をホストの空ディレクトリで上書きしないよう保護
       - /app/apps/web/node_modules
+      # vite.config.ts の api/types alias が参照するソース
+      - ./apps/api/src:/app/apps/api/src
     environment:
       CHOKIDAR_USEPOLLING: "true"
       # Docker 内では api/ai コンテナのサービス名で解決する
