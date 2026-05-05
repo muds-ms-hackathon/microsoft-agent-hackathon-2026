@@ -26,9 +26,27 @@ function setStoredToken(token: string | null): void {
   }
 }
 
+// JWT のペイロードは Base64URL（RFC 7515）でエンコードされており、
+// 標準 Base64 とは `-`/`_` および省略パディングの扱いが異なる。
+// また `atob` の戻り値はバイナリ文字列なので UTF-8 として再デコードする必要がある。
+function decodeBase64UrlJson(part: string): unknown {
+  const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
 export function parseToken(token: string): AuthState["user"] {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const payload = decodeBase64UrlJson(token.split(".")[1]) as {
+      sub: string;
+      email: string;
+      name: string;
+    };
     return {
       sub: payload.sub,
       email: payload.email,
