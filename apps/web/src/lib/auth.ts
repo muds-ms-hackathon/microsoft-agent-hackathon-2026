@@ -26,7 +26,7 @@ function setStoredToken(token: string | null): void {
   }
 }
 
-function parseToken(token: string): AuthState["user"] {
+export function parseToken(token: string): AuthState["user"] {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     return {
