@@ -23,7 +23,24 @@ vi.mock("../src/lib/prisma.js", () => ({
   },
 }));
 
-// auth ミドルウェアを差し替え、固定の認証済みユーザーを c.var.user に注入する。
+// auth ミドルウェアを差し替え、認証済みユーザーを c.var.user に注入する。
+// テストごとに email や id を上書きできるよう、hoisted な mutable オブジェクトを介す。
+const authState = vi.hoisted(() => {
+  const defaultUser = {
+    id: "user-1",
+    externalId: "ext-1",
+    email: "alice@example.com",
+    name: "alice",
+    displayName: "alice",
+    createdAt: new Date("2026-05-01T00:00:00Z"),
+    updatedAt: new Date("2026-05-01T00:00:00Z"),
+  };
+  return {
+    defaultUser,
+    current: { ...defaultUser },
+  };
+});
+
 vi.mock("../src/middleware/auth.js", () => ({
   auth: async (
     c: {
@@ -31,18 +48,14 @@ vi.mock("../src/middleware/auth.js", () => ({
     },
     next: () => Promise<void>,
   ) => {
-    c.set("user", {
-      id: "user-1",
-      externalId: "ext-1",
-      email: "alice@example.com",
-      name: "alice",
-      displayName: "alice",
-      createdAt: new Date("2026-05-01T00:00:00Z"),
-      updatedAt: new Date("2026-05-01T00:00:00Z"),
-    });
+    c.set("user", authState.current);
     await next();
   },
 }));
+
+function resetAuthUser() {
+  authState.current = { ...authState.defaultUser };
+}
 
 import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
@@ -580,6 +593,7 @@ describe("POST /organizations/:id/invite", () => {
 describe("POST /organizations/:id/join", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAuthUser();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-06T00:00:00Z"));
   });
@@ -774,5 +788,48 @@ describe("POST /organizations/:id/join", () => {
       method: "POST",
     });
     expect(res.status).toBe(500);
+  });
+
+  it("認証ユーザーの email に大文字や前後空白が含まれていても招待を一致させる", async () => {
+    // IdP が "  Alice@Example.COM  " のように非正規化された email を返した場合でも、
+    // 招待保存時と同じく trim + 小文字化してから照合する必要がある（さもないと
+    // 招待を出したのに /join が永久に 404 になる）。
+    authState.current = {
+      ...authState.current,
+      email: "  Alice@Example.COM  ",
+    };
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    let observedEmail: string | undefined;
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        organizationInvitation: {
+          findFirst: vi.fn(async (args: { where: { email: string } }) => {
+            observedEmail = args.where.email;
+            return pendingInvitation;
+          }),
+          update: vi.fn().mockResolvedValue({
+            ...pendingInvitation,
+            status: "accepted",
+          }),
+        },
+        organizationMembership: {
+          create: vi.fn().mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1",
+            role: "member",
+            joinedAt: new Date("2026-05-06T00:00:00Z"),
+          }),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/organizations/org-1/join", {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+    expect(observedEmail).toBe("alice@example.com");
   });
 });
