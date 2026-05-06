@@ -21,7 +21,8 @@
     "noUncheckedSideEffectImports": true,
     "types": ["vitest/globals", "@testing-library/jest-dom"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "api/types": ["../api/src/types.ts"]
     }
   },
   "include": ["src"]

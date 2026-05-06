@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api, authHeaders } from "@/lib/api";
 import type { Meeting } from "@/types/meeting";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,7 +21,7 @@ function MeetingsList() {
   } = useQuery<Meeting[]>({
     queryKey: ["meetings"],
     queryFn: async () => {
-      const res = await api.meetings.$get();
+      const res = await api.meetings.$get(authHeaders());
       return res.json();
     },
   });
@@ -72,6 +72,7 @@ function CreateMeetingForm() {
           // datetime-local 値を ISO 8601 UTC に変換
           heldAt: new Date(data.heldAt).toISOString(),
         },
+        ...authHeaders(),
       });
       return res.json();
     },

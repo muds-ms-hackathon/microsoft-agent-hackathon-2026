@@ -1,6 +1,7 @@
 import { screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
+import { makeFakeIdToken } from "./helpers/auth";
 import { renderWithQuery } from "./test-utils";
 
 // index ページが依存する api モジュールをモック
@@ -14,6 +15,12 @@ vi.mock("@/lib/api", () => ({
 }));
 
 beforeEach(() => {
+  // 認証ガード（beforeLoad）をパスするため、makeFakeIdToken のデフォルト
+  // exp（1 時間後）を活かした有効期限内ダミートークンをセットする。
+  localStorage.setItem(
+    "id_token",
+    makeFakeIdToken({ sub: "1", email: "test@example.com", name: "test" }),
+  );
   vi.stubGlobal(
     "WebSocket",
     Object.assign(
@@ -32,6 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });

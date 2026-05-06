@@ -14,6 +14,7 @@ vi.mock("@/lib/api", () => ({
       $post: vi.fn(),
     },
   },
+  authHeaders: () => ({ headers: {} }),
 }));
 
 import { api } from "@/lib/api";

@@ -11,11 +11,11 @@ import {
   jwtVerify,
 } from "jose";
 import {
+  type FakeUser,
   createUser,
   getAllUsers,
   getUserByEmail,
   getUserByKey,
-  type FakeUser,
   users,
 } from "./users.js";
 
@@ -44,10 +44,7 @@ async function getPublicJWK() {
   };
 }
 
-async function generateIdToken(
-  user: FakeUser,
-  nonce: string,
-): Promise<string> {
+async function generateIdToken(user: FakeUser, nonce: string): Promise<string> {
   const privateKey = await getPrivateKey();
 
   return await new SignJWT({
@@ -199,7 +196,7 @@ app.post("/login", async (c) => {
 
   const user = body.userKey
     ? getUserByKey(body.userKey)
-    : getUserByEmail(body.email!);
+    : getUserByEmail(body.email ?? "");
 
   if (!user) {
     return c.json({ error: "ユーザーが見つかりません" }, 404);
@@ -238,7 +235,8 @@ app.post("/verify", async (c) => {
       header: protectedHeader,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "トークン検証に失敗しました";
+    const message =
+      e instanceof Error ? e.message : "トークン検証に失敗しました";
     return c.json({ valid: false, error: message }, 401);
   }
 });
@@ -247,7 +245,10 @@ app.post("/verify", async (c) => {
 app.get("/me", async (c) => {
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return c.json({ error: "Authorization: Bearer <token> ヘッダーが必要です" }, 401);
+    return c.json(
+      { error: "Authorization: Bearer <token> ヘッダーが必要です" },
+      401,
+    );
   }
 
   const token = authHeader.slice(7);
@@ -261,7 +262,10 @@ app.get("/me", async (c) => {
 
     const userId = payload.sub;
     if (!userId) {
-      return c.json({ error: "トークンにsub（ユーザーID）が含まれていません" }, 401);
+      return c.json(
+        { error: "トークンにsub（ユーザーID）が含まれていません" },
+        401,
+      );
     }
 
     // user.id で検索
@@ -273,7 +277,8 @@ app.get("/me", async (c) => {
     const [key, user] = userEntry;
     return c.json({ key, ...user });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "トークンの検証に失敗しました";
+    const message =
+      e instanceof Error ? e.message : "トークンの検証に失敗しました";
     return c.json({ error: message }, 401);
   }
 });
