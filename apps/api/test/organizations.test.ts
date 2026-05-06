@@ -433,7 +433,10 @@ describe("POST /organizations/:id/invite", () => {
 
   it("admin は招待を作成でき、指定した role=admin が invitation に保存される", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("admin"));
-    mockInvitationCreate.mockResolvedValue({ ...sampleInvitation, role: "admin" });
+    mockInvitationCreate.mockResolvedValue({
+      ...sampleInvitation,
+      role: "admin",
+    });
 
     const res = await app.request("/organizations/org-1/invite", {
       method: "POST",
@@ -738,12 +741,14 @@ describe("POST /organizations/:id/join", () => {
           }),
         },
         organizationMembership: {
-          create: vi.fn().mockRejectedValue(
-            new Prisma.PrismaClientKnownRequestError(
-              "Unique constraint failed",
-              { code: "P2002", clientVersion: "test" },
+          create: vi
+            .fn()
+            .mockRejectedValue(
+              new Prisma.PrismaClientKnownRequestError(
+                "Unique constraint failed",
+                { code: "P2002", clientVersion: "test" },
+              ),
             ),
-          ),
         },
       };
       // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ

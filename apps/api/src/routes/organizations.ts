@@ -23,10 +23,9 @@ const updateSchema = z
     description: z.string().optional(),
   })
   .strict()
-  .refine(
-    (d) => d.name !== undefined || d.description !== undefined,
-    { message: "更新する項目を 1 つ以上指定してください" },
-  );
+  .refine((d) => d.name !== undefined || d.description !== undefined, {
+    message: "更新する項目を 1 つ以上指定してください",
+  });
 
 // owner ロールの招待は不可（owner は組織作成者のみ）。
 // expiresInDays は 1〜365 日。email はサーバ側で trim + 小文字化して保存・比較する。
@@ -203,7 +202,11 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     // （expired への自動遷移はバッチジョブ前提）。
     // 外側の existing チェックは高速パスとして残し、並列 /join による
     // membership 主キー (userId, organizationId) 重複は P2002 を捕捉して 409 にする。
-    let result: { userId: string; organizationId: string; role: OrgRole } | null;
+    let result: {
+      userId: string;
+      organizationId: string;
+      role: OrgRole;
+    } | null;
     try {
       result = await prisma.$transaction(async (tx) => {
         const invitation = await tx.organizationInvitation.findFirst({
