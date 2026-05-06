@@ -154,8 +154,32 @@ describe("POST /organizations", () => {
   });
 });
 
+describe("GET /organizations", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("200 と認証ユーザーが所属する組織一覧を返す", async () => {
+    mockOrgFindMany.mockResolvedValue([sampleOrg]);
+    const res = await app.request("/organizations");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ id: string }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe("org-1");
+    expect(mockOrgFindMany).toHaveBeenCalledWith({
+      where: { memberships: { some: { userId: "user-1" } } },
+      orderBy: { createdAt: "desc" },
+    });
+  });
+
+  it("所属組織が無い場合は空配列を返す", async () => {
+    mockOrgFindMany.mockResolvedValue([]);
+    const res = await app.request("/organizations");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
+  });
+});
+
 // 後続テストで使用するモックを参照保持しておくためのダミー句（Biome の未使用警告回避）
-void mockOrgFindMany;
 void mockOrgFindUnique;
 void mockOrgUpdate;
 void mockOrgDelete;

@@ -11,6 +11,14 @@ const createSchema = z.object({
 
 export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
+  .get("/", async (c) => {
+    const user = c.var.user;
+    const orgs = await prisma.organization.findMany({
+      where: { memberships: { some: { userId: user.id } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return c.json(orgs);
+  })
   .post("/", zValidator("json", createSchema), async (c) => {
     const { name, description } = c.req.valid("json");
     const user = c.var.user;
