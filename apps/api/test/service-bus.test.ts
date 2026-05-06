@@ -17,7 +17,6 @@ describe("sendMeetingCreatedEvent", () => {
   });
 
   afterEach(() => {
-    // biome-ignore lint/performance/noDelete: process.env に = undefined を使うと文字列 "undefined" になるため delete が必要
     delete process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
   });
 
