@@ -88,11 +88,23 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
   .get("/", async (c) => {
     const user = c.var.user;
+    // 自分の membership の role を 1 件だけ include して取得し、
+    // フロント側で「自分の role」をカード表示するために平坦化して返す。
     const orgs = await prisma.organization.findMany({
       where: { memberships: { some: { userId: user.id } } },
       orderBy: { createdAt: "desc" },
+      include: {
+        memberships: {
+          where: { userId: user.id },
+          select: { role: true },
+        },
+      },
     });
-    return c.json(orgs);
+    const result = orgs.map(({ memberships, ...rest }) => ({
+      ...rest,
+      role: memberships[0]?.role ?? "member",
+    }));
+    return c.json(result);
   })
   .post("/", zValidator("json", createSchema), async (c) => {
     const { name, description } = c.req.valid("json");
