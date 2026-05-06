@@ -4,9 +4,18 @@
 // 値を返す。
 
 export function readRequiredViteEnv(
-  _key: string,
-  _devFallback: string,
-  _env: ImportMetaEnv = import.meta.env,
+  key: string,
+  devFallback: string,
+  env: ImportMetaEnv = import.meta.env,
 ): string {
-  throw new Error("not implemented");
+  const value = env[key];
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (env.PROD) {
+    throw new Error(
+      `Required Vite env "${key}" is not set. Set it before building for production.`,
+    );
+  }
+  return devFallback;
 }
