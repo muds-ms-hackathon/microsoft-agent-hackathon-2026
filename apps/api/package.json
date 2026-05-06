@@ -4,10 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    "./types": {
-      "types": "./dist/types.d.ts",
-      "default": "./dist/types.js"
-    }
+    "./types": "./src/types.ts"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
