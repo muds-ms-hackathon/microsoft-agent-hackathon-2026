@@ -73,11 +73,13 @@ model OrganizationMembership {
 
 // 組織への招待。inviter は履歴保持のため User 削除時 Restrict。
 // 同一組織への同一メールアドレスの同一 status の招待は重複させない。
+// role は招待承諾時に発行する membership のロール。owner 招待は API 層で禁止する。
 model OrganizationInvitation {
   id             String           @id @default(cuid())
   organizationId String
   email          String
   invitedBy      String
+  role           OrgRole          @default(member)
   expiresAt      DateTime
   status         InvitationStatus @default(pending)
   createdAt      DateTime         @default(now())
