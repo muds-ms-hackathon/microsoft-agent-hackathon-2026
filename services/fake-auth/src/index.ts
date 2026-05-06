@@ -311,7 +311,7 @@ app.post("/users", async (c) => {
   }
 });
 
-const port = Number.parseInt(process.env.PORT ?? "3007");
+const port = Number.parseInt(process.env.PORT ?? "3007", 10);
 
 serve({
   fetch: app.fetch,

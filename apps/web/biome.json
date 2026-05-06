@@ -4,9 +4,9 @@
   "files": {
     "includes": [
       "**",
-      "!coverage/**",
-      "!dist/**",
-      "!node_modules/**",
+      "!coverage",
+      "!dist",
+      "!node_modules",
       "!src/routeTree.gen.ts"
     ]
   }

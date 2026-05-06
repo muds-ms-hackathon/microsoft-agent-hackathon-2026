@@ -2,6 +2,6 @@
   "$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
   "extends": ["../../biome.json"],
   "files": {
-    "includes": ["**", "!coverage/**", "!dist/**", "!node_modules/**"]
+    "includes": ["**", "!coverage", "!dist", "!node_modules"]
   }
 }
