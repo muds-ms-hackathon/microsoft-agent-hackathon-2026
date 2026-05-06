@@ -322,6 +322,17 @@ describe("PATCH /organizations/:id", () => {
       data: { name: "n", description: "d" },
     });
   });
+
+  it("空オブジェクトのリクエストは 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipFindUnique).not.toHaveBeenCalled();
+    expect(mockOrgUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe("DELETE /organizations/:id", () => {
@@ -494,6 +505,37 @@ describe("POST /organizations/:id/invite", () => {
       body: JSON.stringify({ email: "bob@example.com", expiresInDays: 0 }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("expiresInDays が 365 を超える場合は 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com", expiresInDays: 366 }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("email は trim + 小文字化されてから保存される", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationCreate.mockResolvedValue(sampleInvitation);
+
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "  Bob@Example.COM  " }),
+    });
+    expect(res.status).toBe(201);
+    expect(mockInvitationCreate).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org-1",
+        email: "bob@example.com",
+        invitedBy: "user-1",
+        role: "member",
+        expiresAt: new Date("2026-05-13T00:00:00Z"),
+      },
+    });
   });
 
   it("P2002 以外の Prisma 既知エラーは握り潰さず 500 として伝播する", async () => {

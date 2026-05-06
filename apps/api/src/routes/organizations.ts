@@ -16,18 +16,24 @@ const createSchema = z.object({
 });
 
 // 全フィールド optional だが、name を渡す場合は空文字列を弾く。
+// 全フィールド未指定の空ボディは更新意図が不明瞭なため 400 で弾く。
 const updateSchema = z
   .object({
     name: z.string().min(1).optional(),
     description: z.string().optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (d) => d.name !== undefined || d.description !== undefined,
+    { message: "更新する項目を 1 つ以上指定してください" },
+  );
 
-// owner ロールの招待は不可（owner は組織作成者のみ）。expiresInDays は正の整数。
+// owner ロールの招待は不可（owner は組織作成者のみ）。
+// expiresInDays は 1〜365 日。email はサーバ側で trim + 小文字化して保存・比較する。
 const inviteSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   role: z.enum(["admin", "member"]).optional(),
-  expiresInDays: z.number().int().positive().optional(),
+  expiresInDays: z.number().int().positive().max(365).optional(),
 });
 
 // 認証ユーザーが対象組織に所属しており、許容ロールに含まれているかを判定する。
@@ -73,11 +79,33 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(orgs);
   })
+  .post("/", zValidator("json", createSchema), async (c) => {
+    const { name, description } = c.req.valid("json");
+    const user = c.var.user;
+
+    // Organization 作成と作成者を owner として登録する Membership 作成は
+    // 整合性確保のため $transaction で原子的に実行する。
+    const org = await prisma.$transaction(async (tx) => {
+      const created = await tx.organization.create({
+        data: { name, description },
+      });
+      await tx.organizationMembership.create({
+        data: {
+          userId: user.id,
+          organizationId: created.id,
+          role: "owner",
+        },
+      });
+      return created;
+    });
+
+    return c.json(org, 201);
+  })
   .get("/:id", async (c) => {
     const id = c.req.param("id");
 
-    const auth = await requireRole(c, id, null, "");
-    if (!auth.ok) return auth.res;
+    const guard = await requireRole(c, id, null, "");
+    if (!guard.ok) return guard.res;
 
     const org = await prisma.organization.findUnique({ where: { id } });
     if (!org) {
@@ -89,13 +117,13 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const id = c.req.param("id");
     const data = c.req.valid("json");
 
-    const auth = await requireRole(
+    const guard = await requireRole(
       c,
       id,
       ["owner", "admin"],
       "編集権限がありません",
     );
-    if (!auth.ok) return auth.res;
+    if (!guard.ok) return guard.res;
 
     const updated = await prisma.organization.update({
       where: { id },
@@ -106,8 +134,8 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .delete("/:id", async (c) => {
     const id = c.req.param("id");
 
-    const auth = await requireRole(c, id, ["owner"], "削除権限がありません");
-    if (!auth.ok) return auth.res;
+    const guard = await requireRole(c, id, ["owner"], "削除権限がありません");
+    if (!guard.ok) return guard.res;
 
     // schema 側で Membership / Invitation / RecurringMeeting / MeetingMember は
     // onDelete: Cascade のため delete 一発で連鎖削除される。
@@ -119,13 +147,13 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const user = c.var.user;
     const { email, role, expiresInDays } = c.req.valid("json");
 
-    const auth = await requireRole(
+    const guard = await requireRole(
       c,
       id,
       ["owner", "admin"],
       "招待権限がありません",
     );
-    if (!auth.ok) return auth.res;
+    if (!guard.ok) return guard.res;
 
     const days = expiresInDays ?? 7;
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -217,26 +245,4 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "有効な招待が見つかりません" }, 404);
     }
     return c.json(result);
-  })
-  .post("/", zValidator("json", createSchema), async (c) => {
-    const { name, description } = c.req.valid("json");
-    const user = c.var.user;
-
-    // Organization 作成と作成者を owner として登録する Membership 作成は
-    // 整合性確保のため $transaction で原子的に実行する。
-    const org = await prisma.$transaction(async (tx) => {
-      const created = await tx.organization.create({
-        data: { name, description },
-      });
-      await tx.organizationMembership.create({
-        data: {
-          userId: user.id,
-          organizationId: created.id,
-          role: "owner",
-        },
-      });
-      return created;
-    });
-
-    return c.json(org, 201);
   });
