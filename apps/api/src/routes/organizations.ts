@@ -71,6 +71,27 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(updated);
   })
+  .delete("/:id", async (c) => {
+    const id = c.req.param("id");
+    const user = c.var.user;
+
+    const membership = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: { userId: user.id, organizationId: id },
+      },
+    });
+    if (!membership) {
+      return c.json({ error: "組織が見つかりません" }, 404);
+    }
+    if (membership.role !== "owner") {
+      return c.json({ error: "削除権限がありません" }, 403);
+    }
+
+    // schema 側で Membership / Invitation / RecurringMeeting / MeetingMember は
+    // onDelete: Cascade のため delete 一発で連鎖削除される。
+    const deleted = await prisma.organization.delete({ where: { id } });
+    return c.json(deleted);
+  })
   .post("/", zValidator("json", createSchema), async (c) => {
     const { name, description } = c.req.valid("json");
     const user = c.var.user;

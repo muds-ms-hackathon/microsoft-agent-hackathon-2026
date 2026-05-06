@@ -326,7 +326,49 @@ describe("PATCH /organizations/:id", () => {
   });
 });
 
+describe("DELETE /organizations/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function membership(role: "owner" | "admin" | "member") {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  it("owner は 200 で削除できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockOrgDelete.mockResolvedValue(sampleOrg);
+
+    const res = await app.request("/organizations/org-1", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(mockOrgDelete).toHaveBeenCalledWith({ where: { id: "org-1" } });
+  });
+
+  it("admin は 403 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("admin"));
+    const res = await app.request("/organizations/org-1", { method: "DELETE" });
+    expect(res.status).toBe(403);
+    expect(mockOrgDelete).not.toHaveBeenCalled();
+  });
+
+  it("member は 403 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    const res = await app.request("/organizations/org-1", { method: "DELETE" });
+    expect(res.status).toBe(403);
+    expect(mockOrgDelete).not.toHaveBeenCalled();
+  });
+
+  it("未所属ユーザーは 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/organizations/org-1", { method: "DELETE" });
+    expect(res.status).toBe(404);
+    expect(mockOrgDelete).not.toHaveBeenCalled();
+  });
+});
+
 // 後続テストで使用するモックを参照保持しておくためのダミー句（Biome の未使用警告回避）
-void mockOrgDelete;
 void mockInvitationCreate;
 void mockInvitationFindFirst;
