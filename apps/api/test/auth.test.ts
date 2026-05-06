@@ -20,6 +20,7 @@ vi.mock("../src/lib/oidc.js", () => ({
   getJwks: () => "fake-jwks",
 }));
 
+import { Prisma } from "@prisma/client";
 import { jwtVerify } from "jose";
 import { prisma } from "../src/lib/prisma.js";
 import { auth } from "../src/middleware/auth.js";
@@ -221,5 +222,44 @@ describe("auth middleware", () => {
     });
     expect(res.status).toBe(401);
     expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("email が他ユーザーで使用済み (P2002) の場合は 409 を返す", async () => {
+    mockJwtVerify.mockResolvedValueOnce({
+      payload: { sub: "ext-3", email: "alice@example.com", name: "carol" },
+      protectedHeader: { alg: "RS256" },
+    } as never);
+    mockUpsert.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError(
+        "Unique constraint failed on the fields: (`email`)",
+        { code: "P2002", clientVersion: "test" },
+      ),
+    );
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("メールアドレス");
+  });
+
+  it("P2002 以外の Prisma 既知エラーは握り潰さず例外として伝播する", async () => {
+    mockJwtVerify.mockResolvedValueOnce({
+      payload: { sub: "ext-4", email: "dave@example.com", name: "dave" },
+      protectedHeader: { alg: "RS256" },
+    } as never);
+    mockUpsert.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("connection lost", {
+        code: "P1017",
+        clientVersion: "test",
+      }),
+    );
+    const app = buildTestApp();
+    // Hono は未捕捉例外を 500 で返す既定動作
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(500);
   });
 });
