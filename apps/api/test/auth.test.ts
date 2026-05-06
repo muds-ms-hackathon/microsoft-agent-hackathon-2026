@@ -176,7 +176,37 @@ describe("auth middleware", () => {
         name: "bob",
         displayName: "bob",
       },
-      update: {},
+      update: { email: "bob@example.com", name: "bob" },
+    });
+  });
+
+  it("既存ユーザーは IdP 側の email / name 変更を upsert.update で同期する", async () => {
+    mockJwtVerify.mockResolvedValueOnce({
+      payload: {
+        sub: "ext-1",
+        email: "alice-renamed@example.com",
+        name: "alice-renamed",
+      },
+      protectedHeader: { alg: "RS256" },
+    } as never);
+    mockUpsert.mockResolvedValueOnce({
+      ...sampleUser,
+      email: "alice-renamed@example.com",
+      name: "alice-renamed",
+    });
+    const app = buildTestApp();
+    await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(mockUpsert).toHaveBeenCalledWith({
+      where: { externalId: "ext-1" },
+      create: {
+        externalId: "ext-1",
+        email: "alice-renamed@example.com",
+        name: "alice-renamed",
+        displayName: "alice-renamed",
+      },
+      update: { email: "alice-renamed@example.com", name: "alice-renamed" },
     });
   });
 

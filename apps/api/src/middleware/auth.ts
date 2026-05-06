@@ -45,11 +45,13 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
     );
   }
 
-  // displayName は claim に含まれないため name で初期化する。プロフィール編集 API は別 Issue で対応。
+  // 既存ユーザーは IdP 側で email / name が変更され得るためログイン都度同期する。
+  // displayName はユーザーがアプリ側で編集する想定のため update 対象から外す（プロフィール編集 API は別 Issue で対応）。
+  // 新規作成時のみ displayName を name で初期化する。
   const user = await prisma.user.upsert({
     where: { externalId },
     create: { externalId, email, name, displayName: name },
-    update: {},
+    update: { email, name },
   });
 
   c.set("user", user);
