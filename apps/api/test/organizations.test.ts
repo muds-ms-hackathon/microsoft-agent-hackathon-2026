@@ -493,6 +493,24 @@ describe("POST /organizations/:id/invite", () => {
     expect(res.status).toBe(400);
   });
 
+  it("P2002 以外の Prisma 既知エラーは握り潰さず 500 として伝播する", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("connection lost", {
+        code: "P1017",
+        clientVersion: "test",
+      }),
+    );
+
+    // Hono の既定動作で未捕捉例外は 500 になる
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com" }),
+    });
+    expect(res.status).toBe(500);
+  });
+
   it("同一メール × 同一組織 × pending の招待が既存の場合 (P2002) は 409 を返す", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
     mockInvitationCreate.mockRejectedValue(
