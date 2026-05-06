@@ -4,6 +4,7 @@ import {
   saveExpectedAuthParams,
   verifyAndConsumeAuthParams,
 } from "@/lib/auth";
+import { readRequiredViteEnv } from "@/lib/env";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
 import { useEffect, useRef } from "react";
@@ -12,8 +13,12 @@ export const Route = createFileRoute("/login")({
   component: Login,
 });
 
-const FAKE_AUTH_URL =
-  import.meta.env.VITE_FAKE_AUTH_URL ?? "http://localhost:3007";
+// PROD では未設定だと throw（デプロイ事故の早期検知）。DEV ではローカル
+// fake-auth のデフォルト URL にフォールバックする。
+const FAKE_AUTH_URL = readRequiredViteEnv(
+  "VITE_FAKE_AUTH_URL",
+  "http://localhost:3007",
+);
 
 function Login() {
   const navigate = useNavigate();
