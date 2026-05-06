@@ -179,10 +179,58 @@ describe("GET /organizations", () => {
   });
 });
 
+describe("GET /organizations/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("認証ユーザーが所属していれば 200 で組織を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    });
+    mockOrgFindUnique.mockResolvedValue(sampleOrg);
+
+    const res = await app.request("/organizations/org-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string };
+    expect(body.id).toBe("org-1");
+
+    expect(mockMembershipFindUnique).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: { userId: "user-1", organizationId: "org-1" },
+      },
+    });
+    expect(mockOrgFindUnique).toHaveBeenCalledWith({
+      where: { id: "org-1" },
+    });
+  });
+
+  it("認証ユーザーが所属していない場合は 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/organizations/org-1");
+    expect(res.status).toBe(404);
+    expect(mockOrgFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("組織が存在しない場合は 404 を返す", async () => {
+    // 所属レコードはあるが Organization 本体が削除済み等のレースケース
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    });
+    mockOrgFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/organizations/org-1");
+    expect(res.status).toBe(404);
+  });
+});
+
 // 後続テストで使用するモックを参照保持しておくためのダミー句（Biome の未使用警告回避）
-void mockOrgFindUnique;
 void mockOrgUpdate;
 void mockOrgDelete;
-void mockMembershipFindUnique;
 void mockInvitationCreate;
 void mockInvitationFindFirst;

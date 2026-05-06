@@ -19,6 +19,27 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(orgs);
   })
+  .get("/:id", async (c) => {
+    const id = c.req.param("id");
+    const user = c.var.user;
+
+    const membership = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: { userId: user.id, organizationId: id },
+      },
+    });
+    // 所属していないユーザーには組織の存在自体を露出しないため 404 で統一する
+    if (!membership) {
+      return c.json({ error: "組織が見つかりません" }, 404);
+    }
+
+    const org = await prisma.organization.findUnique({ where: { id } });
+    if (!org) {
+      return c.json({ error: "組織が見つかりません" }, 404);
+    }
+
+    return c.json(org);
+  })
   .post("/", zValidator("json", createSchema), async (c) => {
     const { name, description } = c.req.valid("json");
     const user = c.var.user;
