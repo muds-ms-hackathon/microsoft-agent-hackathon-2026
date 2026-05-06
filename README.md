@@ -59,7 +59,7 @@ make migrate                # DB マイグレーションを適用（初回起�
 # 1. FakeAuth から ID トークン取得（host から localhost:3007 経由）
 TOKEN=$(curl -s -X POST http://localhost:3007/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"alice@example.com"}' | jq -r .id_token)
+  -d '{"email":"admin@example.com"}' | jq -r .id_token)
 
 # 2. fake-auth /me でトークン検証が通ることを確認（200 + ユーザー情報）
 curl -i http://localhost:3007/me -H "Authorization: Bearer $TOKEN"
