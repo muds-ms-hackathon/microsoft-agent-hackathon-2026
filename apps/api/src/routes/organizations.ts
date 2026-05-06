@@ -17,6 +17,8 @@ const createSchema = z.object({
 
 // 全フィールド optional だが、name を渡す場合は空文字列を弾く。
 // 全フィールド未指定の空ボディは更新意図が不明瞭なため 400 で弾く。
+// description は省略時は未更新、空文字列で「説明をクリア」を意味する
+// （DB 上は String? だが API 仕様としては null は受け付けず空文字で表現）。
 const updateSchema = z
   .object({
     name: z.string().min(1).optional(),
