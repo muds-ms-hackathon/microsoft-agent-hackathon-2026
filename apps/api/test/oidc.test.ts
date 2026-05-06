@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   getAudience,
@@ -24,7 +24,6 @@ describe("getIssuerUrl", () => {
   });
 
   it("OIDC_ISSUER_URL 未設定時は FakeAuth の既定 URL を返す", () => {
-    // biome-ignore lint/performance/noDelete: process.env から真に未設定にするには delete が必要
     delete process.env.OIDC_ISSUER_URL;
     expect(getIssuerUrl()).toBe("http://localhost:3007");
   });
@@ -42,7 +41,6 @@ describe("getAudience", () => {
   });
 
   it("OIDC_AUDIENCE 未設定時は FakeAuth の既定 audience を返す", () => {
-    // biome-ignore lint/performance/noDelete: process.env から真に未設定にするには delete が必要
     delete process.env.OIDC_AUDIENCE;
     expect(getAudience()).toBe("fake-auth-client");
   });
