@@ -82,6 +82,10 @@ services:
     environment:
       # Docker 内では db コンテナ名で解決する（.env.local の localhost 指定を上書き）
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/decision_loop"
+      # Docker network 上で fake-auth コンテナの JWKS を取得するため、
+      # service 名で解決する。token の iss クレーム（fake-auth 側 ISSUER）と
+      # 完全一致している必要があるため、両者を同一値で揃える。
+      OIDC_ISSUER_URL: "http://fake-auth:3007"
     env_file:
       - path: .env.local
         required: false
@@ -126,7 +130,12 @@ services:
       - /app/services/fake-auth/node_modules
     environment:
       PORT: "3007"
-      ISSUER: "http://localhost:3007"
+      # api コンテナが Docker network 上で fake-auth の JWKS を取得し、
+      # token の iss クレームと issuer 検証を一致させるため service 名を使う。
+      # host 側の curl からは port mapping (3007:3007) で localhost:3007 経由で
+      # /login にアクセス可能（iss クレームは fake-auth:3007 になるが、
+      # フロントは iss を検証しないため副作用なし）。
+      ISSUER: "http://fake-auth:3007"
     env_file:
       - path: .env.local
         required: false
