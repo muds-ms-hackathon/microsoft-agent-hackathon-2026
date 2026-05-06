@@ -1,0 +1,57 @@
+import type { User } from "@prisma/client";
+import type { MiddlewareHandler } from "hono";
+import { jwtVerify } from "jose";
+import { getAudience, getIssuerUrl, getJwks } from "../lib/oidc.js";
+import { prisma } from "../lib/prisma.js";
+
+// auth ミドルウェア通過後、ハンドラから c.var.user で参照できる
+export type AuthVariables = {
+  user: User;
+};
+
+export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
+  c,
+  next,
+) => {
+  const header = c.req.header("Authorization");
+  if (!header?.startsWith("Bearer ")) {
+    return c.json(
+      { error: "Authorization: Bearer <token> ヘッダーが必要です" },
+      401,
+    );
+  }
+  const token = header.slice("Bearer ".length);
+
+  let payload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
+  try {
+    const result = await jwtVerify(token, getJwks(), {
+      issuer: getIssuerUrl(),
+      audience: getAudience(),
+    });
+    payload = result.payload;
+  } catch {
+    return c.json({ error: "トークンの検証に失敗しました" }, 401);
+  }
+
+  // 自動作成に必要な claim が揃っていることを保証する
+  const externalId = typeof payload.sub === "string" ? payload.sub : undefined;
+  const email = typeof payload.email === "string" ? payload.email : undefined;
+  const name = typeof payload.name === "string" ? payload.name : undefined;
+
+  if (!externalId || !email || !name) {
+    return c.json(
+      { error: "トークンに必要な claim (sub/email/name) が含まれていません" },
+      401,
+    );
+  }
+
+  // displayName は claim に含まれないため name で初期化する。プロフィール編集 API は別 Issue で対応。
+  const user = await prisma.user.upsert({
+    where: { externalId },
+    create: { externalId, email, name, displayName: name },
+    update: {},
+  });
+
+  c.set("user", user);
+  await next();
+};
