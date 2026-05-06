@@ -35,14 +35,12 @@ const inviteSchema = z.object({
   expiresInDays: z.number().int().positive().max(365).optional(),
 });
 
-// 認証ユーザーが対象組織に所属しており、許容ロールに含まれているかを判定する。
+// 認証ユーザーが対象組織に所属していることを確認する。
 // 所属していない場合は組織の存在自体を露出させないため 404 で統一する。
-// allowed=null は「所属していれば誰でも可」を意味する（詳細閲覧用）。
-async function requireRole(
+// 詳細閲覧 (GET /:id) のように「所属していれば誰でも可」のケースで使う。
+async function requireMembership(
   c: Context<{ Variables: AuthVariables }>,
   organizationId: string,
-  allowed: OrgRole[] | null,
-  forbiddenMessage: string,
 ): Promise<
   | { ok: true; membership: OrganizationMembership }
   | { ok: false; res: Response }
@@ -59,13 +57,29 @@ async function requireRole(
       res: c.json({ error: "組織が見つかりません" }, 404),
     };
   }
-  if (allowed && !allowed.includes(membership.role)) {
+  return { ok: true, membership };
+}
+
+// 所属確認に加えて、許容ロールに含まれているかを判定する。
+// 所属していなければ 404、ロール不足なら 403。
+async function requireRole(
+  c: Context<{ Variables: AuthVariables }>,
+  organizationId: string,
+  allowed: OrgRole[],
+  forbiddenMessage: string,
+): Promise<
+  | { ok: true; membership: OrganizationMembership }
+  | { ok: false; res: Response }
+> {
+  const guard = await requireMembership(c, organizationId);
+  if (!guard.ok) return guard;
+  if (!allowed.includes(guard.membership.role)) {
     return {
       ok: false,
       res: c.json({ error: forbiddenMessage }, 403),
     };
   }
-  return { ok: true, membership };
+  return guard;
 }
 
 export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
@@ -103,7 +117,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .get("/:id", async (c) => {
     const id = c.req.param("id");
 
-    const guard = await requireRole(c, id, null, "");
+    const guard = await requireMembership(c, id);
     if (!guard.ok) return guard.res;
 
     const org = await prisma.organization.findUnique({ where: { id } });
