@@ -682,4 +682,50 @@ describe("POST /organizations/:id/join", () => {
     expect(res.status).toBe(409);
     expect(mockTransaction).not.toHaveBeenCalled();
   });
+
+  it("並列 /join で membership 作成時に P2002 が発生した場合は 409 を返す", async () => {
+    // 高速パスはすり抜けるが、別リクエストが先に membership を作成済みのケース
+    mockMembershipFindUnique.mockResolvedValue(null);
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        organizationInvitation: {
+          findFirst: vi.fn().mockResolvedValue(pendingInvitation),
+          update: vi.fn().mockResolvedValue({
+            ...pendingInvitation,
+            status: "accepted",
+          }),
+        },
+        organizationMembership: {
+          create: vi.fn().mockRejectedValue(
+            new Prisma.PrismaClientKnownRequestError(
+              "Unique constraint failed",
+              { code: "P2002", clientVersion: "test" },
+            ),
+          ),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/organizations/org-1/join", {
+      method: "POST",
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it("P2002 以外の Prisma 既知エラーは 500 として伝播する", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+    mockTransaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("connection lost", {
+        code: "P1017",
+        clientVersion: "test",
+      }),
+    );
+
+    const res = await app.request("/organizations/org-1/join", {
+      method: "POST",
+    });
+    expect(res.status).toBe(500);
+  });
 });

@@ -173,32 +173,45 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     // 招待検索 → status 更新 → membership 作成を一貫させる。
     // 期限切れ招待は status=pending のまま残るが now と比較してスキップする
     // （expired への自動遷移はバッチジョブ前提）。
-    const result = await prisma.$transaction(async (tx) => {
-      const invitation = await tx.organizationInvitation.findFirst({
-        where: {
-          organizationId: id,
-          email: user.email,
-          status: "pending",
-          expiresAt: { gt: new Date() },
-        },
-      });
-      if (!invitation) {
-        return null;
-      }
+    // 外側の existing チェックは高速パスとして残し、並列 /join による
+    // membership 主キー (userId, organizationId) 重複は P2002 を捕捉して 409 にする。
+    let result: { userId: string; organizationId: string; role: OrgRole } | null;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const invitation = await tx.organizationInvitation.findFirst({
+          where: {
+            organizationId: id,
+            email: user.email,
+            status: "pending",
+            expiresAt: { gt: new Date() },
+          },
+        });
+        if (!invitation) {
+          return null;
+        }
 
-      await tx.organizationInvitation.update({
-        where: { id: invitation.id },
-        data: { status: "accepted" },
+        await tx.organizationInvitation.update({
+          where: { id: invitation.id },
+          data: { status: "accepted" },
+        });
+        const membership = await tx.organizationMembership.create({
+          data: {
+            userId: user.id,
+            organizationId: id,
+            role: invitation.role,
+          },
+        });
+        return membership;
       });
-      const membership = await tx.organizationMembership.create({
-        data: {
-          userId: user.id,
-          organizationId: id,
-          role: invitation.role,
-        },
-      });
-      return membership;
-    });
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002"
+      ) {
+        return c.json({ error: "既にこの組織に参加しています" }, 409);
+      }
+      throw e;
+    }
 
     if (!result) {
       return c.json({ error: "有効な招待が見つかりません" }, 404);
