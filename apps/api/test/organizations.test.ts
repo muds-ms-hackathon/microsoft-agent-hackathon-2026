@@ -364,12 +364,14 @@ describe("DELETE /organizations/:id", () => {
     };
   }
 
-  it("owner は 200 で削除できる", async () => {
+  it("owner は 204 で削除できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
     mockOrgDelete.mockResolvedValue(sampleOrg);
 
     const res = await app.request("/organizations/org-1", { method: "DELETE" });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(204);
+    // 204 はボディなし
+    expect(await res.text()).toBe("");
     expect(mockOrgDelete).toHaveBeenCalledWith({ where: { id: "org-1" } });
   });
 

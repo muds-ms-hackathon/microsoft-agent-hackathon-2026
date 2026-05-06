@@ -152,8 +152,9 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
 
     // schema 側で Membership / Invitation / RecurringMeeting / MeetingMember は
     // onDelete: Cascade のため delete 一発で連鎖削除される。
-    const deleted = await prisma.organization.delete({ where: { id } });
-    return c.json(deleted);
+    // 削除済みリソースの本体を返しても利用側で扱いに困るため 204 で返す。
+    await prisma.organization.delete({ where: { id } });
+    return c.body(null, 204);
   })
   .post("/:id/invite", zValidator("json", inviteSchema), async (c) => {
     const id = c.req.param("id");
