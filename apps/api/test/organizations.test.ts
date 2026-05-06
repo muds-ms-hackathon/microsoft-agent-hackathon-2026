@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Prisma を全モックしてルートロジックのみ検証する。
 vi.mock("../src/lib/prisma.js", () => ({
@@ -44,6 +44,7 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
+import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 
@@ -369,6 +370,149 @@ describe("DELETE /organizations/:id", () => {
   });
 });
 
+describe("POST /organizations/:id/invite", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // テスト全体で時刻を固定して expiresAt を検証可能にする
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-06T00:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function membership(role: "owner" | "admin" | "member") {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  const sampleInvitation = {
+    id: "inv-1",
+    organizationId: "org-1",
+    email: "bob@example.com",
+    invitedBy: "user-1",
+    expiresAt: new Date("2026-05-13T00:00:00Z"),
+    status: "pending",
+    createdAt: new Date("2026-05-06T00:00:00Z"),
+  };
+
+  it("owner は招待を作成でき、デフォルト role=member / 7日後 expiresAt が設定される", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationCreate.mockResolvedValue(sampleInvitation);
+
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com" }),
+    });
+    expect(res.status).toBe(201);
+    expect(mockInvitationCreate).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org-1",
+        email: "bob@example.com",
+        invitedBy: "user-1",
+        expiresAt: new Date("2026-05-13T00:00:00Z"),
+      },
+    });
+  });
+
+  it("admin は招待を作成できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("admin"));
+    mockInvitationCreate.mockResolvedValue(sampleInvitation);
+
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "bob@example.com",
+        role: "admin",
+        expiresInDays: 14,
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(mockInvitationCreate).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org-1",
+        email: "bob@example.com",
+        invitedBy: "user-1",
+        expiresAt: new Date("2026-05-20T00:00:00Z"),
+      },
+    });
+  });
+
+  it("member は 403 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com" }),
+    });
+    expect(res.status).toBe(403);
+    expect(mockInvitationCreate).not.toHaveBeenCalled();
+  });
+
+  it("未所属ユーザーは 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockInvitationCreate).not.toHaveBeenCalled();
+  });
+
+  it("email がメール形式でない場合は 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "not-an-email" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("role に owner を指定した場合は 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com", role: "owner" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("expiresInDays が 0 以下の場合は 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com", expiresInDays: 0 }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("同一メール × 同一組織 × pending の招待が既存の場合 (P2002) は 409 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError(
+        "Unique constraint failed",
+        { code: "P2002", clientVersion: "test" },
+      ),
+    );
+
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com" }),
+    });
+    expect(res.status).toBe(409);
+  });
+});
+
 // 後続テストで使用するモックを参照保持しておくためのダミー句（Biome の未使用警告回避）
-void mockInvitationCreate;
 void mockInvitationFindFirst;

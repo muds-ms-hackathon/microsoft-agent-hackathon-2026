@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { Prisma } from "@prisma/client";
 import { Hono } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -16,6 +17,13 @@ const updateSchema = z
     description: z.string().optional(),
   })
   .strict();
+
+// owner ロールの招待は不可（owner は組織作成者のみ）。expiresInDays は正の整数。
+const inviteSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(["admin", "member"]).optional(),
+  expiresInDays: z.number().int().positive().optional(),
+});
 
 export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
@@ -92,6 +100,55 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const deleted = await prisma.organization.delete({ where: { id } });
     return c.json(deleted);
   })
+  .post(
+    "/:id/invite",
+    zValidator("json", inviteSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const user = c.var.user;
+      const { email, expiresInDays } = c.req.valid("json");
+      // role は将来 OrganizationMembership 作成時に使う。今回 schema には保存しない。
+
+      const membership = await prisma.organizationMembership.findUnique({
+        where: {
+          userId_organizationId: { userId: user.id, organizationId: id },
+        },
+      });
+      if (!membership) {
+        return c.json({ error: "組織が見つかりません" }, 404);
+      }
+      if (membership.role !== "owner" && membership.role !== "admin") {
+        return c.json({ error: "招待権限がありません" }, 403);
+      }
+
+      const days = expiresInDays ?? 7;
+      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+      try {
+        const invitation = await prisma.organizationInvitation.create({
+          data: {
+            organizationId: id,
+            email,
+            invitedBy: user.id,
+            expiresAt,
+          },
+        });
+        return c.json(invitation, 201);
+      } catch (e) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === "P2002"
+        ) {
+          // 同一組織 × 同一 email × 同一 status の重複招待
+          return c.json(
+            { error: "このメールアドレスへの招待は既に存在します" },
+            409,
+          );
+        }
+        throw e;
+      }
+    },
+  )
   .post("/", zValidator("json", createSchema), async (c) => {
     const { name, description } = c.req.valid("json");
     const user = c.var.user;
