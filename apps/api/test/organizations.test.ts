@@ -229,8 +229,104 @@ describe("GET /organizations/:id", () => {
   });
 });
 
+describe("PATCH /organizations/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function membership(role: "owner" | "admin" | "member") {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  it("owner は 200 で更新できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockOrgUpdate.mockResolvedValue({ ...sampleOrg, name: "新しい名前" });
+
+    const res = await app.request("/organizations/org-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "新しい名前" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockOrgUpdate).toHaveBeenCalledWith({
+      where: { id: "org-1" },
+      data: { name: "新しい名前" },
+    });
+  });
+
+  it("admin は 200 で更新できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("admin"));
+    mockOrgUpdate.mockResolvedValue({ ...sampleOrg, description: "新説明" });
+
+    const res = await app.request("/organizations/org-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "新説明" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockOrgUpdate).toHaveBeenCalledWith({
+      where: { id: "org-1" },
+      data: { description: "新説明" },
+    });
+  });
+
+  it("member は 403 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    const res = await app.request("/organizations/org-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "x" }),
+    });
+    expect(res.status).toBe(403);
+    expect(mockOrgUpdate).not.toHaveBeenCalled();
+  });
+
+  it("未所属ユーザーは 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/organizations/org-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "x" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockOrgUpdate).not.toHaveBeenCalled();
+  });
+
+  it("name が空文字列の場合は 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipFindUnique).not.toHaveBeenCalled();
+    expect(mockOrgUpdate).not.toHaveBeenCalled();
+  });
+
+  it("name と description の両方を一度に更新できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockOrgUpdate.mockResolvedValue({
+      ...sampleOrg,
+      name: "n",
+      description: "d",
+    });
+    const res = await app.request("/organizations/org-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "n", description: "d" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockOrgUpdate).toHaveBeenCalledWith({
+      where: { id: "org-1" },
+      data: { name: "n", description: "d" },
+    });
+  });
+});
+
 // 後続テストで使用するモックを参照保持しておくためのダミー句（Biome の未使用警告回避）
-void mockOrgUpdate;
 void mockOrgDelete;
 void mockInvitationCreate;
 void mockInvitationFindFirst;

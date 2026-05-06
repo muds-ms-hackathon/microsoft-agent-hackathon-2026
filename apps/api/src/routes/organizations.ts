@@ -9,6 +9,14 @@ const createSchema = z.object({
   description: z.string().optional(),
 });
 
+// 全フィールド optional だが、name を渡す場合は空文字列を弾く。
+const updateSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    description: z.string().optional(),
+  })
+  .strict();
+
 export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
   .get("/", async (c) => {
@@ -39,6 +47,29 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     }
 
     return c.json(org);
+  })
+  .patch("/:id", zValidator("json", updateSchema), async (c) => {
+    const id = c.req.param("id");
+    const user = c.var.user;
+    const data = c.req.valid("json");
+
+    const membership = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: { userId: user.id, organizationId: id },
+      },
+    });
+    if (!membership) {
+      return c.json({ error: "組織が見つかりません" }, 404);
+    }
+    if (membership.role !== "owner" && membership.role !== "admin") {
+      return c.json({ error: "編集権限がありません" }, 403);
+    }
+
+    const updated = await prisma.organization.update({
+      where: { id },
+      data,
+    });
+    return c.json(updated);
   })
   .post("/", zValidator("json", createSchema), async (c) => {
     const { name, description } = c.req.valid("json");
