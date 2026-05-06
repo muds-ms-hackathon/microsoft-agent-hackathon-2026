@@ -6,12 +6,28 @@
 // 移行後も呼び出し側に閉じた変更だけで済むよう、保存実装を内部に隠蔽
 // しておく。
 //
-// 真実源: localStorage を真実源、authAtom を UI 用キャッシュとして扱う。
-// 初期化時のみ getInitialState() で localStorage から復元する設計のため、
-// 他タブからの変更や直接の localStorage 操作で両者が乖離する余地は残る。
-// atomWithStorage 等で根本解消する作業は別途 Issue (#80) で進める。
+// 真実源: localStorage（id_token キー）に一本化する。authAtom はそこから
+// 派生する読み取り専用 atom であり、storage イベント購読により他タブの
+// ログイン／ログアウトにも追従する。書き込みは loginAtom / logoutAtom が
+// 内部の idTokenAtom（atomWithStorage）を介して行うため、UI と localStorage
+// の二重管理は構造的に発生しない。
 
-import { atom } from "jotai";
+import { type Atom, atom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
+
+// jotai/utils は SyncStorage 型を public な entry point から再エクスポートして
+// いないため、atomWithStorage が受け付ける形に合わせてローカルで定義する。
+// （raw 文字列を扱う storage を実装するための最小定義に留める）
+type IdTokenStorage = {
+  getItem: (key: string, initialValue: string | null) => string | null;
+  setItem: (key: string, newValue: string | null) => void;
+  removeItem: (key: string) => void;
+  subscribe: (
+    key: string,
+    callback: (value: string | null) => void,
+    initialValue: string | null,
+  ) => (() => void) | undefined;
+};
 
 const ID_TOKEN_KEY = "id_token";
 
@@ -25,18 +41,20 @@ export interface AuthState {
   } | null;
 }
 
+const UNAUTHENTICATED: AuthState = {
+  isAuthenticated: false,
+  idToken: null,
+  user: null,
+};
+
 function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(ID_TOKEN_KEY);
 }
 
-function setStoredToken(token: string | null): void {
+function removeStoredToken(): void {
   if (typeof window === "undefined") return;
-  if (token) {
-    localStorage.setItem(ID_TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(ID_TOKEN_KEY);
-  }
+  localStorage.removeItem(ID_TOKEN_KEY);
 }
 
 // JWT のペイロードは Base64URL（RFC 7515）でエンコードされており、
@@ -76,51 +94,97 @@ export function parseToken(token: string): AuthState["user"] {
   }
 }
 
+function deriveAuthState(token: string | null): AuthState {
+  if (!token) return UNAUTHENTICATED;
+  const user = parseToken(token);
+  if (!user) return UNAUTHENTICATED;
+  return { isAuthenticated: true, idToken: token, user };
+}
+
 export function getInitialState(): AuthState {
   const token = getStoredToken();
   if (token) {
     const user = parseToken(token);
     if (user) {
-      return {
-        isAuthenticated: true,
-        idToken: token,
-        user,
-      };
+      return { isAuthenticated: true, idToken: token, user };
     }
     // 期限切れ等で復元できないトークンはここで破棄しておくと
     // 次回以降のガードがログインループに陥らない。
-    setStoredToken(null);
+    removeStoredToken();
   }
-  return {
-    isAuthenticated: false,
-    idToken: null,
-    user: null,
-  };
+  return UNAUTHENTICATED;
 }
 
-export const authAtom = atom<AuthState>(getInitialState());
+// raw な id_token 文字列を localStorage に保存するためのカスタムストレージ。
+// jotai/utils 既定の createJSONStorage は値を JSON エンコードするため、
+// 既存レイアウト（プレーン文字列の id_token）との互換が崩れてしまう。
+// subscribe で `storage` イベントを購読し、他タブからの変更を atom に伝搬する。
+const idTokenStorage: IdTokenStorage = {
+  getItem(key, initialValue) {
+    if (typeof window === "undefined") return initialValue;
+    return localStorage.getItem(key);
+  },
+  setItem(key, newValue) {
+    if (typeof window === "undefined") return;
+    if (newValue === null) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, newValue);
+    }
+  },
+  removeItem(key) {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(key);
+  },
+  subscribe(key, callback, _initialValue) {
+    if (typeof window === "undefined") return undefined;
+    const handler = (e: StorageEvent) => {
+      if (e.storageArea !== localStorage) return;
+      // localStorage.clear() の場合は key=null で発火するため、それも未認証扱い。
+      if (e.key === null || e.key === key) {
+        callback(e.newValue);
+      }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  },
+};
+
+// 真実源としての id_token atom（モジュール外には公開しない）。
+// getOnInit:true でモジュール load 時に同期的に localStorage を読み取り、
+// 初期化フェーズで `getInitialState` の挙動と整合させる。
+const idTokenAtom = atomWithStorage<string | null>(
+  ID_TOKEN_KEY,
+  null,
+  idTokenStorage,
+  { getOnInit: true },
+);
+
+// authAtom は idTokenAtom から派生する読み取り専用 atom。
+// localStorage との二重管理を構造的に排除し、storage イベントを介して
+// 他タブの変更にも追従する。
+export const authAtom: Atom<AuthState> = atom((get) =>
+  deriveAuthState(get(idTokenAtom)),
+);
 
 export const loginAtom = atom(null, (_get, set, token: string) => {
-  setStoredToken(token);
-  const user = parseToken(token);
-  set(authAtom, {
-    isAuthenticated: !!user,
-    idToken: token,
-    user,
-  });
+  set(idTokenAtom, token);
 });
 
 export const logoutAtom = atom(null, (_get, set) => {
-  setStoredToken(null);
-  set(authAtom, {
-    isAuthenticated: false,
-    idToken: null,
-    user: null,
-  });
+  set(idTokenAtom, null);
 });
 
 export function getIdToken(): string | null {
-  return getStoredToken();
+  const token = getStoredToken();
+  if (!token) return null;
+  // authAtom は parseToken 検証後の値しか返さないため、getIdToken も
+  // 期限切れトークンを返さないように揃える（読み取り結果の整合性を保つ）。
+  if (!parseToken(token)) {
+    removeStoredToken();
+    return null;
+  }
+  return token;
 }
 
 // ---- OIDC implicit flow の state / nonce 検証 ----------------------------
