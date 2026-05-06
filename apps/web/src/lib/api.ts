@@ -1,8 +1,7 @@
-import type { AppType } from "api/types";
-import { hc } from "hono/client";
+import { hcWithType } from "api/types";
 import { getIdToken } from "./auth";
 
-export const api = hc<AppType>("/api");
+export const api = hcWithType("/api");
 
 export function authHeaders(): { headers: Record<string, string> } {
   const token = getIdToken();
