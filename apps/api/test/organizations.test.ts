@@ -514,5 +514,112 @@ describe("POST /organizations/:id/invite", () => {
   });
 });
 
-// 後続テストで使用するモックを参照保持しておくためのダミー句（Biome の未使用警告回避）
-void mockInvitationFindFirst;
+describe("POST /organizations/:id/join", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-06T00:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const pendingInvitation = {
+    id: "inv-1",
+    organizationId: "org-1",
+    email: "alice@example.com",
+    invitedBy: "user-2",
+    expiresAt: new Date("2026-05-13T00:00:00Z"),
+    status: "pending",
+    createdAt: new Date("2026-05-06T00:00:00Z"),
+  };
+
+  it("有効な招待がある場合 200 を返し、招待を accepted に更新し membership(member) を作成する", async () => {
+    // 既に member として参加していないことを確認するための findUnique モック
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        organizationInvitation: {
+          findFirst: vi.fn().mockResolvedValue(pendingInvitation),
+          update: vi.fn().mockResolvedValue({
+            ...pendingInvitation,
+            status: "accepted",
+          }),
+        },
+        organizationMembership: {
+          create: vi.fn().mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1",
+            role: "member",
+            joinedAt: new Date("2026-05-06T00:00:00Z"),
+          }),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ
+      const result = await (fn as (t: any) => Promise<unknown>)(tx);
+
+      expect(tx.organizationInvitation.findFirst).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          email: "alice@example.com",
+          status: "pending",
+          expiresAt: { gt: new Date("2026-05-06T00:00:00Z") },
+        },
+      });
+      expect(tx.organizationInvitation.update).toHaveBeenCalledWith({
+        where: { id: "inv-1" },
+        data: { status: "accepted" },
+      });
+      expect(tx.organizationMembership.create).toHaveBeenCalledWith({
+        data: {
+          userId: "user-1",
+          organizationId: "org-1",
+          role: "member",
+        },
+      });
+      return result;
+    });
+
+    const res = await app.request("/organizations/org-1/join", {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("認証ユーザー向けの pending 招待が存在しない場合は 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        organizationInvitation: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          update: vi.fn(),
+        },
+        organizationMembership: { create: vi.fn() },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/organizations/org-1/join", {
+      method: "POST",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("既に member として参加済みの場合は 409 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    });
+
+    const res = await app.request("/organizations/org-1/join", {
+      method: "POST",
+    });
+    expect(res.status).toBe(409);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+});

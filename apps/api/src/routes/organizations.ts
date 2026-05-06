@@ -149,6 +149,56 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       }
     },
   )
+  .post("/:id/join", async (c) => {
+    const id = c.req.param("id");
+    const user = c.var.user;
+
+    // 既に参加済みのユーザーが /join を叩いた場合は冪等ではなく 409 で
+    // 「既に参加済み」を明示する（ロール上書き等の意図しない副作用を避ける）。
+    const existing = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: { userId: user.id, organizationId: id },
+      },
+    });
+    if (existing) {
+      return c.json({ error: "既にこの組織に参加しています" }, 409);
+    }
+
+    // 招待検索 → status 更新 → membership 作成を一貫させる。
+    // 期限切れ招待は status=pending のまま残るが now と比較してスキップする
+    // （expired への自動遷移はバッチジョブ前提）。
+    const result = await prisma.$transaction(async (tx) => {
+      const invitation = await tx.organizationInvitation.findFirst({
+        where: {
+          organizationId: id,
+          email: user.email,
+          status: "pending",
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (!invitation) {
+        return null;
+      }
+
+      await tx.organizationInvitation.update({
+        where: { id: invitation.id },
+        data: { status: "accepted" },
+      });
+      const membership = await tx.organizationMembership.create({
+        data: {
+          userId: user.id,
+          organizationId: id,
+          role: "member",
+        },
+      });
+      return membership;
+    });
+
+    if (!result) {
+      return c.json({ error: "有効な招待が見つかりません" }, 404);
+    }
+    return c.json(result);
+  })
   .post("/", zValidator("json", createSchema), async (c) => {
     const { name, description } = c.req.valid("json");
     const user = c.var.user;
