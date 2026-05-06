@@ -393,6 +393,7 @@ describe("POST /organizations/:id/invite", () => {
     organizationId: "org-1",
     email: "bob@example.com",
     invitedBy: "user-1",
+    role: "member",
     expiresAt: new Date("2026-05-13T00:00:00Z"),
     status: "pending",
     createdAt: new Date("2026-05-06T00:00:00Z"),
@@ -413,14 +414,15 @@ describe("POST /organizations/:id/invite", () => {
         organizationId: "org-1",
         email: "bob@example.com",
         invitedBy: "user-1",
+        role: "member",
         expiresAt: new Date("2026-05-13T00:00:00Z"),
       },
     });
   });
 
-  it("admin は招待を作成できる", async () => {
+  it("admin は招待を作成でき、指定した role=admin が invitation に保存される", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("admin"));
-    mockInvitationCreate.mockResolvedValue(sampleInvitation);
+    mockInvitationCreate.mockResolvedValue({ ...sampleInvitation, role: "admin" });
 
     const res = await app.request("/organizations/org-1/invite", {
       method: "POST",
@@ -437,6 +439,7 @@ describe("POST /organizations/:id/invite", () => {
         organizationId: "org-1",
         email: "bob@example.com",
         invitedBy: "user-1",
+        role: "admin",
         expiresAt: new Date("2026-05-20T00:00:00Z"),
       },
     });
@@ -545,6 +548,7 @@ describe("POST /organizations/:id/join", () => {
     organizationId: "org-1",
     email: "alice@example.com",
     invitedBy: "user-2",
+    role: "member" as const,
     expiresAt: new Date("2026-05-13T00:00:00Z"),
     status: "pending",
     createdAt: new Date("2026-05-06T00:00:00Z"),
@@ -592,6 +596,47 @@ describe("POST /organizations/:id/join", () => {
           userId: "user-1",
           organizationId: "org-1",
           role: "member",
+        },
+      });
+      return result;
+    });
+
+    const res = await app.request("/organizations/org-1/join", {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("invitation.role が admin の場合は membership も admin として作成される", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const adminInvitation = { ...pendingInvitation, role: "admin" as const };
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        organizationInvitation: {
+          findFirst: vi.fn().mockResolvedValue(adminInvitation),
+          update: vi.fn().mockResolvedValue({
+            ...adminInvitation,
+            status: "accepted",
+          }),
+        },
+        organizationMembership: {
+          create: vi.fn().mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1",
+            role: "admin",
+            joinedAt: new Date("2026-05-06T00:00:00Z"),
+          }),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ
+      const result = await (fn as (t: any) => Promise<unknown>)(tx);
+
+      expect(tx.organizationMembership.create).toHaveBeenCalledWith({
+        data: {
+          userId: "user-1",
+          organizationId: "org-1",
+          role: "admin",
         },
       });
       return result;

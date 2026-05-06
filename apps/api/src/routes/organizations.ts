@@ -117,7 +117,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .post("/:id/invite", zValidator("json", inviteSchema), async (c) => {
     const id = c.req.param("id");
     const user = c.var.user;
-    const { email, expiresInDays } = c.req.valid("json");
+    const { email, role, expiresInDays } = c.req.valid("json");
 
     const auth = await requireRole(
       c,
@@ -136,6 +136,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
           organizationId: id,
           email,
           invitedBy: user.id,
+          role: role ?? "member",
           expiresAt,
         },
       });
@@ -193,7 +194,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         data: {
           userId: user.id,
           organizationId: id,
-          role: "member",
+          role: invitation.role,
         },
       });
       return membership;
