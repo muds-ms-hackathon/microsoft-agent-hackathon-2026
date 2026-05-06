@@ -14,3 +14,14 @@ model Meeting {
 
   @@index([heldAt])
 }
+
+// OIDC 認証で取得したユーザー情報。externalId は IdP の sub を保存する。
+model User {
+  id          String   @id @default(cuid())
+  externalId  String   @unique
+  email       String   @unique
+  name        String
+  displayName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
