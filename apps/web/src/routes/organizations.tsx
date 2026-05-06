@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -5,9 +6,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { api, authHeaders } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 export const Route = createFileRoute("/organizations")({
   component: OrganizationsPage,
@@ -55,6 +71,105 @@ function OrganizationCard({ org }: { org: Organization }) {
   );
 }
 
+// ===== 作成フォーム =====
+
+const createSchema = z.object({
+  name: z.string().min(1, "組織名は必須です"),
+  description: z.string().optional(),
+});
+
+type CreateFormValues = z.infer<typeof createSchema>;
+
+function CreateOrganizationDialog() {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CreateFormValues>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { name: "", description: "" },
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (data: CreateFormValues) => {
+      // description は空文字なら API に渡さない（API 側 schema が optional のため）
+      const json: { name: string; description?: string } = { name: data.name };
+      if (data.description && data.description.length > 0) {
+        json.description = data.description;
+      }
+      const res = await api.organizations.$post({
+        json,
+        ...authHeaders(),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      reset();
+      setOpen(false);
+    },
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) reset();
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button>組織を作成</Button>
+      </DialogTrigger>
+      <DialogContent aria-label="新しい組織を作成">
+        <DialogHeader>
+          <DialogTitle>新しい組織を作成</DialogTitle>
+          <DialogDescription>
+            組織名と説明（任意）を入力してください。
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={handleSubmit((data) => mutation.mutate(data))}
+          className="flex flex-col gap-4"
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="org-name">組織名</Label>
+            <Input
+              id="org-name"
+              placeholder="例: ACME 株式会社"
+              {...register("name")}
+            />
+            {errors.name && (
+              <p role="alert" className="text-destructive text-sm">
+                {errors.name.message}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="org-description">説明</Label>
+            <Input
+              id="org-description"
+              placeholder="組織の説明（任意）"
+              {...register("description")}
+            />
+          </div>
+          {mutation.isError && (
+            <p className="text-destructive text-sm">作成に失敗しました</p>
+          )}
+          <DialogFooter>
+            <Button type="submit" disabled={mutation.isPending}>
+              作成
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function OrganizationsPage() {
   const {
     data: orgs = [],
@@ -73,6 +188,7 @@ export function OrganizationsPage() {
     <main className="container mx-auto p-8 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">組織一覧</h1>
+        <CreateOrganizationDialog />
       </header>
 
       {isLoading ? (
