@@ -24,4 +24,65 @@ model User {
   displayName String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  memberships     OrganizationMembership[]
+  invitationsSent OrganizationInvitation[] @relation("InvitedBy")
+}
+
+// 組織内メンバー権限。owner は組織削除可、admin は招待・編集可、member は閲覧中心。
+enum OrgRole {
+  owner
+  admin
+  member
+}
+
+// 組織への招待状態。pending → accepted/expired のいずれかに遷移する。
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+}
+
+// 組織。所属メンバーと配下定例の親エンティティ。
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships OrganizationMembership[]
+  invitations OrganizationInvitation[]
+}
+
+// 組織への所属。userId × organizationId を複合主キーとする。
+model OrganizationMembership {
+  userId         String
+  organizationId String
+  role           OrgRole
+  joinedAt       DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId])
+  @@index([organizationId])
+}
+
+// 組織への招待。inviter は履歴保持のため User 削除時 Restrict。
+// 同一組織への同一メールアドレスの同一 status の招待は重複させない。
+model OrganizationInvitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  invitedBy      String
+  expiresAt      DateTime
+  status         InvitationStatus @default(pending)
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter      User         @relation("InvitedBy", fields: [invitedBy], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, email, status])
+  @@index([email])
 }
