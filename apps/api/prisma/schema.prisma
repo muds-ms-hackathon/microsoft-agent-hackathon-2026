@@ -27,6 +27,7 @@ model User {
 
   memberships     OrganizationMembership[]
   invitationsSent OrganizationInvitation[] @relation("InvitedBy")
+  meetingMembers  MeetingMember[]
 }
 
 // 組織内メンバー権限。owner は組織削除可、admin は招待・編集可、member は閲覧中心。
@@ -51,8 +52,9 @@ model Organization {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  memberships OrganizationMembership[]
-  invitations OrganizationInvitation[]
+  memberships       OrganizationMembership[]
+  invitations       OrganizationInvitation[]
+  recurringMeetings RecurringMeeting[]
 }
 
 // 組織への所属。userId × organizationId を複合主キーとする。
@@ -85,4 +87,39 @@ model OrganizationInvitation {
 
   @@unique([organizationId, email, status])
   @@index([email])
+}
+
+// 定例会議。組織配下の継続的なミーティング枠。
+model RecurringMeeting {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  scheduleCron   String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      MeetingMember[]
+
+  @@index([organizationId])
+}
+
+// 定例ごとのメンバー。recurringMeetingId × userId を複合主キーとする。
+enum MeetingRole {
+  owner
+  member
+}
+
+model MeetingMember {
+  recurringMeetingId String
+  userId             String
+  role               MeetingRole
+  joinedAt           DateTime    @default(now())
+
+  recurringMeeting RecurringMeeting @relation(fields: [recurringMeetingId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([recurringMeetingId, userId])
+  @@index([userId])
 }
