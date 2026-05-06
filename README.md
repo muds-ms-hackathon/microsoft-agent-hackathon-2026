@@ -53,20 +53,24 @@ make migrate                # DB マイグレーションを適用（初回起�
 
 ### OIDC 認証の動作確認
 
-`make dev` 起動後、FakeAuth から取得した ID トークンで認証必須 API を呼び出せることを確認できます。
+`make dev` 起動後、FakeAuth から取得した ID トークンが正しく検証されることと、api コンテナから fake-auth に Docker network 経由で到達できることを確認します。
 
 ```bash
-# FakeAuth から ID トークン取得（host から localhost:3007 にアクセス）
+# 1. FakeAuth から ID トークン取得（host から localhost:3007 経由）
 TOKEN=$(curl -s -X POST http://localhost:3007/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.com"}' | jq -r .id_token)
 
-# API の認証必須エンドポイントに渡して 200 が返ることを確認
-curl -i http://localhost:3001/organizations \
-  -H "Authorization: Bearer $TOKEN"
+# 2. fake-auth /me でトークン検証が通ることを確認（200 + ユーザー情報）
+curl -i http://localhost:3007/me -H "Authorization: Bearer $TOKEN"
+
+# 3. api コンテナから fake-auth の JWKS を取得できることを確認
+docker compose exec api wget -qO- http://fake-auth:3007/.well-known/jwks.json
 ```
 
-> Docker network 上で api コンテナが fake-auth の JWKS を取得し、token の `iss` クレーム（`http://fake-auth:3007`）と issuer 検証が一致するよう、`docker-compose.yml` で fake-auth `ISSUER` と api `OIDC_ISSUER_URL` を `http://fake-auth:3007` に揃えています。
+> 手順 3 が成功することで、api コンテナの OIDC ミドルウェア（`apps/api/src/middleware/auth.ts`）が token の `iss` クレーム（`http://fake-auth:3007`）と JWKS 取得経路の双方を満たせる構成になっていることを確認できます。
+>
+> 認証ミドルウェアを適用した API エンドポイントによる end-to-end 動作確認は、ミドルウェアを実ルートに適用する別 Issue で対応します（現時点では `apps/api/src/app.ts` のどのルートにも未適用）。
 
 ### `make dev-native` で OIDC を使う場合の追加設定
 
