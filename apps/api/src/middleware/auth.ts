@@ -58,11 +58,13 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
   } catch (e) {
     // email は @unique のため、別ユーザーが既に同一メールを保有している場合は P2002 になる。
     // 利用者向けには「メールが他アカウントで使用中」であることを 409 で返し、500 で握り潰さない。
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
+    ) {
       return c.json(
         {
-          error:
-            "このメールアドレスは既に別のアカウントで使用されています",
+          error: "このメールアドレスは既に別のアカウントで使用されています",
         },
         409,
       );
