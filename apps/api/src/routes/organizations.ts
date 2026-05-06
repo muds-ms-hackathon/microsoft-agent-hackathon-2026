@@ -168,6 +168,20 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     );
     if (!guard.ok) return guard.res;
 
+    // 招待先 email のユーザーが既にこの組織のメンバーである場合は、
+    // 招待を作っても /join で 409 になるだけで pending 招待が腐る。
+    // 招待作成時点で 409 を返し、無駄なレコードを残さない。
+    // User.email は @unique なので findFirst でも実質一意。
+    const existingMember = await prisma.organizationMembership.findFirst({
+      where: {
+        organizationId: id,
+        user: { email },
+      },
+    });
+    if (existingMember) {
+      return c.json({ error: "このユーザーは既にこの組織のメンバーです" }, 409);
+    }
+
     const days = expiresInDays ?? 7;
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 

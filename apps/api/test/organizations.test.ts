@@ -12,6 +12,7 @@ vi.mock("../src/lib/prisma.js", () => ({
     },
     organizationMembership: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
     },
     organizationInvitation: {
@@ -67,6 +68,9 @@ const mockOrgUpdate = vi.mocked(prisma.organization.update);
 const mockOrgDelete = vi.mocked(prisma.organization.delete);
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
+);
+const mockMembershipFindFirst = vi.mocked(
+  prisma.organizationMembership.findFirst,
 );
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
 const mockTransaction = vi.mocked(prisma.$transaction);
@@ -587,6 +591,30 @@ describe("POST /organizations/:id/invite", () => {
       body: JSON.stringify({ email: "bob@example.com" }),
     });
     expect(res.status).toBe(409);
+  });
+
+  it("招待先 email が既に組織のメンバーである場合は 409 を返し、招待を作成しない", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockMembershipFindFirst.mockResolvedValue({
+      userId: "user-2",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    });
+
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "bob@example.com" }),
+    });
+    expect(res.status).toBe(409);
+    expect(mockMembershipFindFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        user: { email: "bob@example.com" },
+      },
+    });
+    expect(mockInvitationCreate).not.toHaveBeenCalled();
   });
 });
 
