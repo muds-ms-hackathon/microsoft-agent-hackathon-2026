@@ -56,9 +56,6 @@ const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
 );
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
-const mockInvitationFindFirst = vi.mocked(
-  prisma.organizationInvitation.findFirst,
-);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 const sampleOrg = {
@@ -499,10 +496,10 @@ describe("POST /organizations/:id/invite", () => {
   it("同一メール × 同一組織 × pending の招待が既存の場合 (P2002) は 409 を返す", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
     mockInvitationCreate.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError(
-        "Unique constraint failed",
-        { code: "P2002", clientVersion: "test" },
-      ),
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      }),
     );
 
     const res = await app.request("/organizations/org-1/invite", {
