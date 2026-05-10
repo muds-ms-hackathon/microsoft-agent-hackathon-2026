@@ -12,6 +12,19 @@ model Meeting {
   heldAt    DateTime
   createdAt DateTime @default(now())
 
+  // 議事録メタ情報
+  meetingType String @default(cuid())
+  transcriptionQuality String?
+  supplementaryMemo String?
+  sequenceNumber Int?
+  previousMeetingId String?
+  estimatedDurationMinutes Int?
+  estimationNote String?
+
+  // 自己参照リレーション
+  previousMeeting Meeting? @relation("MeetingChain", fields: [previousMeetingId], references: [id])
+  nextMeetings Meeting[] @relation("MeetingChain")
+
   @@index([heldAt])
 }
 
