@@ -13,11 +13,11 @@ model Meeting {
   createdAt DateTime @default(now())
 
   // 議事録メタ情報
-  meetingType String @default(one_time())
+  meetingType String @default("one_time")
   transcriptionQuality String?
   supplementaryMemo String?
   sequenceNumber Int?
-  previousMeetingId String @@index([heldAt])
+  previousMeetingId String?
   estimatedDurationMinutes Int?
   estimationNote String?
 
@@ -25,6 +25,8 @@ model Meeting {
   previousMeeting Meeting? @relation("MeetingChain", fields: [previousMeetingId], references: [id])
   nextMeetings Meeting[] @relation("MeetingChain")
 
+  // インデックス
+  @@index([previousMeetingId])
   @@index([heldAt])
 }
 
