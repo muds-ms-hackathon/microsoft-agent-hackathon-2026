@@ -13,11 +13,11 @@ model Meeting {
   createdAt DateTime @default(now())
 
   // 議事録メタ情報
-  meetingType String @default(cuid())
+  meetingType String @default(one_time())
   transcriptionQuality String?
   supplementaryMemo String?
   sequenceNumber Int?
-  previousMeetingId String?
+  previousMeetingId String @@index([heldAt])
   estimatedDurationMinutes Int?
   estimationNote String?
 
