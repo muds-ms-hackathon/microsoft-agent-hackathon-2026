@@ -20,7 +20,7 @@ import { api, authHeaders } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -81,6 +81,8 @@ type CreateFormValues = z.infer<typeof createSchema>;
 function CreateOrganizationDialog() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const nameId = useId();
+  const descriptionId = useId();
   const {
     register,
     handleSubmit,
@@ -138,9 +140,9 @@ function CreateOrganizationDialog() {
           className="flex flex-col gap-4"
         >
           <div className="flex flex-col gap-2">
-            <Label htmlFor="org-name">組織名</Label>
+            <Label htmlFor={nameId}>組織名</Label>
             <Input
-              id="org-name"
+              id={nameId}
               placeholder="例: ACME 株式会社"
               {...register("name")}
             />
@@ -151,9 +153,9 @@ function CreateOrganizationDialog() {
             )}
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="org-description">説明</Label>
+            <Label htmlFor={descriptionId}>説明</Label>
             <Input
-              id="org-description"
+              id={descriptionId}
               placeholder="組織の説明（任意）"
               {...register("description")}
             />
