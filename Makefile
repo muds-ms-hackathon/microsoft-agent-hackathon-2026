@@ -1,4 +1,4 @@
-.PHONY: help install dev dev-build dev-fresh dev-reset dev-native fake-auth-keys docker-clean lint test format migrate migrate-status db-shell refresh
+.PHONY: help install dev dev-build dev-fresh dev-reset dev-native fake-auth-keys docker-clean lint test format migrate migrate-status db-shell refresh logs ps
 
 help: ## 利用可能な make ターゲット一覧を表示する
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -31,6 +31,12 @@ refresh: ## 単一サービスを anon volume ごと再生成する（SVC=<servi
 	fi
 	docker compose rm -fsv $(SVC)
 	docker compose up -d --build $(SVC)
+
+logs: ## docker compose logs -f を実行する（SVC=<service> で個別指定可）
+	docker compose logs -f $(SVC)
+
+ps: ## docker compose ps を実行する
+	docker compose ps
 
 dev-native: ## インフラ（db / servicebus / fake-auth）のみ Docker で起動し、アプリは overmind で起動する
 	docker compose up -d db servicebus-db servicebus fake-auth
