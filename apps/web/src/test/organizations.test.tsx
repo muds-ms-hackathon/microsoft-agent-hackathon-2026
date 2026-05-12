@@ -17,9 +17,10 @@ vi.mock("@/lib/api", () => ({
 
 import { api } from "@/lib/api";
 
-// hono/client のレスポンス型が複雑なため、モックの戻り値はヘルパー経由でキャスト
+// hono/client のレスポンス型が複雑なため、モックの戻り値はヘルパー経由でキャスト。
+// queryFn 側で res.ok チェックを行うため ok: true / status: 200 も埋める。
 function mockJson<T>(data: T) {
-  return { json: async () => data } as never;
+  return { ok: true, status: 200, json: async () => data } as never;
 }
 
 type Organization = {
@@ -91,6 +92,21 @@ describe("組織一覧表示", () => {
   it("取得失敗時はエラー表示が出る", async () => {
     vi.mocked(api.organizations.$get).mockRejectedValue(new Error("network"));
     renderWithQuery(<OrganizationsPage />);
+    expect(await screen.findByText("取得に失敗しました")).toBeInTheDocument();
+  });
+
+  it("API が 4xx を返した場合（res.ok=false）もエラー表示でフォールバックする", async () => {
+    // 認証失敗などで API が配列でない { error } を返すケース。
+    // queryFn 側で弾かないと orgs.map() が落ちるため、UI クラッシュではなく
+    // エラー表示にフォールバックすることを保証する。
+    vi.mocked(api.organizations.$get).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: "認証が必要です" }),
+    } as never);
+
+    renderWithQuery(<OrganizationsPage />);
+
     expect(await screen.findByText("取得に失敗しました")).toBeInTheDocument();
   });
 });

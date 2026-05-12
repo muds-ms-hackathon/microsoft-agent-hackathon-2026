@@ -179,6 +179,11 @@ export function OrganizationsPage() {
     queryKey: ["organizations"],
     queryFn: async () => {
       const res = await api.organizations.$get(authHeaders());
+      // 認証失敗などで API が { error } を返した場合、配列でないものを
+      // そのまま data に格納すると orgs.map() で落ちるため、ここで弾く。
+      if (!res.ok) {
+        throw new Error(`Failed to fetch organizations: ${res.status}`);
+      }
       // Hono RPC のレスポンス型は date が string なので as でキャストする
       return (await res.json()) as Organization[];
     },
