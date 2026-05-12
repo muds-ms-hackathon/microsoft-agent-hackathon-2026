@@ -192,6 +192,49 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     }));
     return c.json(result);
   })
+  .delete("/:id/members/:userId", async (c) => {
+    const id = c.req.param("id");
+    const targetUserId = c.req.param("userId");
+    const callerUserId = c.var.user.id;
+
+    const guard = await requireRole(
+      c,
+      id,
+      ["owner"],
+      "メンバー削除権限がありません",
+    );
+    if (!guard.ok) return guard.res;
+
+    // 自己削除は #125（退会）の責務として本エンドポイントでは拒否する。
+    if (callerUserId === targetUserId) {
+      return c.json({ error: "自分自身を削除することはできません" }, 400);
+    }
+
+    // 削除対象 membership の存在を事前確認し、無ければ 404。
+    // delete 時の P2025 を catch する方法もあるが、可読性優先で事前 findUnique を採る。
+    const target = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: targetUserId,
+          organizationId: id,
+        },
+      },
+    });
+    if (!target) {
+      return c.json({ error: "対象メンバーが見つかりません" }, 404);
+    }
+
+    // MeetingMember は schema 側で onDelete: Cascade のため連鎖削除される。
+    await prisma.organizationMembership.delete({
+      where: {
+        userId_organizationId: {
+          userId: targetUserId,
+          organizationId: id,
+        },
+      },
+    });
+    return c.body(null, 204);
+  })
   .patch("/:id", zValidator("json", updateSchema), async (c) => {
     const id = c.req.param("id");
     const data = c.req.valid("json");
