@@ -172,17 +172,49 @@ describe("POST /organizations", () => {
 describe("GET /organizations", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("200 と認証ユーザーが所属する組織一覧を返す", async () => {
-    mockOrgFindMany.mockResolvedValue([sampleOrg]);
+  it("200 と認証ユーザーが所属する組織一覧（自分の role を含む）を返す", async () => {
+    // findMany は include: { memberships } で自分の membership を含めて取得し、
+    // ハンドラ側で role を平坦化して返す。
+    mockOrgFindMany.mockResolvedValue([
+      { ...sampleOrg, memberships: [{ role: "owner" }] },
+    ] as never);
     const res = await app.request("/organizations");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Array<{ id: string }>;
+    const body = (await res.json()) as Array<{ id: string; role: string }>;
     expect(body).toHaveLength(1);
     expect(body[0].id).toBe("org-1");
+    expect(body[0].role).toBe("owner");
+    // memberships は内部表現として残さず、レスポンスに混入しないこと
+    expect(body[0]).not.toHaveProperty("memberships");
     expect(mockOrgFindMany).toHaveBeenCalledWith({
       where: { memberships: { some: { userId: "user-1" } } },
       orderBy: { createdAt: "desc" },
+      include: {
+        memberships: {
+          where: { userId: "user-1" },
+          select: { role: true },
+        },
+      },
     });
+  });
+
+  it("複数所属でそれぞれの role が含まれる", async () => {
+    mockOrgFindMany.mockResolvedValue([
+      { ...sampleOrg, id: "org-1", memberships: [{ role: "owner" }] },
+      {
+        ...sampleOrg,
+        id: "org-2",
+        name: "別の組織",
+        memberships: [{ role: "member" }],
+      },
+    ] as never);
+    const res = await app.request("/organizations");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ id: string; role: string }>;
+    expect(body.map((o) => [o.id, o.role])).toEqual([
+      ["org-1", "owner"],
+      ["org-2", "member"],
+    ]);
   });
 
   it("所属組織が無い場合は空配列を返す", async () => {
