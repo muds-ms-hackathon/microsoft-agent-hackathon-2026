@@ -9,5 +9,10 @@
       "!node_modules",
       "!src/routeTree.gen.ts"
     ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   }
 }
