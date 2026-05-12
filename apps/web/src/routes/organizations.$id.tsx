@@ -82,6 +82,102 @@ function OrganizationDetailPage() {
   );
 }
 
+// ===== 編集ダイアログ =====
+
+const editSchema = z.object({
+  name: z.string().min(1, "組織名は必須です"),
+  // 空文字を許容することで API 側で「説明をクリア」を表現できる。
+  description: z.string(),
+});
+
+type EditFormValues = z.infer<typeof editSchema>;
+
+function EditOrganizationDialog({
+  org,
+}: {
+  org: { id: string; name: string; description: string | null };
+}) {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const nameId = useId();
+  const descriptionId = useId();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<EditFormValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues: { name: org.name, description: org.description ?? "" },
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (data: EditFormValues) => {
+      const res = await api.organizations[":id"].$patch(
+        { param: { id: org.id }, json: data },
+        authHeaders(),
+      );
+      if (!res.ok) {
+        throw new Error(`Failed to update organization: ${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organizations", org.id] });
+      setOpen(false);
+    },
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        // 閉じるときは「未保存の変更を破棄して元の値に戻す」挙動にする
+        if (!next) {
+          reset({ name: org.name, description: org.description ?? "" });
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline">組織情報を編集</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>組織情報を編集</DialogTitle>
+          <DialogDescription>組織名と説明を更新します。</DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={handleSubmit((data) => mutation.mutate(data))}
+          className="flex flex-col gap-4"
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={nameId}>組織名</Label>
+            <Input id={nameId} {...register("name")} />
+            {errors.name && (
+              <p role="alert" className="text-destructive text-sm">
+                {errors.name.message}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={descriptionId}>説明</Label>
+            <Input id={descriptionId} {...register("description")} />
+          </div>
+          {mutation.isError && (
+            <p className="text-destructive text-sm">更新に失敗しました</p>
+          )}
+          <DialogFooter>
+            <Button type="submit" disabled={mutation.isPending}>
+              保存
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ===== 招待ダイアログ =====
 
 const inviteSchema = z.object({
@@ -247,8 +343,13 @@ export function OrganizationDetailView({
     <main className="container mx-auto p-8 space-y-6">
       <header className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="text-2xl font-bold">{org.name}</h1>
-          <RoleBadge role={org.role} />
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">{org.name}</h1>
+            <RoleBadge role={org.role} />
+          </div>
+          {(org.role === "owner" || org.role === "admin") && (
+            <EditOrganizationDialog org={org} />
+          )}
         </div>
         {org.description ? (
           <p className="text-muted-foreground">{org.description}</p>

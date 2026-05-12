@@ -368,3 +368,140 @@ describe("組織詳細ページ - メンバー招待ダイアログ", () => {
     ).toBeInTheDocument();
   });
 });
+
+// ===== 権限制御（編集ボタン） =====
+
+describe("組織詳細ページ - 編集ボタンの表示", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("owner には「組織情報を編集」ボタンが表示される", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "owner" }),
+    );
+    renderDetail();
+    expect(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    ).toBeInTheDocument();
+  });
+
+  it("admin にも「組織情報を編集」ボタンが表示される", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "admin" }),
+    );
+    renderDetail();
+    expect(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    ).toBeInTheDocument();
+  });
+
+  it("member には「組織情報を編集」ボタンが表示されない", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "member" }),
+    );
+    renderDetail();
+    await screen.findByText("ACME 株式会社");
+    expect(
+      screen.queryByRole("button", { name: "組織情報を編集" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+// ===== 編集ダイアログ =====
+
+describe("組織詳細ページ - 組織情報編集ダイアログ", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "owner" }),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("編集ダイアログを開くと現在の name/description がプレフィルされる", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    expect(within(dialog).getByLabelText("組織名")).toHaveValue(
+      "ACME 株式会社",
+    );
+    expect(within(dialog).getByLabelText("説明")).toHaveValue(
+      "テスト組織の説明",
+    );
+  });
+
+  it("name を空にして送信するとバリデーションエラーが出る", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    await user.clear(within(dialog).getByLabelText("組織名"));
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    expect(await screen.findByText("組織名は必須です")).toBeInTheDocument();
+    expect(api.organizations[":id"].$patch).not.toHaveBeenCalled();
+  });
+
+  it("正常送信で $patch が呼ばれ、ダイアログが閉じる", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].$patch).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, name: "新組織名" }),
+    );
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    const nameInput = within(dialog).getByLabelText("組織名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "新組織名");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].$patch).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: { name: "新組織名", description: "テスト組織の説明" },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "組織情報を編集" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("送信失敗時はエラー表示が出てダイアログは閉じない", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].$patch).mockResolvedValue(
+      mockJson({ error: "bad" }, 400),
+    );
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    expect(await screen.findByText("更新に失敗しました")).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "組織情報を編集" }),
+    ).toBeInTheDocument();
+  });
+});
