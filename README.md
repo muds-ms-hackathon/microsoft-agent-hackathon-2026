@@ -107,10 +107,20 @@ docker compose exec api wget -qO- http://fake-auth:3007/.well-known/jwks.json
 | `make dev` | 通常起動（イメージ再ビルドなし） | 維持 |
 | `make dev-build` | `package.json` / `Dockerfile` 変更後の再ビルド起動 | 維持 |
 | `make dev-fresh` | `node_modules` が壊れたときのリセット起動 | **維持** |
+| `make refresh SVC=<service>` | 単一サービスを anon volume ごと再生成（pnpm 依存追加時など） | 維持 |
 | `make dev-reset` | DB 含む全 volume をリセットして起動 | **消える** |
 | `make docker-clean` | コンテナと全 volume を削除（起動しない） | **消える** |
 
 > `make dev-reset` / `make docker-clean` 後は `make migrate` で DB を再構築してください。
+
+### コンテナ運用補助
+
+| コマンド | 用途 |
+|---------|------|
+| `make ps` | `docker compose ps` でコンテナ状態を確認する |
+| `make logs` | 全サービスのログを follow する |
+| `make logs SVC=<service>` | 個別サービスのログを follow する |
+| `make help` | 利用可能な make ターゲット一覧を表示する |
 
 ## Development
 
