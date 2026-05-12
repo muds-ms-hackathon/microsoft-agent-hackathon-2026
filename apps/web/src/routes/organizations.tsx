@@ -128,7 +128,7 @@ function CreateOrganizationDialog() {
       <DialogTrigger asChild>
         <Button>組織を作成</Button>
       </DialogTrigger>
-      <DialogContent aria-label="新しい組織を作成">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>新しい組織を作成</DialogTitle>
           <DialogDescription>
