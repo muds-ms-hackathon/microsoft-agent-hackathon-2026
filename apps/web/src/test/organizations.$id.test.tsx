@@ -190,6 +190,25 @@ describe("組織詳細ページ - 基本表示", () => {
     renderDetail();
     expect(await screen.findByText("取得に失敗しました")).toBeInTheDocument();
   });
+
+  it("メンバー取得だけが失敗した場合、メンバー欄に専用のエラー表示が出る", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockRejectedValue(
+      new Error("network"),
+    );
+    renderDetail();
+    // 組織情報は通常通り表示される
+    expect(await screen.findByText("ACME 株式会社")).toBeInTheDocument();
+    // メンバー一覧 ul は描画されず、エラーメッセージのみ
+    expect(
+      await screen.findByText("メンバーの取得に失敗しました"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("list", { name: "メンバー一覧" }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 // ===== 権限制御（招待ボタン） =====

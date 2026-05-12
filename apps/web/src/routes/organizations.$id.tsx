@@ -528,25 +528,35 @@ export function OrganizationDetailView({
             <InviteMemberDialog orgId={id} />
           )}
         </div>
-        <ul aria-label="メンバー一覧" className="divide-y rounded-md border">
-          {members.map((m) => (
-            <li
-              key={m.userId}
-              className="flex items-center justify-between gap-3 px-4 py-3"
-            >
-              <div className="flex flex-col">
-                <span className="font-medium">{m.displayName}</span>
-                <span className="text-sm text-muted-foreground">{m.email}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <RoleBadge role={m.role} />
-                {org.role === "owner" && m.email !== currentUserEmail && (
-                  <DeleteMemberDialog orgId={id} member={m} />
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+        {membersQuery.isError ? (
+          // members だけ取得失敗したケース。空配列にフォールバックすると
+          // 「メンバーが 0 人」に見えてしまうため、明示的にエラー表示する。
+          <p className="text-destructive text-sm">
+            メンバーの取得に失敗しました
+          </p>
+        ) : (
+          <ul aria-label="メンバー一覧" className="divide-y rounded-md border">
+            {members.map((m) => (
+              <li
+                key={m.userId}
+                className="flex items-center justify-between gap-3 px-4 py-3"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">{m.displayName}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {m.email}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RoleBadge role={m.role} />
+                  {org.role === "owner" && m.email !== currentUserEmail && (
+                    <DeleteMemberDialog orgId={id} member={m} />
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section aria-label="定例" className="space-y-3">
