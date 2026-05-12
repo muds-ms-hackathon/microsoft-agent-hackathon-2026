@@ -259,8 +259,24 @@ function EditOrganizationDialog({
 
   const mutation = useMutation({
     mutationFn: async (data: EditFormValues) => {
+      // 変更があったフィールドのみを送る。
+      // フォームは description が null のときも "" を初期値に持つため、
+      // 「name だけ編集して保存」したケースで API に description: "" が
+      // 渡って DB の null が空文字で上書きされる事故を防ぐ。
+      const json: { name?: string; description?: string } = {};
+      if (data.name !== org.name) json.name = data.name;
+      const prevDescription = org.description ?? "";
+      if (data.description !== prevDescription) {
+        json.description = data.description;
+      }
+      // 変更が無い場合は API を呼ばずに成功扱いで閉じる
+      // （API 側の updateSchema が「name か description のどちらか必須」を要求するため、
+      // 空ペイロードを送ると 400 になる）。
+      if (json.name === undefined && json.description === undefined) {
+        return null;
+      }
       const res = await api.organizations[":id"].$patch(
-        { param: { id: org.id }, json: data },
+        { param: { id: org.id }, json },
         authHeaders(),
       );
       if (!res.ok) {

@@ -454,7 +454,7 @@ describe("組織詳細ページ - 組織情報編集ダイアログ", () => {
     expect(api.organizations[":id"].$patch).not.toHaveBeenCalled();
   });
 
-  it("正常送信で $patch が呼ばれ、ダイアログが閉じる", async () => {
+  it("name だけ変更すると description は送信されない（差分送信）", async () => {
     const user = userEvent.setup();
     vi.mocked(api.organizations[":id"].$patch).mockResolvedValue(
       mockJson({ ...ownerOrgDetail, name: "新組織名" }),
@@ -474,7 +474,7 @@ describe("組織詳細ページ - 組織情報編集ダイアログ", () => {
       expect(api.organizations[":id"].$patch).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新組織名", description: "テスト組織の説明" },
+          json: { name: "新組織名" },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
@@ -484,6 +484,82 @@ describe("組織詳細ページ - 組織情報編集ダイアログ", () => {
         screen.queryByRole("dialog", { name: "組織情報を編集" }),
       ).not.toBeInTheDocument();
     });
+  });
+
+  it("description が null の組織で name のみ編集しても description は送信されない", async () => {
+    const user = userEvent.setup();
+    // description: null の組織で開く
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, description: null }),
+    );
+    vi.mocked(api.organizations[":id"].$patch).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, name: "新組織名", description: null }),
+    );
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    const nameInput = within(dialog).getByLabelText("組織名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "新組織名");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].$patch).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: { name: "新組織名" },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("description だけ変更すると description のみ送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].$patch).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, description: "新しい説明" }),
+    );
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    const descInput = within(dialog).getByLabelText("説明");
+    await user.clear(descInput);
+    await user.type(descInput, "新しい説明");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].$patch).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: { description: "新しい説明" },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("値を変更せずに保存すると $patch は呼ばれずダイアログが閉じる", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "組織情報を編集" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(api.organizations[":id"].$patch).not.toHaveBeenCalled();
   });
 
   it("送信失敗時はエラー表示が出てダイアログは閉じない", async () => {
@@ -498,6 +574,10 @@ describe("組織詳細ページ - 組織情報編集ダイアログ", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "組織情報を編集",
     });
+    // 差分送信のため、API を呼ばせるには値を変更する必要がある
+    const nameInput = within(dialog).getByLabelText("組織名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "失敗予定の新組織名");
     await user.click(within(dialog).getByRole("button", { name: "保存" }));
     expect(await screen.findByText("更新に失敗しました")).toBeInTheDocument();
     expect(
