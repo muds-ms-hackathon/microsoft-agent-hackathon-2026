@@ -159,6 +159,39 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     }
     return c.json({ ...org, role: guard.membership.role });
   })
+  .get("/:id/members", async (c) => {
+    const id = c.req.param("id");
+
+    const guard = await requireMembership(c, id);
+    if (!guard.ok) return guard.res;
+
+    // OrgRole enum を DB 側で owner→admin→member 順に並べる手段がないため
+    // findMany では並べず、レスポンス整形時にメモリ内ソートする。
+    const memberships = await prisma.organizationMembership.findMany({
+      where: { organizationId: id },
+      include: { user: true },
+    });
+
+    const roleOrder: Record<OrgRole, number> = {
+      owner: 0,
+      admin: 1,
+      member: 2,
+    };
+    const sorted = [...memberships].sort((a, b) => {
+      if (a.role !== b.role) return roleOrder[a.role] - roleOrder[b.role];
+      return a.joinedAt.getTime() - b.joinedAt.getTime();
+    });
+
+    const result = sorted.map((m) => ({
+      userId: m.userId,
+      name: m.user.name,
+      displayName: m.user.displayName,
+      email: m.user.email,
+      role: m.role,
+      joinedAt: m.joinedAt,
+    }));
+    return c.json(result);
+  })
   .patch("/:id", zValidator("json", updateSchema), async (c) => {
     const id = c.req.param("id");
     const data = c.req.valid("json");
