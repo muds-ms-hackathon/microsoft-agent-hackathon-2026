@@ -1,3 +1,7 @@
+import type {
+  Member,
+  OrganizationDetail,
+} from "@/features/organizations/types";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,37 +37,6 @@ function mockJson<T>(data: T, status = 200) {
     json: async () => data,
   } as never;
 }
-
-type OrgRole = "owner" | "admin" | "member";
-
-type Member = {
-  userId: string;
-  name: string;
-  displayName: string;
-  email: string;
-  role: OrgRole;
-  joinedAt: string;
-};
-
-type RecurringMeeting = {
-  id: string;
-  organizationId: string;
-  name: string;
-  description: string | null;
-  scheduleCron: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type OrganizationDetail = {
-  id: string;
-  name: string;
-  description: string | null;
-  role: OrgRole;
-  createdAt: string;
-  updatedAt: string;
-  recurringMeetings: RecurringMeeting[];
-};
 
 const ownerOrgDetail: OrganizationDetail = {
   id: "org-1",
