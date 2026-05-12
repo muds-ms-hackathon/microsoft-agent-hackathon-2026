@@ -1,8 +1,24 @@
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { api, authHeaders } from "@/lib/api";
 import { authAtom } from "@/lib/auth";
-import { useQuery } from "@tanstack/react-query";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
+import { useId, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 export const Route = createFileRoute("/organizations/$id")({
   component: OrganizationDetailPage,
@@ -63,6 +79,112 @@ function OrganizationDetailPage() {
       currentUserEmail={auth.user?.email ?? null}
       onOrganizationDeleted={() => navigate({ to: "/organizations" })}
     />
+  );
+}
+
+// ===== 招待ダイアログ =====
+
+const inviteSchema = z.object({
+  email: z.string().email("メールアドレスの形式が正しくありません"),
+  role: z.enum(["admin", "member"]),
+});
+
+type InviteFormValues = z.infer<typeof inviteSchema>;
+
+function InviteMemberDialog({ orgId }: { orgId: string }) {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const emailId = useId();
+  const roleId = useId();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<InviteFormValues>({
+    resolver: zodResolver(inviteSchema),
+    defaultValues: { email: "", role: "member" },
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (data: InviteFormValues) => {
+      const res = await api.organizations[":id"].invite.$post(
+        { param: { id: orgId }, json: data },
+        authHeaders(),
+      );
+      // 4xx/5xx を success として扱うと「招待したつもりが実は失敗」が起きるため弾く。
+      if (!res.ok) {
+        throw new Error(`Failed to invite member: ${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["organizations", orgId, "members"],
+      });
+      reset();
+      setOpen(false);
+    },
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) reset();
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button>メンバーを招待</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>メンバーを招待</DialogTitle>
+          <DialogDescription>
+            メールアドレスとロールを指定して招待します。招待は 7 日間有効です。
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={handleSubmit((data) => mutation.mutate(data))}
+          className="flex flex-col gap-4"
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={emailId}>メールアドレス</Label>
+            <Input
+              id={emailId}
+              type="email"
+              placeholder="user@example.com"
+              {...register("email")}
+            />
+            {errors.email && (
+              <p role="alert" className="text-destructive text-sm">
+                {errors.email.message}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={roleId}>ロール</Label>
+            <select
+              id={roleId}
+              {...register("role")}
+              className="border rounded-md p-2 bg-background"
+            >
+              <option value="member">メンバー</option>
+              <option value="admin">管理者</option>
+            </select>
+          </div>
+          {mutation.isError && (
+            <p className="text-destructive text-sm">招待の送信に失敗しました</p>
+          )}
+          <DialogFooter>
+            <Button type="submit" disabled={mutation.isPending}>
+              招待を送信
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -134,7 +256,12 @@ export function OrganizationDetailView({
       </header>
 
       <section aria-label="メンバー" className="space-y-3">
-        <h2 className="text-lg font-semibold">メンバー</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">メンバー</h2>
+          {(org.role === "owner" || org.role === "admin") && (
+            <InviteMemberDialog orgId={id} />
+          )}
+        </div>
         <ul aria-label="メンバー一覧" className="divide-y rounded-md border">
           {members.map((m) => (
             <li
