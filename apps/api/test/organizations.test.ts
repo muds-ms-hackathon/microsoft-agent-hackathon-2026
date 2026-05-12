@@ -229,28 +229,104 @@ describe("GET /organizations", () => {
 describe("GET /organizations/:id", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("認証ユーザーが所属していれば 200 で組織を返す", async () => {
+  const sampleRecurringMeetings = [
+    {
+      id: "meet-2",
+      organizationId: "org-1",
+      name: "週次定例",
+      description: null,
+      scheduleCron: "0 10 * * 1",
+      createdAt: new Date("2026-05-03T00:00:00Z"),
+      updatedAt: new Date("2026-05-03T00:00:00Z"),
+    },
+    {
+      id: "meet-1",
+      organizationId: "org-1",
+      name: "月次レビュー",
+      description: "月初に実施",
+      scheduleCron: "0 9 1 * *",
+      createdAt: new Date("2026-05-01T00:00:00Z"),
+      updatedAt: new Date("2026-05-01T00:00:00Z"),
+    },
+  ];
+
+  it("認証ユーザーが所属していれば 200 で組織と自分の role・定例一覧を返す", async () => {
     mockMembershipFindUnique.mockResolvedValue({
       userId: "user-1",
       organizationId: "org-1",
-      role: "member",
+      role: "owner",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockOrgFindUnique.mockResolvedValue(sampleOrg);
+    mockOrgFindUnique.mockResolvedValue({
+      ...sampleOrg,
+      recurringMeetings: sampleRecurringMeetings,
+    } as never);
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { id: string };
+    const body = (await res.json()) as {
+      id: string;
+      role: string;
+      recurringMeetings: Array<{ id: string; createdAt: string }>;
+    };
     expect(body.id).toBe("org-1");
+    expect(body.role).toBe("owner");
+    expect(body.recurringMeetings).toHaveLength(2);
+    expect(body.recurringMeetings[0].id).toBe("meet-2");
+    expect(body.recurringMeetings[1].id).toBe("meet-1");
 
     expect(mockMembershipFindUnique).toHaveBeenCalledWith({
       where: {
         userId_organizationId: { userId: "user-1", organizationId: "org-1" },
       },
     });
+    // recurringMeetings を include で取得し、createdAt desc で並べる。
     expect(mockOrgFindUnique).toHaveBeenCalledWith({
       where: { id: "org-1" },
+      include: {
+        recurringMeetings: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
     });
+  });
+
+  it("member ロールでも自分の role が反映されて返る", async () => {
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    });
+    mockOrgFindUnique.mockResolvedValue({
+      ...sampleOrg,
+      recurringMeetings: [],
+    } as never);
+
+    const res = await app.request("/organizations/org-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { role: string };
+    expect(body.role).toBe("member");
+  });
+
+  it("定例が 0 件なら recurringMeetings は空配列で返る", async () => {
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "admin",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    });
+    mockOrgFindUnique.mockResolvedValue({
+      ...sampleOrg,
+      recurringMeetings: [],
+    } as never);
+
+    const res = await app.request("/organizations/org-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      recurringMeetings: unknown[];
+    };
+    expect(body.recurringMeetings).toEqual([]);
   });
 
   it("認証ユーザーが所属していない場合は 404 を返す", async () => {

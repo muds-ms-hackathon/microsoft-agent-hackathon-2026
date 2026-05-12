@@ -144,11 +144,20 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const guard = await requireMembership(c, id);
     if (!guard.ok) return guard.res;
 
-    const org = await prisma.organization.findUnique({ where: { id } });
+    // 自分の role はガードで確定済みのものを流用し、追加クエリを避ける。
+    // 定例一覧は組織詳細画面の簡易表示用に併せて返す（並び順は作成日時降順）。
+    const org = await prisma.organization.findUnique({
+      where: { id },
+      include: {
+        recurringMeetings: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
     if (!org) {
       return c.json({ error: "組織が見つかりません" }, 404);
     }
-    return c.json(org);
+    return c.json({ ...org, role: guard.membership.role });
   })
   .patch("/:id", zValidator("json", updateSchema), async (c) => {
     const id = c.req.param("id");
