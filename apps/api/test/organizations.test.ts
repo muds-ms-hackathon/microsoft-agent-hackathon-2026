@@ -13,6 +13,7 @@ vi.mock("../src/lib/prisma.js", () => ({
     organizationMembership: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
     },
     organizationInvitation: {
@@ -71,6 +72,9 @@ const mockMembershipFindUnique = vi.mocked(
 );
 const mockMembershipFindFirst = vi.mocked(
   prisma.organizationMembership.findFirst,
+);
+const mockMembershipFindMany = vi.mocked(
+  prisma.organizationMembership.findMany,
 );
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
 const mockTransaction = vi.mocked(prisma.$transaction);
@@ -349,6 +353,128 @@ describe("GET /organizations/:id", () => {
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /organizations/:id/members", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const sampleMemberships = [
+    // 並び順検証用に、意図的に DB 順序を「想定の表示順」と逆にしておく。
+    {
+      userId: "user-3",
+      organizationId: "org-1",
+      role: "member" as const,
+      joinedAt: new Date("2026-05-05T00:00:00Z"),
+      user: {
+        id: "user-3",
+        name: "carol",
+        displayName: "Carol C.",
+        email: "carol@example.com",
+      },
+    },
+    {
+      userId: "user-2",
+      organizationId: "org-1",
+      role: "admin" as const,
+      joinedAt: new Date("2026-05-03T00:00:00Z"),
+      user: {
+        id: "user-2",
+        name: "bob",
+        displayName: "Bob B.",
+        email: "bob@example.com",
+      },
+    },
+    {
+      userId: "user-4",
+      organizationId: "org-1",
+      role: "member" as const,
+      joinedAt: new Date("2026-05-02T00:00:00Z"),
+      user: {
+        id: "user-4",
+        name: "dave",
+        displayName: "Dave D.",
+        email: "dave@example.com",
+      },
+    },
+    {
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "owner" as const,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+      user: {
+        id: "user-1",
+        name: "alice",
+        displayName: "Alice A.",
+        email: "alice@example.com",
+      },
+    },
+  ];
+
+  it("認証ユーザーが所属していれば 200 でメンバー一覧を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "owner",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    });
+    mockMembershipFindMany.mockResolvedValue(sampleMemberships as never);
+
+    const res = await app.request("/organizations/org-1/members");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      userId: string;
+      name: string;
+      displayName: string;
+      email: string;
+      role: string;
+      joinedAt: string;
+    }>;
+
+    expect(body).toHaveLength(4);
+    // owner → admin → member、同 role 内は joinedAt asc
+    expect(body.map((m) => m.userId)).toEqual([
+      "user-1",
+      "user-2",
+      "user-4",
+      "user-3",
+    ]);
+    expect(body[0]).toEqual({
+      userId: "user-1",
+      name: "alice",
+      displayName: "Alice A.",
+      email: "alice@example.com",
+      role: "owner",
+      joinedAt: "2026-05-01T00:00:00.000Z",
+    });
+
+    expect(mockMembershipFindMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1" },
+      include: { user: true },
+    });
+  });
+
+  it("member ロールでも所属していればメンバー一覧を取得できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-3",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date("2026-05-05T00:00:00Z"),
+    });
+    mockMembershipFindMany.mockResolvedValue(sampleMemberships as never);
+
+    const res = await app.request("/organizations/org-1/members");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ role: string }>;
+    expect(body).toHaveLength(4);
+  });
+
+  it("認証ユーザーが所属していない場合は 404 を返し findMany は呼ばれない", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/organizations/org-1/members");
+    expect(res.status).toBe(404);
+    expect(mockMembershipFindMany).not.toHaveBeenCalled();
   });
 });
 
