@@ -82,6 +82,73 @@ function OrganizationDetailPage() {
   );
 }
 
+// ===== メンバー削除確認ダイアログ =====
+
+function DeleteMemberDialog({
+  orgId,
+  member,
+}: {
+  orgId: string;
+  member: { userId: string; displayName: string };
+}) {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.organizations[":id"].members[":userId"].$delete(
+        { param: { id: orgId, userId: member.userId } },
+        authHeaders(),
+      );
+      if (!res.ok) {
+        throw new Error(`Failed to delete member: ${res.status}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["organizations", orgId, "members"],
+      });
+      setOpen(false);
+    },
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) mutation.reset();
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="destructive" size="sm">
+          {`${member.displayName} を削除`}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>メンバーを削除</DialogTitle>
+          <DialogDescription>
+            {`${member.displayName} さんを組織から削除しますか？この操作は取り消せません。`}
+          </DialogDescription>
+        </DialogHeader>
+        {mutation.isError && (
+          <p className="text-destructive text-sm">削除に失敗しました</p>
+        )}
+        <DialogFooter>
+          <Button
+            variant="destructive"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate()}
+          >
+            削除する
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ===== 編集ダイアログ =====
 
 const editSchema = z.object({
@@ -286,7 +353,7 @@ function InviteMemberDialog({ orgId }: { orgId: string }) {
 
 export function OrganizationDetailView({
   id,
-  currentUserEmail: _currentUserEmail,
+  currentUserEmail,
   onOrganizationDeleted: _onOrganizationDeleted,
 }: {
   id: string;
@@ -373,7 +440,12 @@ export function OrganizationDetailView({
                 <span className="font-medium">{m.displayName}</span>
                 <span className="text-sm text-muted-foreground">{m.email}</span>
               </div>
-              <RoleBadge role={m.role} />
+              <div className="flex items-center gap-2">
+                <RoleBadge role={m.role} />
+                {org.role === "owner" && m.email !== currentUserEmail && (
+                  <DeleteMemberDialog orgId={id} member={m} />
+                )}
+              </div>
             </li>
           ))}
         </ul>
