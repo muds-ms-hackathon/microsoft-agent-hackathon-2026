@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -290,17 +290,20 @@ function EditOrganizationDialog({
     },
   });
 
+  // ダイアログが閉じているときに org が変化したら、最新値に合わせて
+  // フォームを同期する。これにより以下のフローで stale な値が残るのを防ぐ:
+  //   1. 保存成功 → setOpen(false) → invalidateQueries で refetch がキック
+  //   2. 親の useQuery が新しい org を返す
+  //   3. この effect が走り、reset({ name: 新しい org.name, ... })
+  // ダイアログ表示中は useEffect が reset しないため、入力中の値は破壊されない。
+  useEffect(() => {
+    if (!open) {
+      reset({ name: org.name, description: org.description ?? "" });
+    }
+  }, [org.name, org.description, open, reset]);
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        // 閉じるときは「未保存の変更を破棄して元の値に戻す」挙動にする
-        if (!next) {
-          reset({ name: org.name, description: org.description ?? "" });
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline">組織情報を編集</Button>
       </DialogTrigger>

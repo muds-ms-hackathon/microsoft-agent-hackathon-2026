@@ -584,6 +584,47 @@ describe("組織詳細ページ - 組織情報編集ダイアログ", () => {
       screen.getByRole("dialog", { name: "組織情報を編集" }),
     ).toBeInTheDocument();
   });
+
+  it("保存成功後に org が refetch で更新されると、次回開いたとき新しい値が表示される", async () => {
+    const user = userEvent.setup();
+    // 初回は元の name、保存成功後の refetch では新しい name を返すよう切り替える
+    const updatedOrg = { ...ownerOrgDetail, name: "更新後の組織名" };
+    vi.mocked(api.organizations[":id"].$get)
+      .mockResolvedValueOnce(mockJson(ownerOrgDetail))
+      .mockResolvedValue(mockJson(updatedOrg));
+    vi.mocked(api.organizations[":id"].$patch).mockResolvedValue(
+      mockJson(updatedOrg),
+    );
+
+    renderDetail();
+    // 1 回目: 編集して保存 → ダイアログ閉じる
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog1 = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    const nameInput1 = within(dialog1).getByLabelText("組織名");
+    await user.clear(nameInput1);
+    await user.type(nameInput1, "更新後の組織名");
+    await user.click(within(dialog1).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "組織情報を編集" }),
+      ).not.toBeInTheDocument();
+    });
+    // ヘッダーが新しい name を反映したことを確認（refetch 完了の指標）
+    await screen.findByText("更新後の組織名");
+
+    // 2 回目: ダイアログを再オープン → 新しい name が初期値として表示されるはず
+    await user.click(screen.getByRole("button", { name: "組織情報を編集" }));
+    const dialog2 = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    expect(within(dialog2).getByLabelText("組織名")).toHaveValue(
+      "更新後の組織名",
+    );
+  });
 });
 
 // ===== メンバー削除（権限制御） =====
