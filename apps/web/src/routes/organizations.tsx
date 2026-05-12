@@ -102,6 +102,12 @@ function CreateOrganizationDialog() {
       }
       // headers は第 2 引数で渡す（第 1 引数に混ぜると無視される）。
       const res = await api.organizations.$post({ json }, authHeaders());
+      // 非 2xx を success として扱うと、API が 400/401/500 を返した場合でも
+      // Dialog が閉じてしまい、ユーザーが成功したと誤認する。res.ok を見て
+      // エラー扱いに落とし、useMutation の onError / isError 経路に流す。
+      if (!res.ok) {
+        throw new Error(`Failed to create organization: ${res.status}`);
+      }
       return res.json();
     },
     onSuccess: () => {

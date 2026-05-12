@@ -213,4 +213,29 @@ describe("組織作成モーダル", () => {
       );
     });
   });
+
+  it("API が 4xx を返した場合はエラー表示が出てダイアログが閉じない", async () => {
+    // 非 2xx を success として扱うと「作成したつもりが実は失敗」のサイレント
+    // 失敗を生む。エラー表示が出て Dialog が閉じないことを保証する。
+    const user = userEvent.setup();
+    vi.mocked(api.organizations.$post).mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "bad request" }),
+    } as never);
+
+    renderWithQuery(<OrganizationsPage />);
+
+    await user.click(screen.getByRole("button", { name: "組織を作成" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "新しい組織を作成",
+    });
+    await user.type(within(dialog).getByLabelText("組織名"), "失敗する組織");
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+
+    expect(await screen.findByText("作成に失敗しました")).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "新しい組織を作成" }),
+    ).toBeInTheDocument();
+  });
 });
