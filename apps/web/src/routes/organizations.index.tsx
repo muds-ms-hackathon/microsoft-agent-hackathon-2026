@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RoleBadge } from "@/features/organizations/components/RoleBadge";
+import type { Organization } from "@/features/organizations/types";
 import { api, authHeaders } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,31 +29,6 @@ import { z } from "zod";
 export const Route = createFileRoute("/organizations/")({
   component: OrganizationsPage,
 });
-
-type OrgRole = "owner" | "admin" | "member";
-
-type Organization = {
-  id: string;
-  name: string;
-  description: string | null;
-  role: OrgRole;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const roleLabels: Record<OrgRole, string> = {
-  owner: "オーナー",
-  admin: "管理者",
-  member: "メンバー",
-};
-
-function RoleBadge({ role }: { role: OrgRole }) {
-  return (
-    <span className="inline-flex items-center rounded-md border bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-      {roleLabels[role]}
-    </span>
-  );
-}
 
 function OrganizationCard({ org }: { org: Organization }) {
   return (
