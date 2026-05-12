@@ -100,10 +100,8 @@ function CreateOrganizationDialog() {
       if (data.description && data.description.length > 0) {
         json.description = data.description;
       }
-      const res = await api.organizations.$post({
-        json,
-        ...authHeaders(),
-      });
+      // headers は第 2 引数で渡す（第 1 引数に混ぜると無視される）。
+      const res = await api.organizations.$post({ json }, authHeaders());
       return res.json();
     },
     onSuccess: () => {
@@ -178,7 +176,9 @@ export function OrganizationsPage() {
   } = useQuery<Organization[]>({
     queryKey: ["organizations"],
     queryFn: async () => {
-      const res = await api.organizations.$get(authHeaders());
+      // Hono RPC client は第 2 引数で headers を受け取る。第 1 引数の input に
+      // headers を入れても無視されるため、authHeaders() は必ず第 2 引数へ渡す。
+      const res = await api.organizations.$get(undefined, authHeaders());
       // 認証失敗などで API が { error } を返した場合、配列でないものを
       // そのまま data に格納すると orgs.map() で落ちるため、ここで弾く。
       if (!res.ok) {

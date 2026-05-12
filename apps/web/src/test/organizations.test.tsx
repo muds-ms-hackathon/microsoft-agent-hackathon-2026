@@ -169,10 +169,10 @@ describe("組織作成モーダル", () => {
     await user.click(within(dialog).getByRole("button", { name: "作成" }));
 
     await waitFor(() => {
+      // 第 1 引数は input ({json}), 第 2 引数は ClientRequestOptions (headers)
       expect(api.organizations.$post).toHaveBeenCalledWith(
-        expect.objectContaining({
-          json: { name: "新しい組織", description: "説明文" },
-        }),
+        { json: { name: "新しい組織", description: "説明文" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
       );
     });
     // ダイアログが閉じる
@@ -208,7 +208,8 @@ describe("組織作成モーダル", () => {
 
     await waitFor(() => {
       expect(api.organizations.$post).toHaveBeenCalledWith(
-        expect.objectContaining({ json: { name: "説明なし組織" } }),
+        { json: { name: "説明なし組織" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
       );
     });
   });
