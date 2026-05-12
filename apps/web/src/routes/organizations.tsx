@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -66,7 +65,6 @@ function OrganizationCard({ org }: { org: Organization }) {
           <CardDescription>{org.description}</CardDescription>
         ) : null}
       </CardHeader>
-      <CardContent />
     </Card>
   );
 }
