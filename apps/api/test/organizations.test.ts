@@ -15,6 +15,7 @@ vi.mock("../src/lib/prisma.js", () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      delete: vi.fn(),
     },
     organizationInvitation: {
       create: vi.fn(),
@@ -76,6 +77,7 @@ const mockMembershipFindFirst = vi.mocked(
 const mockMembershipFindMany = vi.mocked(
   prisma.organizationMembership.findMany,
 );
+const mockMembershipDelete = vi.mocked(prisma.organizationMembership.delete);
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
@@ -475,6 +477,99 @@ describe("GET /organizations/:id/members", () => {
     const res = await app.request("/organizations/org-1/members");
     expect(res.status).toBe(404);
     expect(mockMembershipFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /organizations/:id/members/:userId", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function membership(role: "owner" | "admin" | "member", userId = "user-1") {
+    return {
+      userId,
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  it("owner は他メンバーを削除でき 204 を返す", async () => {
+    // requireRole 内の findUnique（呼び出し元の membership）→ 削除対象の findUnique の順で呼ばれる
+    mockMembershipFindUnique
+      .mockResolvedValueOnce(membership("owner", "user-1"))
+      .mockResolvedValueOnce(membership("member", "user-2"));
+    mockMembershipDelete.mockResolvedValue(
+      membership("member", "user-2") as never,
+    );
+
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "DELETE",
+    });
+
+    expect(res.status).toBe(204);
+    expect(mockMembershipDelete).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: { userId: "user-2", organizationId: "org-1" },
+      },
+    });
+  });
+
+  it("admin は 403 を返し delete は呼ばれない", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(
+      membership("admin", "user-1"),
+    );
+
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
+  });
+
+  it("member は 403 を返し delete は呼ばれない", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(
+      membership("member", "user-1"),
+    );
+
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
+  });
+
+  it("削除対象 membership が存在しない場合は 404 を返し delete は呼ばれない", async () => {
+    mockMembershipFindUnique
+      .mockResolvedValueOnce(membership("owner", "user-1"))
+      .mockResolvedValueOnce(null);
+
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
+  });
+
+  it("自分自身を削除しようとした場合は 400 を返し delete は呼ばれない", async () => {
+    // requireRole では owner と判定されるが、対象が自分なら 400 で拒否
+    mockMembershipFindUnique.mockResolvedValueOnce(
+      membership("owner", "user-1"),
+    );
+
+    const res = await app.request("/organizations/org-1/members/user-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
+  });
+
+  it("認証ユーザー自身が未所属の場合は 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(null);
+
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
   });
 });
 
