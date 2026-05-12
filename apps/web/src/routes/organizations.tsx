@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { api, authHeaders } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -55,17 +55,23 @@ function RoleBadge({ role }: { role: OrgRole }) {
 
 function OrganizationCard({ org }: { org: Organization }) {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">{org.name}</CardTitle>
-          <RoleBadge role={org.role} />
-        </div>
-        {org.description ? (
-          <CardDescription>{org.description}</CardDescription>
-        ) : null}
-      </CardHeader>
-    </Card>
+    <Link
+      to="/organizations/$id"
+      params={{ id: org.id }}
+      className="block transition-colors hover:bg-accent rounded-xl"
+    >
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">{org.name}</CardTitle>
+            <RoleBadge role={org.role} />
+          </div>
+          {org.description ? (
+            <CardDescription>{org.description}</CardDescription>
+          ) : null}
+        </CardHeader>
+      </Card>
+    </Link>
   );
 }
 
