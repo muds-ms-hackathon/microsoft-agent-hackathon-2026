@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OrganizationsIndexRouteImport } from './routes/organizations.index'
+import { Route as OrganizationsIdRouteImport } from './routes/organizations.$id'
 
 const OrganizationsRoute = OrganizationsRouteImport.update({
   id: '/organizations',
@@ -28,35 +30,61 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrganizationsIndexRoute = OrganizationsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OrganizationsRoute,
+} as any)
+const OrganizationsIdRoute = OrganizationsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => OrganizationsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/organizations': typeof OrganizationsRoute
+  '/organizations': typeof OrganizationsRouteWithChildren
+  '/organizations/$id': typeof OrganizationsIdRoute
+  '/organizations/': typeof OrganizationsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/organizations': typeof OrganizationsRoute
+  '/organizations/$id': typeof OrganizationsIdRoute
+  '/organizations': typeof OrganizationsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/organizations': typeof OrganizationsRoute
+  '/organizations': typeof OrganizationsRouteWithChildren
+  '/organizations/$id': typeof OrganizationsIdRoute
+  '/organizations/': typeof OrganizationsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/organizations'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/organizations'
+    | '/organizations/$id'
+    | '/organizations/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/organizations'
-  id: '__root__' | '/' | '/login' | '/organizations'
+  to: '/' | '/login' | '/organizations/$id' | '/organizations'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/organizations'
+    | '/organizations/$id'
+    | '/organizations/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
-  OrganizationsRoute: typeof OrganizationsRoute
+  OrganizationsRoute: typeof OrganizationsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -82,13 +110,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/organizations/': {
+      id: '/organizations/'
+      path: '/'
+      fullPath: '/organizations/'
+      preLoaderRoute: typeof OrganizationsIndexRouteImport
+      parentRoute: typeof OrganizationsRoute
+    }
+    '/organizations/$id': {
+      id: '/organizations/$id'
+      path: '/$id'
+      fullPath: '/organizations/$id'
+      preLoaderRoute: typeof OrganizationsIdRouteImport
+      parentRoute: typeof OrganizationsRoute
+    }
   }
 }
+
+interface OrganizationsRouteChildren {
+  OrganizationsIdRoute: typeof OrganizationsIdRoute
+  OrganizationsIndexRoute: typeof OrganizationsIndexRoute
+}
+
+const OrganizationsRouteChildren: OrganizationsRouteChildren = {
+  OrganizationsIdRoute: OrganizationsIdRoute,
+  OrganizationsIndexRoute: OrganizationsIndexRoute,
+}
+
+const OrganizationsRouteWithChildren = OrganizationsRoute._addFileChildren(
+  OrganizationsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
-  OrganizationsRoute: OrganizationsRoute,
+  OrganizationsRoute: OrganizationsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
