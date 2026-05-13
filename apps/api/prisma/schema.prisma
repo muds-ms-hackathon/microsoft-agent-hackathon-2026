@@ -283,6 +283,7 @@ model MeetingEstimationBreakdown {
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
+  @@unique([meetingId, type])
 }
 
 // AI Searchに登録するRAGインデックスドキュメント。1会議=1ドキュメント。
