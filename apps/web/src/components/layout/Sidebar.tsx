@@ -21,7 +21,7 @@ export function Sidebar() {
           className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
           activeProps={{
             className:
-              "flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm bg-background text-foreground font-medium shadow-xs border border-border/40",
+              "flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm bg-foreground/10 text-foreground font-medium",
           }}
         >
           <LayoutDashboard size={15} />
