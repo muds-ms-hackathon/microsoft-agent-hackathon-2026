@@ -210,8 +210,13 @@ function WsChat() {
 
 export function Index() {
   return (
-    <section className="container mx-auto p-8 space-y-8">
-      <h1 className="text-2xl font-bold">Decision Loop</h1>
+    <section
+      aria-labelledby="dashboard-title"
+      className="container mx-auto p-8 space-y-8"
+    >
+      <h1 id="dashboard-title" className="text-2xl font-bold">
+        Decision Loop
+      </h1>
       <MeetingsList />
       <CreateMeetingForm />
       <WsChat />

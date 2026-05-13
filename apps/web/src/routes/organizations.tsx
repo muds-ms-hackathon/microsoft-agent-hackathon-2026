@@ -196,9 +196,14 @@ export function OrganizationsPage() {
   });
 
   return (
-    <section className="container mx-auto p-8 space-y-6">
+    <section
+      aria-labelledby="organizations-title"
+      className="container mx-auto p-8 space-y-6"
+    >
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">組織一覧</h1>
+        <h1 id="organizations-title" className="text-2xl font-bold">
+          組織一覧
+        </h1>
         <CreateOrganizationDialog />
       </header>
 
