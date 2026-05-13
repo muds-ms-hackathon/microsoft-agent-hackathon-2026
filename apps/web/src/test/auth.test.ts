@@ -203,6 +203,27 @@ describe("authAtom（localStorage 真実源・派生 atom）", () => {
     });
   });
 
+  it("logoutAtom 経由で書き込むと currentOrganizationId もクリアされる", async () => {
+    // logout 時に「前回のユーザーの選択中組織」が次のユーザーに引き継がれて
+    // しまう事故を防ぐため、id_token と同時に current_organization_id も
+    // クリアされることを確認する。
+    const { setCurrentOrganizationIdAtom, currentOrganizationIdAtom } =
+      await import("../lib/currentOrganization");
+    const token = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+    });
+    const store = createStore();
+    store.set(loginAtom, token);
+    store.set(setCurrentOrganizationIdAtom, "org-1");
+
+    store.set(logoutAtom);
+
+    expect(localStorage.getItem("current_organization_id")).toBeNull();
+    expect(store.get(currentOrganizationIdAtom)).toBeNull();
+  });
+
   it("他タブの logout（storage イベント newValue=null）で authAtom が未認証に追従する", () => {
     const token = makeFakeIdToken({
       sub: "u1",

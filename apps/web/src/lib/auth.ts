@@ -14,6 +14,7 @@
 
 import { type Atom, atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
+import { clearCurrentOrganizationIdAtom } from "./currentOrganization";
 
 // jotai/utils は SyncStorage 型を public な entry point から再エクスポートして
 // いないため、atomWithStorage が受け付ける形に合わせてローカルで定義する。
@@ -173,6 +174,9 @@ export const loginAtom = atom(null, (_get, set, token: string) => {
 
 export const logoutAtom = atom(null, (_get, set) => {
   set(idTokenAtom, null);
+  // 「前のユーザーが選択していた組織」が次のユーザーに引き継がれる事故を
+  // 防ぐため、id_token と同じタイミングで current_organization_id も破棄する。
+  set(clearCurrentOrganizationIdAtom);
 });
 
 export function getIdToken(): string | null {
