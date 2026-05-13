@@ -1,5 +1,7 @@
+import { Sidebar } from "@/components/layout/Sidebar";
+import { Topbar } from "@/components/layout/Topbar";
 import { getIdToken } from "@/lib/auth";
-import { Outlet, createRootRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createRootRoute, redirect, useRouterState } from "@tanstack/react-router";
 
 export const Route = createRootRoute({
   beforeLoad: ({ location }) => {
@@ -15,9 +17,27 @@ export const Route = createRootRoute({
       });
     }
   },
-  component: () => (
-    <div className="min-h-screen bg-background">
-      <Outlet />
-    </div>
-  ),
+  component: RootLayout,
 });
+
+function RootLayout() {
+  const { location } = useRouterState();
+  const isLogin = location.pathname === "/login";
+
+  // ログインページにはレイアウトを表示しない
+  if (isLogin) {
+    return <Outlet />;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Topbar />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
