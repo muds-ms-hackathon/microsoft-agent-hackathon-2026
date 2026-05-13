@@ -267,6 +267,7 @@ model MeetingSpeaker {
   user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([meetingId])
+  @@unique([meetingId, userId])
 }
 
 // 次回会議の所要時間見積もり内訳。meetings.estimatedDurationMinutesの算出根拠を保持する。
