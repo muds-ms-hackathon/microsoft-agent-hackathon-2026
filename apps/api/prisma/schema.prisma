@@ -325,9 +325,9 @@ model DecisionItem {
   body             String?
   sourceQuote      String?
   sourceContext    String?
-  status           DecisionItemStatus   // draft / reviewing / open / decided / cancelled
-  decisionState    DecisionState?  // confirmed / tentative / open
-  reason           DecisionReason?  // no_consensus / information_lack / intentional_defer / not_discussed
+  status           DecisionItemStatus
+  decisionState    DecisionState?
+  reason           DecisionReason?
   blockingItemId   String?
   recurrenceCount  Int?
   ambiguityFlags   Json?
@@ -419,14 +419,14 @@ model AmbiguousInfo {
   body                       String
   sourceQuote                String?
   sourceContext              String?
-  status                     AmbiguousInfoStatus    // draft / reviewing / resolved / rejected
-  ambiguityType              AmbiguityType?   // missing_speaker / transcription_error_low / no_assignee / unclear_decision など
-  severity                   AmbiguitySeverity?   // high / medium / low
+  status                     AmbiguousInfoStatus
+  ambiguityType              AmbiguityType?
+  severity                   AmbiguitySeverity?
   inferenceBasis             String?
   dueDateRaw                 String?
   dueDateEstimated           Boolean?
   affectedItemIds            Json?
-  resolutionType             ResolutionType?   // null = 未解消 / task / decision_item / discarded
+  resolutionType             ResolutionType?
   resolvedToTaskId           String?
   resolvedToDecisionItemId   String?
   version                    Int       @default(0)
