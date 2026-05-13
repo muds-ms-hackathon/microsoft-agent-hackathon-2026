@@ -259,7 +259,7 @@ model MeetingSpeaker {
   meetingId        String
   userId           String?
   name             String?
-  resolutionStatus ResolutionStatus   // resolved / unresolved / unknown
+  resolutionStatus ResolutionStatus
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -273,7 +273,7 @@ model MeetingSpeaker {
 model MeetingEstimationBreakdown {
   id        String   @id @default(cuid())
   meetingId String
-  type      EstimationBreakdownType   // required_task_check / open_issue_new / open_issue_recurring / overdue_task / new_topic / tentative_reconfirm / buffer
+  type      EstimationBreakdownType
   count     Int
   minutes   Int
   createdAt DateTime @default(now())
@@ -372,8 +372,8 @@ model Task {
   body             String?
   sourceQuote      String?
   sourceContext    String?
-  status           TaskStatus   // draft / reviewing / todo / in_progress / done / rejected
-  priority         TaskPriority?   // required / optional
+  status           TaskStatus
+  priority         TaskPriority?
   dueDateRaw       String?
   dueDateEstimated Boolean?
   assigneeRaw      String?
@@ -396,6 +396,7 @@ model Task {
   @@index([decisionItemId])
   @@index([dueDate])
   @@index([startDate])
+  @@index([status])
 }
 
 // タスクの担当者。複数担当者に対応するための中間テーブル。
