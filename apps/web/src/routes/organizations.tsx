@@ -196,7 +196,7 @@ export function OrganizationsPage() {
   });
 
   return (
-    <main className="container mx-auto p-8 space-y-6">
+    <section className="container mx-auto p-8 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">組織一覧</h1>
         <CreateOrganizationDialog />
@@ -217,6 +217,6 @@ export function OrganizationsPage() {
           ))}
         </ul>
       )}
-    </main>
+    </section>
   );
 }

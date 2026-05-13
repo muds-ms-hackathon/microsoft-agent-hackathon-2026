@@ -210,11 +210,11 @@ function WsChat() {
 
 export function Index() {
   return (
-    <main className="container mx-auto p-8 space-y-8">
+    <section className="container mx-auto p-8 space-y-8">
       <h1 className="text-2xl font-bold">Decision Loop</h1>
       <MeetingsList />
       <CreateMeetingForm />
       <WsChat />
-    </main>
+    </section>
   );
 }
