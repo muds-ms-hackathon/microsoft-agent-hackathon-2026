@@ -1,4 +1,8 @@
 import { defineConfig } from "prisma/config";
+import { config } from "dotenv";
+
+// .env ファイルをロードして環境変数を設定
+config();
 
 export default defineConfig({
   datasource: {
