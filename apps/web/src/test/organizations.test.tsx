@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OrganizationsPage } from "../routes/organizations";
+import { OrganizationsPage } from "../routes/organizations.index";
 import { renderWithQuery } from "./test-utils";
 
 // hono/client api モジュールをモック
@@ -14,6 +14,39 @@ vi.mock("@/lib/api", () => ({
   },
   authHeaders: () => ({ headers: {} }),
 }));
+
+// TanStack Router の <Link> は RouterProvider が無いと内部で落ちるため、
+// テスト中は href を持つ通常の <a> として描画するモックに差し替える。
+// 子要素・className・role 属性は保持し、属性ベースの assertion を可能にする。
+vi.mock("@tanstack/react-router", async () => {
+  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
+    "@tanstack/react-router",
+  );
+  return {
+    ...actual,
+    Link: ({
+      to,
+      params,
+      children,
+      className,
+    }: {
+      to: string;
+      params?: Record<string, string>;
+      children?: React.ReactNode;
+      className?: string;
+    }) => {
+      const href =
+        typeof to === "string"
+          ? to.replace(/\$(\w+)/g, (_, k: string) => params?.[k] ?? "")
+          : String(to);
+      return (
+        <a href={href} className={className}>
+          {children}
+        </a>
+      );
+    },
+  };
+});
 
 import { api } from "@/lib/api";
 
@@ -93,6 +126,17 @@ describe("組織一覧表示", () => {
     vi.mocked(api.organizations.$get).mockRejectedValue(new Error("network"));
     renderWithQuery(<OrganizationsPage />);
     expect(await screen.findByText("取得に失敗しました")).toBeInTheDocument();
+  });
+
+  it("各組織カードは詳細ページへのリンクになっている", async () => {
+    vi.mocked(api.organizations.$get).mockResolvedValue(mockJson(mockOrgs));
+
+    renderWithQuery(<OrganizationsPage />);
+
+    const link1 = await screen.findByRole("link", { name: /ACME 株式会社/ });
+    expect(link1).toHaveAttribute("href", "/organizations/org-1");
+    const link2 = screen.getByRole("link", { name: /別の組織/ });
+    expect(link2).toHaveAttribute("href", "/organizations/org-2");
   });
 
   it("API が 4xx を返した場合（res.ok=false）もエラー表示でフォールバックする", async () => {
