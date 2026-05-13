@@ -1,7 +1,12 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { getIdToken } from "@/lib/auth";
-import { Outlet, createRootRoute, redirect, useRouterState } from "@tanstack/react-router";
+import {
+  Outlet,
+  createRootRoute,
+  redirect,
+  useRouterState,
+} from "@tanstack/react-router";
 
 export const Route = createRootRoute({
   beforeLoad: ({ location }) => {
