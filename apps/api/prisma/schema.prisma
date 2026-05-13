@@ -25,6 +25,17 @@ model Meeting {
   previousMeeting Meeting? @relation("MeetingChain", fields: [previousMeetingId], references: [id])
   nextMeetings Meeting[] @relation("MeetingChain")
 
+  // リレーション
+  speakers             MeetingSpeaker[]
+  estimationBreakdowns MeetingEstimationBreakdown[]
+  ragDocument          RagDocument?
+  currentMeetingRefs   RelatedPastMeeting[] @relation("CurrentMeeting")
+  relatedMeetingRefs   RelatedPastMeeting[] @relation("RelatedMeeting")
+  decisionItems        DecisionItem[]
+  decisionItemsPlanned DecisionItem[]       @relation("PlannedMeeting")
+  tasks                Task[]
+  ambiguousInfos       AmbiguousInfo[]
+
   // インデックス
   @@index([previousMeetingId])
   @@index([heldAt])
@@ -43,6 +54,107 @@ model User {
   memberships     OrganizationMembership[]
   invitationsSent OrganizationInvitation[] @relation("InvitedBy")
   meetingMembers  MeetingMember[]
+
+  // 会議の話者情報。話者名とDBユーザーの紐付け状態を管理する。ユーザーが削除された場合も履歴保持のためレコードは残すが、userIdはnullにする。
+  meetingSpeakers      MeetingSpeaker[]
+  decisionItemsDecided DecisionItem[]
+  decisionItemAssignees DecisionItemAssignee[]
+  taskAssignees        TaskAssignee[]
+  auditLogs            AuditLog[]
+  readLogs             ReadLog[]
+}
+
+// 決定事項のステータス
+enum DecisionItemStatus {
+  draft
+  reviewing
+  open
+  decided
+  cancelled
+}
+
+// 決定事項の確定状態
+enum DecisionState {
+  confirmed
+  tentative
+  open
+}
+
+// 未決の理由
+enum DecisionReason {
+  no_consensus
+  information_lack
+  intentional_defer
+  not_discussed
+}
+
+// タスクのステータス
+enum TaskStatus {
+  draft
+  reviewing
+  todo
+  in_progress
+  done
+  rejected
+}
+
+// タスクの必須度
+enum TaskPriority {
+  required
+  optional
+}
+
+// 曖昧情報のステータス
+enum AmbiguousInfoStatus {
+  draft
+  reviewing
+  resolved
+  rejected
+}
+
+// 曖昧情報の種別
+enum AmbiguityType {
+  missing_speaker
+  transcription_error_low
+  transcription_error_high
+  no_assignee
+  no_deadline_mentioned
+  no_deadline_absolute
+  unclear_decision
+  insufficient_basis
+  unclear_scope
+}
+
+// 曖昧情報の深刻度
+enum AmbiguitySeverity {
+  high
+  medium
+  low
+}
+
+// 曖昧情報の解消種別
+enum ResolutionType {
+  task
+  decision_item
+  discarded
+}
+
+// 話者の解決状態
+enum ResolutionStatus {
+  resolved
+  unresolved
+  unknown
+}
+
+// 所要時間見積もりの種別
+enum EstimationBreakdownType {
+  required_task_check
+  open_issue_new
+  open_issue_recurring
+  overdue_task
+  new_topic
+  tentative_reconfirm
+  buffer
 }
 
 // 組織内メンバー権限。owner は組織削除可、admin は招待・編集可、member は閲覧中心。
@@ -139,4 +251,225 @@ model MeetingMember {
 
   @@id([recurringMeetingId, userId])
   @@index([userId])
+}
+
+// 会議ごとの話者情報。書き起こし上の呼称とDBユーザーの紐付け状態を管理する。
+model MeetingSpeaker {
+  id               String   @id @default(cuid())
+  meetingId        String
+  userId           String?
+  name             String?
+  resolutionStatus ResolutionStatus
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([meetingId])
+  @@unique([meetingId, userId])
+}
+
+// 次回会議の所要時間見積もり内訳。meetings.estimatedDurationMinutesの算出根拠を保持する。
+model MeetingEstimationBreakdown {
+  id        String   @id @default(cuid())
+  meetingId String
+  type      EstimationBreakdownType
+  count     Int
+  minutes   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@unique([meetingId, type])
+}
+
+// AI Searchに登録するRAGインデックスドキュメント。1会議=1ドキュメント。
+model RagDocument {
+  id                     String    @id @default(cuid())
+  meetingId              String    @unique
+  themeKeywords          Json
+  confirmedDecisionTexts Json
+  openIssueTexts         Json
+  participantNames       Json
+  indexedAt              DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+// RAG検索で見つかった関連過去会議。recurring_flagで再議論検出に使用する。
+model RelatedPastMeeting {
+  id                String   @id @default(cuid())
+  meetingId         String
+  relatedMeetingId  String
+  relevanceSummary  String
+  recurringFlag     Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  meeting        Meeting @relation("CurrentMeeting", fields: [meetingId], references: [id], onDelete: Cascade)
+  relatedMeeting Meeting @relation("RelatedMeeting", fields: [relatedMeetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, relatedMeetingId])
+  @@index([meetingId])
+  @@index([relatedMeetingId])
+}
+
+// 会議から抽出された決定事項・未決事項。
+model DecisionItem {
+  id               String   @id @default(cuid())
+  meetingId        String
+  title            String
+  body             String?
+  sourceQuote      String?
+  sourceContext    String?
+  status           DecisionItemStatus
+  decisionState    DecisionState?
+  reason           DecisionReason?
+  blockingItemId   String?
+  recurrenceCount  Int?
+  ambiguityFlags   Json?
+  decisionDeadline DateTime?
+  plannedMeetingId String?
+  decidedAt        DateTime?
+  decidedBy        String?
+  version          Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  meeting        Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  plannedMeeting Meeting? @relation("PlannedMeeting", fields: [plannedMeetingId], references: [id], onDelete: SetNull)
+  decidedByUser  User?    @relation(fields: [decidedBy], references: [id], onDelete: SetNull)
+  assignees      DecisionItemAssignee[]
+  tasks          Task[]
+  ambiguousInfos AmbiguousInfo[]
+
+  @@index([meetingId])
+  @@index([status])
+}
+
+// 決定事項・未決事項の担当者。複数担当者に対応するための中間テーブル。
+model DecisionItemAssignee {
+  id             String @id @default(cuid())
+  decisionItemId String
+  userId         String
+
+  decisionItem DecisionItem @relation(fields: [decisionItemId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionItemId, userId])
+  @@index([decisionItemId])
+}
+
+// 会議から抽出されたタスク。
+model Task {
+  id               String    @id @default(cuid())
+  meetingId        String
+  decisionItemId   String?
+  title            String
+  body             String?
+  sourceQuote      String?
+  sourceContext    String?
+  status           TaskStatus
+  priority         TaskPriority?
+  dueDateRaw       String?
+  dueDateEstimated Boolean?
+  assigneeRaw      String?
+  blockingItemId   String?
+  carriedOverCount Int?
+  ambiguityFlags   Json?
+  dueDate          DateTime?
+  startDate        DateTime?
+  followUpDate     DateTime?
+  version          Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  meeting      Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  decisionItem DecisionItem? @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
+  assignees    TaskAssignee[]
+  ambiguousInfos AmbiguousInfo[]
+
+  @@index([meetingId])
+  @@index([decisionItemId])
+  @@index([dueDate])
+  @@index([startDate])
+  @@index([status])
+}
+
+// タスクの担当者。複数担当者に対応するための中間テーブル。
+model TaskAssignee {
+  id      String @id @default(cuid())
+  taskId  String
+  userId  String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+}
+
+// 会議中に発生した曖昧な情報。
+model AmbiguousInfo {
+  id                         String    @id @default(cuid())
+  meetingId                  String
+  body                       String
+  sourceQuote                String?
+  sourceContext              String?
+  status                     AmbiguousInfoStatus
+  ambiguityType              AmbiguityType?
+  severity                   AmbiguitySeverity?
+  inferenceBasis             String?
+  dueDateRaw                 String?
+  dueDateEstimated           Boolean?
+  affectedItemIds            Json?
+  resolutionType             ResolutionType?
+  resolvedToTaskId           String?
+  resolvedToDecisionItemId   String?
+  version                    Int       @default(0)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  meeting              Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  resolvedToTask       Task?         @relation(fields: [resolvedToTaskId], references: [id], onDelete: SetNull)
+  resolvedToDecision   DecisionItem? @relation(fields: [resolvedToDecisionItemId], references: [id], onDelete: SetNull)
+
+  @@index([meetingId])
+  @@index([status])
+}
+
+// 各リソースへの操作履歴。追記専用の不変ログ。
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String
+  resourceType String   // task / decision_item / ambiguous_info など
+  resourceId   String
+  action       String   // create / update / delete
+  beforeValue  Json?
+  afterValue   Json?
+  createdAt    DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([resourceType, resourceId])
+  @@index([actorId])
+}
+
+// ユーザーによるリソースの既読履歴。追記専用の不変ログ。
+model ReadLog {
+  id           String   @id @default(cuid())
+  userId       String
+  resourceType String   // task / decision_item / ambiguous_info など
+  resourceId   String
+  readAt       DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, resourceType, resourceId])
 }
