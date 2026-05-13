@@ -448,16 +448,16 @@ export function OrganizationDetailView({
 
   if (orgQuery.isLoading) {
     return (
-      <main className="container mx-auto p-8">
+      <div className="container mx-auto p-8">
         <p>読み込み中...</p>
-      </main>
+      </div>
     );
   }
   if (orgQuery.isError || !orgQuery.data) {
     return (
-      <main className="container mx-auto p-8">
+      <div className="container mx-auto p-8">
         <p>取得に失敗しました</p>
-      </main>
+      </div>
     );
   }
 
@@ -465,11 +465,16 @@ export function OrganizationDetailView({
   const members = membersQuery.data ?? [];
 
   return (
-    <main className="container mx-auto p-8 space-y-6">
+    <section
+      aria-labelledby="organization-detail-title"
+      className="container mx-auto p-8 space-y-6"
+    >
       <header className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">{org.name}</h1>
+            <h1 id="organization-detail-title" className="text-2xl font-bold">
+              {org.name}
+            </h1>
             <RoleBadge role={org.role} />
           </div>
           {(org.role === "owner" || org.role === "admin") && (
@@ -554,6 +559,6 @@ export function OrganizationDetailView({
           />
         </section>
       )}
-    </main>
+    </section>
   );
 }
