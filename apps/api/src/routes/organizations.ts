@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { recurringMeetingCreateSchema } from "../lib/schemas/recurring-meeting.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 
 const createSchema = z.object({
@@ -265,6 +266,41 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     await prisma.organization.delete({ where: { id } });
     return c.body(null, 204);
   })
+  .post(
+    "/:id/meetings",
+    zValidator("json", recurringMeetingCreateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const user = c.var.user;
+      const { name, description, scheduleCron } = c.req.valid("json");
+
+      const guard = await requireMembership(c, id);
+      if (!guard.ok) return guard.res;
+
+      // RecurringMeeting 作成と作成者を MeetingMember.owner として登録する処理は
+      // 整合性確保のため $transaction で原子的に実行する。
+      const meeting = await prisma.$transaction(async (tx) => {
+        const created = await tx.recurringMeeting.create({
+          data: {
+            organizationId: id,
+            name,
+            description,
+            scheduleCron,
+          },
+        });
+        await tx.meetingMember.create({
+          data: {
+            recurringMeetingId: created.id,
+            userId: user.id,
+            role: "owner",
+          },
+        });
+        return created;
+      });
+
+      return c.json(meeting, 201);
+    },
+  )
   .post("/:id/invite", zValidator("json", inviteSchema), async (c) => {
     const id = c.req.param("id");
     const user = c.var.user;
