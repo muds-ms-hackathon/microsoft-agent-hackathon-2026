@@ -95,9 +95,15 @@ export function CreateOrganizationDialog({
         if (!next) reset();
       }}
     >
-      <DialogTrigger asChild>
-        {trigger ?? <Button>組織を作成</Button>}
-      </DialogTrigger>
+      {/* 外部から open を制御する場合 (openProp 指定時) はトリガーを描画しない。
+          サイドバーのドロップダウンメニューから開くようなケースでは、
+          DropdownMenuItem 自体がトリガーの役割を担うため、ここに別のトリガーを
+          置くと a11y 上の役割が二重化してしまう。 */}
+      {openProp === undefined && (
+        <DialogTrigger asChild>
+          {trigger ?? <Button>組織を作成</Button>}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>新しい組織を作成</DialogTitle>
