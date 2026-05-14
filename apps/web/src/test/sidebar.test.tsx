@@ -25,10 +25,17 @@ vi.mock("@/lib/api", () => ({
   authHeaders: () => ({ headers: {} }),
 }));
 
+// 現在パスを切り替えるためのテスト用ホルダー。useRouterState のモックから参照する。
+// テストごとに beforeEach で "/" にリセットされる。
+const currentPathnameRef = { value: "/" };
+const navigateMock = vi.fn();
+
 // TanStack Router の Link は RouterProvider 配下でないと落ちるため、
 // テスト中は href を持つ <a> として描画するモックに差し替える。
 // asChild で囲んだ場合に Radix が DropdownMenuItem 上にイベントを伝搬しても
 // 単純な <a> として href が assert できる形にする。
+// 併せて useRouterState / useNavigate も Sidebar が組織切替時の遷移判定に
+// 用いているためモック差し替えする。
 vi.mock("@tanstack/react-router", async () => {
   const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
     "@tanstack/react-router",
@@ -53,6 +60,11 @@ vi.mock("@tanstack/react-router", async () => {
         </a>
       );
     },
+    // selector を無視して現在の pathname を返す軽量モック。
+    // 実装側は useRouterState({ select: (s) => s.location.pathname }) を呼ぶが、
+    // テストでは selector を素通しして固定値を返せれば十分。
+    useRouterState: () => currentPathnameRef.value,
+    useNavigate: () => navigateMock,
   };
 });
 
@@ -115,6 +127,9 @@ beforeEach(() => {
   // 使わないため、明示的にリセットしておくだけで十分。
   (api.organizations.$get as Mock).mockReset();
   (api.organizations.$post as Mock).mockReset();
+  // ルーターモックの状態もデフォルト (ダッシュボード) に戻す。
+  currentPathnameRef.value = "/";
+  navigateMock.mockReset();
 });
 
 afterEach(() => {
@@ -221,6 +236,84 @@ describe("Sidebar 組織セレクター", () => {
     await waitFor(() => {
       expect(localStorage.getItem("current_organization_id")).toBe("org-2");
     });
+  });
+
+  it("組織詳細ページにいるときに切替すると、新しい組織の詳細ページに navigate される", async () => {
+    // /organizations/$id 上では「その場に留まる」と古い組織の内容が
+    // 表示されたままになるため、新しい組織の詳細ページに自動遷移する。
+    currentPathnameRef.value = "/organizations/org-1";
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    const user = userEvent.setup();
+
+    renderSidebar();
+
+    await waitFor(() => {
+      expect(localStorage.getItem("current_organization_id")).toBe("org-1");
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: "組織を切り替え" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "別の組織" }),
+    );
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: "/organizations/$id",
+        params: { id: "org-2" },
+      });
+    });
+  });
+
+  it("詳細ページ以外で切替したときは navigate されない（その場に留まる）", async () => {
+    // 一覧やダッシュボードにいる時は遷移を強制しない。例えば /organizations は
+    // 組織非依存のページで、切替時に飛ばすと UX が破壊的になる。
+    currentPathnameRef.value = "/organizations";
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    const user = userEvent.setup();
+
+    renderSidebar();
+
+    await waitFor(() => {
+      expect(localStorage.getItem("current_organization_id")).toBe("org-1");
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: "組織を切り替え" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "別の組織" }),
+    );
+
+    await waitFor(() => {
+      expect(localStorage.getItem("current_organization_id")).toBe("org-2");
+    });
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("ダッシュボード上で切替しても navigate されない", async () => {
+    currentPathnameRef.value = "/";
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    const user = userEvent.setup();
+
+    renderSidebar();
+
+    await waitFor(() => {
+      expect(localStorage.getItem("current_organization_id")).toBe("org-1");
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: "組織を切り替え" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "別の組織" }),
+    );
+
+    await waitFor(() => {
+      expect(localStorage.getItem("current_organization_id")).toBe("org-2");
+    });
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("ドロップダウンに「現在の組織の詳細」リンクが /organizations/{currentId} で出る", async () => {

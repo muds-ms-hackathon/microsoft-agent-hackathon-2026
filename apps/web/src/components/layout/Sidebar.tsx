@@ -17,7 +17,7 @@ import {
   setCurrentOrganizationIdAtom,
 } from "@/lib/currentOrganization";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   CalendarDays,
@@ -54,12 +54,33 @@ function initial(name: string | null | undefined): string {
   return chars[0] ?? "?";
 }
 
+// 組織詳細ページのパスにマッチする正規表現。
+// `/organizations` (一覧) や `/organizations/` (末尾スラッシュのみ) は除外し、
+// 末尾セグメントが 1 文字以上ある場合だけ詳細ページとみなす。
+const ORGANIZATION_DETAIL_PATH = /^\/organizations\/[^/]+/;
+
 export function Sidebar() {
   const { data: orgs, isLoading } = useOrganizations();
   const currentId = useAtomValue(currentOrganizationIdAtom);
   const setCurrentId = useSetAtom(setCurrentOrganizationIdAtom);
   const clearCurrentId = useSetAtom(clearCurrentOrganizationIdAtom);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const navigate = useNavigate();
+  // selector で必要な値だけ subscribe し、関係のない state 変化での再描画を抑える。
+  const pathname = useRouterState({
+    select: (s) => s.location.pathname,
+  });
+
+  // 組織詳細ページを開いている時に組織を切り替えた場合、URL の id 部分は古いままで
+  // 表示も古い組織の詳細を引き続き取得してしまう。同じ詳細ページの新しい id に
+  // 自動遷移して内容を切り替える。それ以外のページではその場に留まる
+  // (ダッシュボードや組織非依存ページで操作中のコンテキストを破壊しないため)。
+  const handleSelectOrganization = (newId: string) => {
+    setCurrentId(newId);
+    if (ORGANIZATION_DETAIL_PATH.test(pathname)) {
+      navigate({ to: "/organizations/$id", params: { id: newId } });
+    }
+  };
 
   // 組織一覧の取得結果を見て「現在の組織 ID」を整合させる。
   //   - 一覧が空 → null にリセット (退会・削除直後など)
@@ -92,7 +113,7 @@ export function Sidebar() {
         orgs={orgs ?? null}
         currentOrg={currentOrg}
         currentId={currentId}
-        onSelect={setCurrentId}
+        onSelect={handleSelectOrganization}
         onOpenCreateDialog={() => setCreateDialogOpen(true)}
       />
 
