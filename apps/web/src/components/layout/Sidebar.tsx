@@ -265,8 +265,8 @@ function OrganizationSelector({
           onSelect={(e) => {
             // onSelect のデフォルト挙動でメニューが閉じた直後にダイアログを
             // 開こうとすると Radix の focus 管理と競合してフォーカスがずれる
-            // ことがある。preventDefault でメニューの自動 close を抑止し、
-            // setTimeout で 1 tick 遅らせてからダイアログを開く。
+            // ことがある。preventDefault でメニューの自動 close を抑止してから
+            // ダイアログを開く。
             e.preventDefault();
             onOpenCreateDialog();
           }}
