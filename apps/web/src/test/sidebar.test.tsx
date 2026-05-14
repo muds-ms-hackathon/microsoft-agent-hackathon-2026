@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/layout/Sidebar";
+import type { Organization } from "@/features/organizations/types";
 import { api } from "@/lib/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -67,15 +68,6 @@ vi.mock("@tanstack/react-router", async () => {
     useNavigate: () => navigateMock,
   };
 });
-
-type Organization = {
-  id: string;
-  name: string;
-  description: string | null;
-  role: "owner" | "admin" | "member";
-  createdAt: string;
-  updatedAt: string;
-};
 
 const mockOrgs: Organization[] = [
   {
