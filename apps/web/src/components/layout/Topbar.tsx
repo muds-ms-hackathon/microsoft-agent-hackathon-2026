@@ -1,12 +1,14 @@
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { authAtom } from "@/lib/auth";
-import { useAtomValue } from "jotai";
+import { authAtom, logoutAtom } from "@/lib/auth";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useNavigate } from "@tanstack/react-router";
 import { Settings } from "lucide-react";
 
 // 名前の頭文字を取り出す。サロゲートペアを Array.from で正しく扱う。
@@ -17,7 +19,14 @@ function initial(name: string | null | undefined): string {
 
 function UserAvatar() {
   const auth = useAtomValue(authAtom);
+  const logout = useSetAtom(logoutAtom);
+  const navigate = useNavigate();
   const user = auth.isAuthenticated ? auth.user : null;
+
+  const handleLogout = () => {
+    logout();
+    navigate({ to: "/login" });
+  };
 
   return (
     <DropdownMenu>
@@ -38,7 +47,12 @@ function UserAvatar() {
           </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {/* ログアウト（未実装） */}
+        <DropdownMenuItem
+          onSelect={handleLogout}
+          className="cursor-pointer text-destructive focus:text-destructive"
+        >
+          ログアウト
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
