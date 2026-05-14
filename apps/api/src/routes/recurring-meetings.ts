@@ -98,4 +98,33 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
       });
       return c.json(updated);
     },
-  );
+  )
+  .delete("/:id", async (c) => {
+    const id = c.req.param("id");
+    const user = c.var.user;
+
+    const meeting = await prisma.recurringMeeting.findUnique({
+      where: { id },
+    });
+    const guard = await requireRecurringAccess(c, meeting);
+    if (!guard.ok) return guard.res;
+
+    // 削除は MeetingMember.owner のみ許可。組織メンバーでも MeetingMember
+    // 未参加・member ロールの場合は 403。
+    const member = await prisma.meetingMember.findUnique({
+      where: {
+        recurringMeetingId_userId: {
+          recurringMeetingId: id,
+          userId: user.id,
+        },
+      },
+    });
+    if (!member || member.role !== "owner") {
+      return c.json({ error: "定例の削除権限がありません" }, 403);
+    }
+
+    // 配下の MeetingMember / Meeting は schema 側で onDelete: Cascade のため
+    // delete 一発で連鎖削除される。
+    await prisma.recurringMeeting.delete({ where: { id } });
+    return c.body(null, 204);
+  });

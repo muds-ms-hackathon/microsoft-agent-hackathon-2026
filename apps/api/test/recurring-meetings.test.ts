@@ -57,6 +57,8 @@ const mockMembershipFindUnique = vi.mocked(
 const mockRecurringFindUnique = vi.mocked(prisma.recurringMeeting.findUnique);
 const mockRecurringFindMany = vi.mocked(prisma.recurringMeeting.findMany);
 const mockRecurringUpdate = vi.mocked(prisma.recurringMeeting.update);
+const mockRecurringDelete = vi.mocked(prisma.recurringMeeting.delete);
+const mockMeetingMemberFindUnique = vi.mocked(prisma.meetingMember.findUnique);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member") {
@@ -448,5 +450,81 @@ describe("PATCH /recurring-meetings/:id", () => {
     });
     expect(res.status).toBe(404);
     expect(mockRecurringUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /recurring-meetings/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("MeetingMember.owner は削除でき、204 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockMeetingMemberFindUnique.mockResolvedValue({
+      recurringMeetingId: "rmtg-1",
+      userId: "user-1",
+      role: "owner",
+      joinedAt: new Date("2026-05-06T00:00:00Z"),
+    });
+    mockRecurringDelete.mockResolvedValue(sampleRecurring as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe("");
+    expect(mockRecurringDelete).toHaveBeenCalledWith({
+      where: { id: "rmtg-1" },
+    });
+    // 配下の Meeting / MeetingMember は schema 側の onDelete: Cascade に委ねる。
+  });
+
+  it("MeetingMember.member は 403 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockMeetingMemberFindUnique.mockResolvedValue({
+      recurringMeetingId: "rmtg-1",
+      userId: "user-1",
+      role: "member",
+      joinedAt: new Date("2026-05-06T00:00:00Z"),
+    });
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+    expect(mockRecurringDelete).not.toHaveBeenCalled();
+  });
+
+  it("組織メンバーだが MeetingMember 未参加なら 403 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockMeetingMemberFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+    expect(mockRecurringDelete).not.toHaveBeenCalled();
+  });
+
+  it("組織メンバーでなければ 404 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+    expect(mockMeetingMemberFindUnique).not.toHaveBeenCalled();
+    expect(mockRecurringDelete).not.toHaveBeenCalled();
+  });
+
+  it("定例が存在しない場合は 404 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(null);
+    const res = await app.request("/recurring-meetings/missing", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+    expect(mockRecurringDelete).not.toHaveBeenCalled();
   });
 });
