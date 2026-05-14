@@ -34,7 +34,9 @@ function renderTopbar(name = "田中太郎", email = "tanaka@example.com") {
 describe("Topbar", () => {
   it("アバターに名前の頭文字が表示される", () => {
     renderTopbar("田中太郎");
-    expect(screen.getByRole("button", { name: "ユーザーメニュー" })).toHaveTextContent("田");
+    expect(
+      screen.getByRole("button", { name: "ユーザーメニュー" }),
+    ).toHaveTextContent("田");
   });
 
   it("ログアウトをクリックすると /login へ遷移する", async () => {
