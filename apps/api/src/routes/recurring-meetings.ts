@@ -1,7 +1,9 @@
+import { zValidator } from "@hono/zod-validator";
 import type { MeetingRole, RecurringMeeting } from "@prisma/client";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
+import { recurringMeetingUpdateSchema } from "../lib/schemas/recurring-meeting.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 
 // 認証ユーザーが定例の所属組織のメンバーであるかを確認する共通ガード。
@@ -74,4 +76,26 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
     // include で取得した members は整形後の配列で置き換えて返す。
     const { members: _members, ...rest } = guard.meeting;
     return c.json({ ...rest, members });
-  });
+  })
+  .patch(
+    "/:id",
+    zValidator("json", recurringMeetingUpdateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const data = c.req.valid("json");
+
+      // 編集は組織メンバー全員に許可（削除のみ MeetingMember.owner 限定）。
+      // 定例取得時は members を含めずに済むため include しない軽量クエリ。
+      const meeting = await prisma.recurringMeeting.findUnique({
+        where: { id },
+      });
+      const guard = await requireRecurringAccess(c, meeting);
+      if (!guard.ok) return guard.res;
+
+      const updated = await prisma.recurringMeeting.update({
+        where: { id },
+        data,
+      });
+      return c.json(updated);
+    },
+  );

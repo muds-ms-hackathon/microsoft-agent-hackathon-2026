@@ -56,6 +56,7 @@ const mockMembershipFindUnique = vi.mocked(
 );
 const mockRecurringFindUnique = vi.mocked(prisma.recurringMeeting.findUnique);
 const mockRecurringFindMany = vi.mocked(prisma.recurringMeeting.findMany);
+const mockRecurringUpdate = vi.mocked(prisma.recurringMeeting.update);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member") {
@@ -341,5 +342,111 @@ describe("GET /recurring-meetings/:id", () => {
 
     const res = await app.request("/recurring-meetings/rmtg-1");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("PATCH /recurring-meetings/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("組織メンバーは定例を編集できる（name のみ）", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockRecurringUpdate.mockResolvedValue({
+      ...sampleRecurring,
+      name: "新しい定例名",
+    } as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "新しい定例名" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockRecurringUpdate).toHaveBeenCalledWith({
+      where: { id: "rmtg-1" },
+      data: { name: "新しい定例名" },
+    });
+  });
+
+  it("scheduleCron も編集できる", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockRecurringUpdate.mockResolvedValue({
+      ...sampleRecurring,
+      scheduleCron: "0 14 * * 5",
+    } as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduleCron: "0 14 * * 5" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockRecurringUpdate).toHaveBeenCalledWith({
+      where: { id: "rmtg-1" },
+      data: { scheduleCron: "0 14 * * 5" },
+    });
+  });
+
+  it("scheduleCron が不正フォーマットなら 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduleCron: "not-a-cron" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockRecurringUpdate).not.toHaveBeenCalled();
+  });
+
+  it("空ボディの PATCH は 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("name が空文字なら 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("定義外フィールドを含む PATCH は 400 を返す", async () => {
+    // strict() により未知のフィールドはエラーになる。
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "新しい名前", unknown: "foo" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("定例が存在しない場合は 404 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(null);
+    const res = await app.request("/recurring-meetings/missing", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "新しい名前" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockRecurringUpdate).not.toHaveBeenCalled();
+  });
+
+  it("組織メンバーでなければ 404 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "新しい名前" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockRecurringUpdate).not.toHaveBeenCalled();
   });
 });
