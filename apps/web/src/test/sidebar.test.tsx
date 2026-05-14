@@ -61,10 +61,15 @@ vi.mock("@tanstack/react-router", async () => {
         </a>
       );
     },
-    // selector を無視して現在の pathname を返す軽量モック。
-    // 実装側は useRouterState({ select: (s) => s.location.pathname }) を呼ぶが、
-    // テストでは selector を素通しして固定値を返せれば十分。
-    useRouterState: () => currentPathnameRef.value,
+    // 実装側 (useRouterState({ select: (s) => s.location.pathname })) と同じ
+    // 呼び出し形を維持するため、selector を実行して値を返す。selector の
+    // シグネチャが壊れた場合にテストでも検知できるようにするのが目的。
+    useRouterState: (opts?: {
+      select?: (state: { location: { pathname: string } }) => unknown;
+    }) => {
+      const state = { location: { pathname: currentPathnameRef.value } };
+      return opts?.select ? opts.select(state) : state;
+    },
     useNavigate: () => navigateMock,
   };
 });
