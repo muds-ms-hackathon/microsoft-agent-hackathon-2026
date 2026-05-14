@@ -54,6 +54,7 @@ import { prisma } from "../src/lib/prisma.js";
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
 );
+const mockRecurringFindUnique = vi.mocked(prisma.recurringMeeting.findUnique);
 const mockRecurringFindMany = vi.mocked(prisma.recurringMeeting.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
@@ -264,5 +265,81 @@ describe("GET /organizations/:id/meetings", () => {
     const res = await app.request("/organizations/org-1/meetings");
     expect(res.status).toBe(404);
     expect(mockRecurringFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /recurring-meetings/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const sampleMembers = [
+    // 並び順検証用に DB 順序を意図的に role 逆順で返し、ハンドラ側で
+    // owner → member の順にソートされることを確認する。
+    {
+      recurringMeetingId: "rmtg-1",
+      userId: "user-2",
+      role: "member" as const,
+      joinedAt: new Date("2026-05-07T00:00:00Z"),
+      user: {
+        id: "user-2",
+        name: "bob",
+        displayName: "Bob B.",
+        email: "bob@example.com",
+      },
+    },
+    {
+      recurringMeetingId: "rmtg-1",
+      userId: "user-1",
+      role: "owner" as const,
+      joinedAt: new Date("2026-05-06T00:00:00Z"),
+      user: {
+        id: "user-1",
+        name: "alice",
+        displayName: "Alice A.",
+        email: "alice@example.com",
+      },
+    },
+  ];
+
+  it("組織メンバーは定例詳細を取得でき、メンバー一覧を owner→member 順で返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue({
+      ...sampleRecurring,
+      members: sampleMembers,
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+
+    const res = await app.request("/recurring-meetings/rmtg-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      id: string;
+      members: Array<{ userId: string; role: string; name: string }>;
+    };
+    expect(body.id).toBe("rmtg-1");
+    expect(body.members).toHaveLength(2);
+    expect(body.members[0].userId).toBe("user-1");
+    expect(body.members[0].role).toBe("owner");
+    expect(body.members[0].name).toBe("alice");
+    expect(body.members[1].userId).toBe("user-2");
+    expect(body.members[1].role).toBe("member");
+  });
+
+  it("定例が存在しない場合は 404 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/recurring-meetings/missing");
+    expect(res.status).toBe(404);
+    // 組織所属チェックに進む前に 404 で短絡する。
+    expect(mockMembershipFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("定例所属組織のメンバーでない場合は 404 を返す", async () => {
+    // 組織の存在自体を露出させないため、所属していない場合は 404 で統一する。
+    mockRecurringFindUnique.mockResolvedValue({
+      ...sampleRecurring,
+      members: [],
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/recurring-meetings/rmtg-1");
+    expect(res.status).toBe(404);
   });
 });
