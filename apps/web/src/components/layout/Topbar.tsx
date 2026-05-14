@@ -18,10 +18,9 @@ function initial(name: string | null | undefined): string {
 }
 
 function UserAvatar() {
-  const auth = useAtomValue(authAtom);
   const logout = useSetAtom(logoutAtom);
   const navigate = useNavigate();
-  const user = auth.isAuthenticated ? auth.user : null;
+  const { user } = useAtomValue(authAtom);
 
   const handleLogout = () => {
     logout();
