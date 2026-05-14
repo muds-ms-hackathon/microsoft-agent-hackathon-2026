@@ -54,6 +54,7 @@ import { prisma } from "../src/lib/prisma.js";
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
 );
+const mockRecurringFindMany = vi.mocked(prisma.recurringMeeting.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member") {
@@ -207,5 +208,61 @@ describe("POST /organizations/:id/meetings", () => {
       }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /organizations/:id/meetings", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const listSample = [
+    {
+      ...sampleRecurring,
+      id: "rmtg-2",
+      name: "月次レビュー",
+      createdAt: new Date("2026-05-08T00:00:00Z"),
+      _count: { members: 3 },
+    },
+    {
+      ...sampleRecurring,
+      id: "rmtg-1",
+      _count: { members: 5 },
+    },
+  ];
+
+  it("組織メンバーは定例一覧を取得でき、_count.members を含む", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockRecurringFindMany.mockResolvedValue(listSample as never);
+
+    const res = await app.request("/organizations/org-1/meetings");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      _count: { members: number };
+    }>;
+    expect(body).toHaveLength(2);
+    expect(body[0].id).toBe("rmtg-2");
+    expect(body[0]._count.members).toBe(3);
+    expect(body[1].id).toBe("rmtg-1");
+    expect(body[1]._count.members).toBe(5);
+    expect(mockRecurringFindMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1" },
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { members: true } } },
+    });
+  });
+
+  it("定例が無い組織は空配列を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockRecurringFindMany.mockResolvedValue([] as never);
+    const res = await app.request("/organizations/org-1/meetings");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it("未所属ユーザーは 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/organizations/org-1/meetings");
+    expect(res.status).toBe(404);
+    expect(mockRecurringFindMany).not.toHaveBeenCalled();
   });
 });

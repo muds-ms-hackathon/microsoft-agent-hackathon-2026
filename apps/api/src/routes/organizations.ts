@@ -266,6 +266,21 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     await prisma.organization.delete({ where: { id } });
     return c.body(null, 204);
   })
+  .get("/:id/meetings", async (c) => {
+    const id = c.req.param("id");
+
+    const guard = await requireMembership(c, id);
+    if (!guard.ok) return guard.res;
+
+    // 一覧画面でメンバー数バッジを出せるよう _count.members を併せて取得する。
+    // メンバー詳細は重いので別エンドポイント（GET /recurring-meetings/:id）で返す。
+    const meetings = await prisma.recurringMeeting.findMany({
+      where: { organizationId: id },
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { members: true } } },
+    });
+    return c.json(meetings);
+  })
   .post(
     "/:id/meetings",
     zValidator("json", recurringMeetingCreateSchema),
