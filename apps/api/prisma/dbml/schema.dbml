@@ -1,0 +1,454 @@
+//// ------------------------------------------------------
+//// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+//// ------------------------------------------------------
+
+Table Meeting {
+  id String [pk]
+  title String [not null]
+  heldAt DateTime [not null]
+  createdAt DateTime [default: `now()`, not null]
+  meetingType String [not null, default: 'one_time']
+  transcriptionQuality String
+  supplementaryMemo String
+  sequenceNumber Int
+  previousMeetingId String
+  estimatedDurationMinutes Int
+  estimationNote String
+  previousMeeting Meeting
+  nextMeetings Meeting [not null]
+  speakers MeetingSpeaker [not null]
+  estimationBreakdowns MeetingEstimationBreakdown [not null]
+  ragDocument RagDocument
+  currentMeetingRefs RelatedPastMeeting [not null]
+  relatedMeetingRefs RelatedPastMeeting [not null]
+  decisionItems DecisionItem [not null]
+  decisionItemsPlanned DecisionItem [not null]
+  tasks Task [not null]
+  ambiguousInfos AmbiguousInfo [not null]
+}
+
+Table User {
+  id String [pk]
+  externalId String [unique, not null]
+  email String [unique, not null]
+  name String [not null]
+  displayName String [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  memberships OrganizationMembership [not null]
+  invitationsSent OrganizationInvitation [not null]
+  meetingMembers MeetingMember [not null]
+  meetingSpeakers MeetingSpeaker [not null]
+  decisionItemsDecided DecisionItem [not null]
+  decisionItemAssignees DecisionItemAssignee [not null]
+  taskAssignees TaskAssignee [not null]
+  auditLogs AuditLog [not null]
+  readLogs ReadLog [not null]
+}
+
+Table Organization {
+  id String [pk]
+  name String [not null]
+  description String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  memberships OrganizationMembership [not null]
+  invitations OrganizationInvitation [not null]
+  recurringMeetings RecurringMeeting [not null]
+}
+
+Table OrganizationMembership {
+  userId String [not null]
+  organizationId String [not null]
+  role OrgRole [not null]
+  joinedAt DateTime [default: `now()`, not null]
+  user User [not null]
+  organization Organization [not null]
+
+  indexes {
+    (userId, organizationId) [pk]
+  }
+}
+
+Table OrganizationInvitation {
+  id String [pk]
+  organizationId String [not null]
+  email String [not null]
+  invitedBy String [not null]
+  role OrgRole [not null, default: 'member']
+  expiresAt DateTime [not null]
+  status InvitationStatus [not null, default: 'pending']
+  createdAt DateTime [default: `now()`, not null]
+  organization Organization [not null]
+  inviter User [not null]
+
+  indexes {
+    (organizationId, email, status) [unique]
+  }
+}
+
+Table RecurringMeeting {
+  id String [pk]
+  organizationId String [not null]
+  name String [not null]
+  description String
+  scheduleCron String [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  organization Organization [not null]
+  members MeetingMember [not null]
+}
+
+Table MeetingMember {
+  recurringMeetingId String [not null]
+  userId String [not null]
+  role MeetingRole [not null]
+  joinedAt DateTime [default: `now()`, not null]
+  recurringMeeting RecurringMeeting [not null]
+  user User [not null]
+
+  indexes {
+    (recurringMeetingId, userId) [pk]
+  }
+}
+
+Table MeetingSpeaker {
+  id String [pk]
+  meetingId String [not null]
+  userId String
+  name String
+  resolutionStatus ResolutionStatus [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+  user User
+
+  indexes {
+    (meetingId, userId) [unique]
+  }
+}
+
+Table MeetingEstimationBreakdown {
+  id String [pk]
+  meetingId String [not null]
+  type EstimationBreakdownType [not null]
+  count Int [not null]
+  minutes Int [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+
+  indexes {
+    (meetingId, type) [unique]
+  }
+}
+
+Table RagDocument {
+  id String [pk]
+  meetingId String [unique, not null]
+  themeKeywords Json [not null]
+  confirmedDecisionTexts Json [not null]
+  openIssueTexts Json [not null]
+  participantNames Json [not null]
+  indexedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+}
+
+Table RelatedPastMeeting {
+  id String [pk]
+  meetingId String [not null]
+  relatedMeetingId String [not null]
+  relevanceSummary String [not null]
+  recurringFlag Boolean [not null, default: false]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+  relatedMeeting Meeting [not null]
+
+  indexes {
+    (meetingId, relatedMeetingId) [unique]
+  }
+}
+
+Table DecisionItem {
+  id String [pk]
+  meetingId String [not null]
+  title String [not null]
+  body String
+  sourceQuote String
+  sourceContext String
+  status DecisionItemStatus [not null]
+  decisionState DecisionState
+  reason DecisionReason
+  blockingItemId String
+  recurrenceCount Int
+  ambiguityFlags Json
+  decisionDeadline DateTime
+  plannedMeetingId String
+  decidedAt DateTime
+  decidedBy String
+  version Int [not null, default: 0]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+  plannedMeeting Meeting
+  decidedByUser User
+  assignees DecisionItemAssignee [not null]
+  tasks Task [not null]
+  ambiguousInfos AmbiguousInfo [not null]
+}
+
+Table DecisionItemAssignee {
+  id String [pk]
+  decisionItemId String [not null]
+  userId String [not null]
+  decisionItem DecisionItem [not null]
+  user User [not null]
+
+  indexes {
+    (decisionItemId, userId) [unique]
+  }
+}
+
+Table Task {
+  id String [pk]
+  meetingId String [not null]
+  decisionItemId String
+  title String [not null]
+  body String
+  sourceQuote String
+  sourceContext String
+  status TaskStatus [not null]
+  priority TaskPriority
+  dueDateRaw String
+  dueDateEstimated Boolean
+  assigneeRaw String
+  blockingItemId String
+  carriedOverCount Int
+  ambiguityFlags Json
+  dueDate DateTime
+  startDate DateTime
+  followUpDate DateTime
+  version Int [not null, default: 0]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+  decisionItem DecisionItem
+  assignees TaskAssignee [not null]
+  ambiguousInfos AmbiguousInfo [not null]
+}
+
+Table TaskAssignee {
+  id String [pk]
+  taskId String [not null]
+  userId String [not null]
+  task Task [not null]
+  user User [not null]
+
+  indexes {
+    (taskId, userId) [unique]
+  }
+}
+
+Table AmbiguousInfo {
+  id String [pk]
+  meetingId String [not null]
+  body String [not null]
+  sourceQuote String
+  sourceContext String
+  status AmbiguousInfoStatus [not null]
+  ambiguityType AmbiguityType
+  severity AmbiguitySeverity
+  inferenceBasis String
+  dueDateRaw String
+  dueDateEstimated Boolean
+  affectedItemIds Json
+  resolutionType ResolutionType
+  resolvedToTaskId String
+  resolvedToDecisionItemId String
+  version Int [not null, default: 0]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+  resolvedToTask Task
+  resolvedToDecision DecisionItem
+}
+
+Table AuditLog {
+  id String [pk]
+  actorId String [not null]
+  resourceType String [not null]
+  resourceId String [not null]
+  action String [not null]
+  beforeValue Json
+  afterValue Json
+  createdAt DateTime [default: `now()`, not null]
+  actor User [not null]
+}
+
+Table ReadLog {
+  id String [pk]
+  userId String [not null]
+  resourceType String [not null]
+  resourceId String [not null]
+  readAt DateTime [default: `now()`, not null]
+  createdAt DateTime [default: `now()`, not null]
+  user User [not null]
+}
+
+Enum DecisionItemStatus {
+  draft
+  reviewing
+  open
+  decided
+  cancelled
+}
+
+Enum DecisionState {
+  confirmed
+  tentative
+  open
+}
+
+Enum DecisionReason {
+  no_consensus
+  information_lack
+  intentional_defer
+  not_discussed
+}
+
+Enum TaskStatus {
+  draft
+  reviewing
+  todo
+  in_progress
+  done
+  rejected
+}
+
+Enum TaskPriority {
+  required
+  optional
+}
+
+Enum AmbiguousInfoStatus {
+  draft
+  reviewing
+  resolved
+  rejected
+}
+
+Enum AmbiguityType {
+  missing_speaker
+  transcription_error_low
+  transcription_error_high
+  no_assignee
+  no_deadline_mentioned
+  no_deadline_absolute
+  unclear_decision
+  insufficient_basis
+  unclear_scope
+}
+
+Enum AmbiguitySeverity {
+  high
+  medium
+  low
+}
+
+Enum ResolutionType {
+  task
+  decision_item
+  discarded
+}
+
+Enum ResolutionStatus {
+  resolved
+  unresolved
+  unknown
+}
+
+Enum EstimationBreakdownType {
+  required_task_check
+  open_issue_new
+  open_issue_recurring
+  overdue_task
+  new_topic
+  tentative_reconfirm
+  buffer
+}
+
+Enum OrgRole {
+  owner
+  admin
+  member
+}
+
+Enum InvitationStatus {
+  pending
+  accepted
+  expired
+}
+
+Enum MeetingRole {
+  owner
+  member
+}
+
+Ref: Meeting.previousMeetingId - Meeting.id
+
+Ref: OrganizationMembership.userId > User.id [delete: Cascade]
+
+Ref: OrganizationMembership.organizationId > Organization.id [delete: Cascade]
+
+Ref: OrganizationInvitation.organizationId > Organization.id [delete: Cascade]
+
+Ref: OrganizationInvitation.invitedBy > User.id [delete: Restrict]
+
+Ref: RecurringMeeting.organizationId > Organization.id [delete: Cascade]
+
+Ref: MeetingMember.recurringMeetingId > RecurringMeeting.id [delete: Cascade]
+
+Ref: MeetingMember.userId > User.id [delete: Cascade]
+
+Ref: MeetingSpeaker.meetingId > Meeting.id [delete: Cascade]
+
+Ref: MeetingSpeaker.userId > User.id [delete: Set Null]
+
+Ref: MeetingEstimationBreakdown.meetingId > Meeting.id [delete: Cascade]
+
+Ref: RagDocument.meetingId - Meeting.id [delete: Cascade]
+
+Ref: RelatedPastMeeting.meetingId > Meeting.id [delete: Cascade]
+
+Ref: RelatedPastMeeting.relatedMeetingId > Meeting.id [delete: Cascade]
+
+Ref: DecisionItem.meetingId > Meeting.id [delete: Cascade]
+
+Ref: DecisionItem.plannedMeetingId > Meeting.id [delete: Cascade]
+
+Ref: DecisionItem.decidedBy > User.id [delete: Set Null]
+
+Ref: DecisionItemAssignee.decisionItemId > DecisionItem.id [delete: Cascade]
+
+Ref: DecisionItemAssignee.userId > User.id [delete: Cascade]
+
+Ref: Task.meetingId > Meeting.id [delete: Cascade]
+
+Ref: Task.decisionItemId > DecisionItem.id [delete: Set Null]
+
+Ref: TaskAssignee.taskId > Task.id [delete: Cascade]
+
+Ref: TaskAssignee.userId > User.id [delete: Cascade]
+
+Ref: AmbiguousInfo.meetingId > Meeting.id [delete: Cascade]
+
+Ref: AmbiguousInfo.resolvedToTaskId > Task.id [delete: Set Null]
+
+Ref: AmbiguousInfo.resolvedToDecisionItemId > DecisionItem.id [delete: Set Null]
+
+Ref: AuditLog.actorId > User.id [delete: Restrict]
+
+Ref: ReadLog.userId > User.id [delete: Cascade]
