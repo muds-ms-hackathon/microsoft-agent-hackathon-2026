@@ -1190,6 +1190,32 @@ describe("組織詳細ページ - 定例編集ダイアログ", () => {
     expect(api["recurring-meetings"][":id"].$patch).not.toHaveBeenCalled();
   });
 
+  it("所要時間プリセット 90 分を選んで保存すると defaultDurationMinutes が差分送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail.recurringMeetings[0],
+        defaultDurationMinutes: 90,
+      }),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    await user.click(within(dialog).getByRole("radio", { name: "90 分" }));
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$patch).toHaveBeenCalledWith(
+        { param: { id: "meet-1" }, json: { defaultDurationMinutes: 90 } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
   it("頻度を毎日に切り替えて保存すると scheduleCron が差分送信される", async () => {
     const user = userEvent.setup();
     vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
