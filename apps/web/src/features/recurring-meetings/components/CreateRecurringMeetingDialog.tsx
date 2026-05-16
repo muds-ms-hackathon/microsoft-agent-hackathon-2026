@@ -13,12 +13,15 @@ import { Label } from "@/components/ui/label";
 import { api, authHeaders } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useId, useState } from "react";
-import { useForm } from "react-hook-form";
+import { type ReactNode, useId, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+import { buildCron, defaultCronBuilderState } from "../scheduleCron";
+import { ScheduleCronBuilder } from "./ScheduleCronBuilder";
 
-// API 側 schema と同様、MVP では「スペース区切り 5 フィールド」のみ検証する。
-// 詳細な妥当性チェックは cron パーサー導入時に厳格化予定。
+// API 側 schema と同じ：scheduleCron は「スペース区切り 5 フィールド」のみ検証する。
+// ビルダー UI を経由する場合は常に有効な cron が生成されるため、フォーム値としては
+// regex を満たすが、防御的に schema 側も維持しておく。
 const cronFieldFormat = /^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/;
 
 const createSchema = z.object({
@@ -32,26 +35,47 @@ const createSchema = z.object({
 
 type CreateFormValues = z.infer<typeof createSchema>;
 
-export function CreateRecurringMeetingDialog({ orgId }: { orgId: string }) {
-  const [open, setOpen] = useState(false);
+export function CreateRecurringMeetingDialog({
+  orgId,
+  trigger,
+  open: openProp,
+  onOpenChange,
+}: {
+  orgId: string;
+  // 任意のトリガー要素を差し込み可能にする。未指定時は「定例を作成」ボタンを使う。
+  trigger?: ReactNode;
+  // 制御モード用。サイドバー等の外側 UI から開きたい場合に使う。
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = (next: boolean) => {
+    if (onOpenChange) onOpenChange(next);
+    if (openProp === undefined) setInternalOpen(next);
+  };
+
   const queryClient = useQueryClient();
   const nameId = useId();
   const descriptionId = useId();
-  const cronId = useId();
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<CreateFormValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { name: "", description: "", scheduleCron: "" },
+    defaultValues: {
+      name: "",
+      description: "",
+      scheduleCron: buildCron(defaultCronBuilderState),
+    },
   });
 
   const mutation = useMutation({
     mutationFn: async (data: CreateFormValues) => {
-      // description は空文字なら API に渡さない（API 側 schema が optional のため、
-      // 空文字を送ると DB 上の null と挙動が一致しなくなる）。
+      // description は空文字なら API に渡さない（API 側 schema が optional のため）。
       const json: {
         name: string;
         description?: string;
@@ -70,9 +94,7 @@ export function CreateRecurringMeetingDialog({ orgId }: { orgId: string }) {
       return res.json();
     },
     onSuccess: () => {
-      // 組織詳細の recurringMeetings を更新するため、組織詳細クエリを invalidate。
-      // サイドバーの定例リスト用クエリも同じ invalidate で更新できるよう、
-      // 別 hook 側で同じ key プレフィックスを共有する想定。
+      // 組織詳細とサイドバーの定例リスト用クエリを更新する。
       queryClient.invalidateQueries({ queryKey: ["organizations", orgId] });
       queryClient.invalidateQueries({
         queryKey: ["organizations", orgId, "meetings"],
@@ -93,15 +115,19 @@ export function CreateRecurringMeetingDialog({ orgId }: { orgId: string }) {
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button>定例を作成</Button>
-      </DialogTrigger>
+      {/* 外部から open を制御する場合（サイドバーから開く等）はトリガーを描画しない。
+          ダイアログのトリガー責務を外側に委ねるためのパターン。 */}
+      {openProp === undefined && (
+        <DialogTrigger asChild>
+          {trigger ?? <Button>定例を作成</Button>}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>定例を作成</DialogTitle>
           <DialogDescription>
-            開催する定例の情報を入力してください。開催頻度は cron 形式（例:
-            毎週月曜10時なら 0 10 * * 1）で入力します。
+            開催する定例の情報を入力してください。頻度は「毎日 / 毎週 /
+            毎月」から選び、曜日や時刻を指定します。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -129,19 +155,17 @@ export function CreateRecurringMeetingDialog({ orgId }: { orgId: string }) {
               {...register("description")}
             />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={cronId}>開催頻度（cron 形式）</Label>
-            <Input
-              id={cronId}
-              placeholder="0 10 * * 1（毎週月曜10時）"
-              {...register("scheduleCron")}
-            />
-            {errors.scheduleCron && (
-              <p role="alert" className="text-destructive text-sm">
-                {errors.scheduleCron.message}
-              </p>
+          <Controller
+            name="scheduleCron"
+            control={control}
+            render={({ field }) => (
+              <ScheduleCronBuilder
+                value={field.value}
+                onChange={field.onChange}
+                error={errors.scheduleCron?.message}
+              />
             )}
-          </div>
+          />
           {mutation.isError && (
             <p className="text-destructive text-sm">定例の作成に失敗しました</p>
           )}
