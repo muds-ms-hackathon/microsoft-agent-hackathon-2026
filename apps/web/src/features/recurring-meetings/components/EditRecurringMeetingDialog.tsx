@@ -177,8 +177,8 @@ export function EditRecurringMeetingDialog({
               <Label htmlFor={cronTextId}>開催頻度（cron 形式）</Label>
               <Input id={cronTextId} {...register("scheduleCron")} />
               <p className="text-xs text-muted-foreground">
-                この定例には範囲・ステップ指定など複雑な cron 式が使われているため、
-                テキスト形式で編集します。
+                この定例には範囲・ステップ指定など複雑な cron
+                式が使われているため、 テキスト形式で編集します。
               </p>
               {errors.scheduleCron && (
                 <p role="alert" className="text-destructive text-sm">
