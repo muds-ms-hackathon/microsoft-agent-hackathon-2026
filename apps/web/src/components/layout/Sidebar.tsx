@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateOrganizationDialog } from "@/features/organizations/components/CreateOrganizationDialog";
 import type { Organization } from "@/features/organizations/types";
+import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
 import { api, authHeaders } from "@/lib/api";
 import {
@@ -66,6 +67,7 @@ export function Sidebar() {
   const setCurrentId = useSetAtom(setCurrentOrganizationIdAtom);
   const clearCurrentId = useSetAtom(clearCurrentOrganizationIdAtom);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createMeetingOpen, setCreateMeetingOpen] = useState(false);
   const navigate = useNavigate();
   // selector で必要な値だけ subscribe し、関係のない state 変化での再描画を抑える。
   const pathname = useRouterState({
@@ -141,11 +143,31 @@ export function Sidebar() {
         </Link>
 
         {/* 定例セクション。選択中組織配下の定例を一覧表示する。
-            クリック時の遷移先は組織詳細画面（定例詳細画面は将来 Issue）。 */}
-        <p className="px-2.5 pt-4 pb-1 text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
-          定例
-        </p>
+            クリック時の遷移先は組織詳細画面（定例詳細画面は将来 Issue）。
+            組織が選択されているときだけ「+ 定例を追加」ボタンを表示する。 */}
+        <div className="flex items-center justify-between pt-4 pb-1 pl-2.5 pr-1">
+          <p className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
+            定例
+          </p>
+          {currentId && (
+            <button
+              type="button"
+              aria-label="定例を追加"
+              onClick={() => setCreateMeetingOpen(true)}
+              className="h-6 w-6 rounded-md text-muted-foreground/80 hover:bg-muted hover:text-foreground flex items-center justify-center"
+            >
+              <PlusIcon size={13} />
+            </button>
+          )}
+        </div>
         <SidebarMeetingList orgId={currentId} />
+        {currentId && (
+          <CreateRecurringMeetingDialog
+            orgId={currentId}
+            open={createMeetingOpen}
+            onOpenChange={setCreateMeetingOpen}
+          />
+        )}
       </nav>
     </aside>
   );

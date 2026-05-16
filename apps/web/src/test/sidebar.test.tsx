@@ -22,7 +22,7 @@ vi.mock("@/lib/api", () => ({
       $get: vi.fn(),
       $post: vi.fn(),
       ":id": {
-        meetings: { $get: vi.fn() },
+        meetings: { $get: vi.fn(), $post: vi.fn() },
       },
     },
   },
@@ -128,6 +128,7 @@ beforeEach(() => {
   (api.organizations.$get as Mock).mockReset();
   (api.organizations.$post as Mock).mockReset();
   (api.organizations[":id"].meetings.$get as Mock).mockReset();
+  (api.organizations[":id"].meetings.$post as Mock).mockReset();
   // 定例 GET は組織選択直後に走るため、デフォルトでは空配列を返しておく。
   (api.organizations[":id"].meetings.$get as Mock).mockResolvedValue(
     mockJson([]),
@@ -499,6 +500,72 @@ describe("Sidebar 定例リスト", () => {
     await waitFor(() => {
       expect(api.organizations[":id"].meetings.$get).toHaveBeenCalledWith(
         { param: { id: "org-2" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("組織選択時は定例セクションに「定例を追加」ボタンが表示される", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    renderSidebar();
+    expect(
+      await screen.findByRole("button", { name: "定例を追加" }),
+    ).toBeInTheDocument();
+  });
+
+  it("組織が 0 件のときは「定例を追加」ボタンを表示しない", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson([]));
+    renderSidebar();
+    await screen.findByRole("button", { name: /新しい組織を作成/ });
+    expect(
+      screen.queryByRole("button", { name: "定例を追加" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("「定例を追加」ボタンを押すと作成ダイアログが開く", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    const user = userEvent.setup();
+
+    renderSidebar();
+
+    await user.click(await screen.findByRole("button", { name: "定例を追加" }));
+    expect(
+      await screen.findByRole("dialog", { name: "定例を作成" }),
+    ).toBeInTheDocument();
+  });
+
+  it("サイドバーから作成すると現在組織配下に POST される", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    (api.organizations[":id"].meetings.$post as Mock).mockResolvedValue(
+      mockJson({
+        id: "meet-new",
+        organizationId: "org-1",
+        name: "新規定例",
+        description: null,
+        scheduleCron: "0 10 * * 1",
+        createdAt: "2026-05-16T00:00:00.000Z",
+        updatedAt: "2026-05-16T00:00:00.000Z",
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderSidebar();
+
+    await waitFor(() => {
+      expect(localStorage.getItem("current_organization_id")).toBe("org-1");
+    });
+
+    await user.click(await screen.findByRole("button", { name: "定例を追加" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: { name: "新規定例", scheduleCron: "0 10 * * 1" },
+        },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
     });
