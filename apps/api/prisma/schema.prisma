@@ -25,9 +25,16 @@ model Meeting {
   estimatedDurationMinutes Int?
   estimationNote String?
 
+  // 紐付く定例。単発会議の場合は null。
+  // 定例が削除されても本会議の議事録メタ・タスク・決定事項を残すため SetNull とする。
+  recurringMeetingId String?
+
   // 自己参照リレーション
   previousMeeting Meeting? @relation("MeetingChain", fields: [previousMeetingId], references: [id])
   nextMeetings Meeting[] @relation("MeetingChain")
+
+  // 定例リレーション
+  recurringMeeting RecurringMeeting? @relation(fields: [recurringMeetingId], references: [id], onDelete: SetNull)
 
   // リレーション
   speakers             MeetingSpeaker[]
@@ -43,6 +50,7 @@ model Meeting {
   // インデックス
   @@index([previousMeetingId])
   @@index([heldAt])
+  @@index([recurringMeetingId])
 }
 
 // OIDC 認証で取得したユーザー情報。externalId は IdP の sub を保存する。
@@ -237,6 +245,8 @@ model RecurringMeeting {
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      MeetingMember[]
+  // 配下に開催される個別 Meeting 群。定例削除時は SetNull で紐付け解除のみ。
+  meetings     Meeting[]
 
   @@index([organizationId])
 }
