@@ -142,9 +142,32 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(within(memberList).getByText("メンバー")).toBeInTheDocument();
   });
 
-  it("定例一覧が表示される", async () => {
+  it("定例一覧がカードで表示され、定例名・scheduleCron・作成日を含む", async () => {
     renderDetail();
-    expect(await screen.findByText("週次定例")).toBeInTheDocument();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const cards = within(list).getAllByRole("listitem");
+    expect(cards).toHaveLength(1);
+    const card = cards[0];
+    expect(within(card).getByText("週次定例")).toBeInTheDocument();
+    expect(within(card).getByText("0 10 * * 1")).toBeInTheDocument();
+    // 作成日は ISO ではなくロケール表示するため、年が含まれていれば OK
+    expect(within(card).getByText(/2026/)).toBeInTheDocument();
+  });
+
+  it("定例カードに description があれば表示される", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail,
+        recurringMeetings: [
+          {
+            ...ownerOrgDetail.recurringMeetings[0],
+            description: "毎週月曜の進捗共有",
+          },
+        ],
+      }),
+    );
+    renderDetail();
+    expect(await screen.findByText("毎週月曜の進捗共有")).toBeInTheDocument();
   });
 
   it("定例が 0 件のときは空状態メッセージが表示される", async () => {

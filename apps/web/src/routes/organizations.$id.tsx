@@ -16,6 +16,7 @@ import type {
   OrganizationDetail,
 } from "@/features/organizations/types";
 import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
+import { RecurringMeetingCard } from "@/features/recurring-meetings/components/RecurringMeetingCard";
 import { api, authHeaders } from "@/lib/api";
 import { authAtom } from "@/lib/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -533,16 +534,12 @@ export function OrganizationDetailView({
         {org.recurringMeetings.length === 0 ? (
           <p className="text-muted-foreground">定例はまだありません</p>
         ) : (
-          <ul aria-label="定例一覧" className="divide-y rounded-md border">
+          <ul
+            aria-label="定例一覧"
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
             {org.recurringMeetings.map((meeting) => (
-              <li key={meeting.id} className="px-4 py-3">
-                <span className="font-medium">{meeting.name}</span>
-                {meeting.description ? (
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    {meeting.description}
-                  </span>
-                ) : null}
-              </li>
+              <RecurringMeetingCard key={meeting.id} meeting={meeting} />
             ))}
           </ul>
         )}
