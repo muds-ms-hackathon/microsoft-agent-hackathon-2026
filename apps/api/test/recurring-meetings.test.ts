@@ -76,6 +76,7 @@ const sampleRecurring = {
   name: "週次定例",
   description: "毎週月曜",
   scheduleCron: "0 10 * * 1",
+  defaultDurationMinutes: 60,
   createdAt: new Date("2026-05-06T00:00:00Z"),
   updatedAt: new Date("2026-05-06T00:00:00Z"),
 };
@@ -102,6 +103,7 @@ describe("POST /organizations/:id/meetings", () => {
           name: "週次定例",
           description: "毎週月曜",
           scheduleCron: "0 10 * * 1",
+          defaultDurationMinutes: 60,
         },
       });
       expect(tx.meetingMember.create).toHaveBeenCalledWith({
@@ -121,6 +123,7 @@ describe("POST /organizations/:id/meetings", () => {
         name: "週次定例",
         description: "毎週月曜",
         scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 60,
       }),
     });
 
@@ -152,6 +155,7 @@ describe("POST /organizations/:id/meetings", () => {
       body: JSON.stringify({
         name: "週次定例",
         scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 60,
       }),
     });
     expect(res.status).toBe(201);
@@ -165,6 +169,7 @@ describe("POST /organizations/:id/meetings", () => {
       body: JSON.stringify({
         name: "週次定例",
         scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 60,
       }),
     });
     expect(res.status).toBe(404);
@@ -175,7 +180,11 @@ describe("POST /organizations/:id/meetings", () => {
     const res = await app.request("/organizations/org-1/meetings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "", scheduleCron: "0 10 * * 1" }),
+      body: JSON.stringify({
+        name: "",
+        scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 60,
+      }),
     });
     expect(res.status).toBe(400);
     expect(mockMembershipFindUnique).not.toHaveBeenCalled();
@@ -186,7 +195,10 @@ describe("POST /organizations/:id/meetings", () => {
     const res = await app.request("/organizations/org-1/meetings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scheduleCron: "0 10 * * 1" }),
+      body: JSON.stringify({
+        scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 60,
+      }),
     });
     expect(res.status).toBe(400);
   });
@@ -195,7 +207,10 @@ describe("POST /organizations/:id/meetings", () => {
     const res = await app.request("/organizations/org-1/meetings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "週次定例" }),
+      body: JSON.stringify({
+        name: "週次定例",
+        defaultDurationMinutes: 60,
+      }),
     });
     expect(res.status).toBe(400);
   });
@@ -209,6 +224,45 @@ describe("POST /organizations/:id/meetings", () => {
       body: JSON.stringify({
         name: "週次定例",
         scheduleCron: "invalid cron",
+        defaultDurationMinutes: 60,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("defaultDurationMinutes 欠落は 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "週次定例",
+        scheduleCron: "0 10 * * 1",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("defaultDurationMinutes が 0 以下なら 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "週次定例",
+        scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 0,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("defaultDurationMinutes が 480 を超えると 400 を返す", async () => {
+    const res = await app.request("/organizations/org-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "週次定例",
+        scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 481,
       }),
     });
     expect(res.status).toBe(400);
@@ -388,6 +442,36 @@ describe("PATCH /recurring-meetings/:id", () => {
       where: { id: "rmtg-1" },
       data: { scheduleCron: "0 14 * * 5" },
     });
+  });
+
+  it("defaultDurationMinutes も編集できる", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockRecurringUpdate.mockResolvedValue({
+      ...sampleRecurring,
+      defaultDurationMinutes: 90,
+    } as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultDurationMinutes: 90 }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockRecurringUpdate).toHaveBeenCalledWith({
+      where: { id: "rmtg-1" },
+      data: { defaultDurationMinutes: 90 },
+    });
+  });
+
+  it("defaultDurationMinutes が 480 を超えると 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultDurationMinutes: 481 }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockRecurringUpdate).not.toHaveBeenCalled();
   });
 
   it("scheduleCron が不正フォーマットなら 400 を返す", async () => {

@@ -287,7 +287,8 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const id = c.req.param("id");
       const user = c.var.user;
-      const { name, description, scheduleCron } = c.req.valid("json");
+      const { name, description, scheduleCron, defaultDurationMinutes } =
+        c.req.valid("json");
 
       const guard = await requireMembership(c, id);
       if (!guard.ok) return guard.res;
@@ -301,6 +302,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
             name,
             description,
             scheduleCron,
+            defaultDurationMinutes,
           },
         });
         await tx.meetingMember.create({
