@@ -219,10 +219,7 @@ function SidebarMeetingList({ orgId }: { orgId: string | null }) {
             className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
           >
             <CalendarDays size={15} className="shrink-0" />
-            <span className="truncate flex-1">{m.name}</span>
-            <span className="text-xs text-muted-foreground/70 shrink-0">
-              {m.defaultDurationMinutes}分
-            </span>
+            <span className="truncate">{m.name}</span>
           </Link>
         </li>
       ))}
