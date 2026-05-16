@@ -1080,7 +1080,7 @@ describe("組織詳細ページ - 定例編集ダイアログ", () => {
     );
   });
 
-  it("定例カードの「編集」ボタンを押すとダイアログが開き、現在の値が初期表示される", async () => {
+  it("定例カードの「編集」ボタンを押すとダイアログが開き、ビルダー UI に既存値が反映される", async () => {
     const user = userEvent.setup();
     renderDetail();
     const card = (
@@ -1092,9 +1092,9 @@ describe("組織詳細ページ - 定例編集ダイアログ", () => {
     );
     const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
     expect(within(dialog).getByLabelText("定例名")).toHaveValue("週次定例");
-    expect(within(dialog).getByLabelText("開催頻度（cron 形式）")).toHaveValue(
-      "0 10 * * 1",
-    );
+    // 既存 cron "0 10 * * 1" は「毎週 月曜 10:00」として復元される
+    const preview = within(dialog).getByLabelText("開催頻度プレビュー");
+    expect(preview).toHaveTextContent("毎週 月 10:00");
   });
 
   it("name のみ変更して保存すると差分のみが送信される", async () => {
@@ -1149,7 +1149,46 @@ describe("組織詳細ページ - 定例編集ダイアログ", () => {
     expect(api["recurring-meetings"][":id"].$patch).not.toHaveBeenCalled();
   });
 
-  it("scheduleCron を不正な形式に変更するとバリデーションエラー", async () => {
+  it("頻度を毎日に切り替えて保存すると scheduleCron が差分送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail.recurringMeetings[0],
+        scheduleCron: "0 10 * * *",
+      }),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    await user.click(within(dialog).getByRole("radio", { name: "毎日" }));
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$patch).toHaveBeenCalledWith(
+        { param: { id: "meet-1" }, json: { scheduleCron: "0 10 * * *" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("ビルダーで表現できない cron はカスタム入力フィールドで編集できる", async () => {
+    // 範囲指定 "1-5" のような未対応 cron。ビルダーで構築できないため
+    // テキスト入力フィールドを fallback として描画する。
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail,
+        recurringMeetings: [
+          {
+            ...ownerOrgDetail.recurringMeetings[0],
+            scheduleCron: "0 10 * * 1-5",
+          },
+        ],
+      }),
+    );
     const user = userEvent.setup();
     renderDetail();
     const list = await screen.findByRole("list", { name: "定例一覧" });
@@ -1159,16 +1198,12 @@ describe("組織詳細ページ - 定例編集ダイアログ", () => {
       }),
     );
     const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
-    const cronInput = within(dialog).getByLabelText("開催頻度（cron 形式）");
-    await user.clear(cronInput);
-    await user.type(cronInput, "invalid");
-    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    const fallback = within(dialog).getByLabelText("開催頻度（cron 形式）");
+    expect(fallback).toHaveValue("0 10 * * 1-5");
+    // ビルダーのプレビュー欄は表示されない
     expect(
-      await within(dialog).findByText(
-        "スペース区切りで 5 フィールドを入力してください",
-      ),
-    ).toBeInTheDocument();
-    expect(api["recurring-meetings"][":id"].$patch).not.toHaveBeenCalled();
+      within(dialog).queryByLabelText("開催頻度プレビュー"),
+    ).not.toBeInTheDocument();
   });
 
   it("API エラー時はダイアログ内にエラーメッセージを表示する", async () => {

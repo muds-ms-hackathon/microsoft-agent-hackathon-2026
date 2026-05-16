@@ -14,9 +14,11 @@ import type { RecurringMeeting } from "@/features/organizations/types";
 import { api, authHeaders } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useId, useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+import { parseCron } from "../scheduleCron";
+import { ScheduleCronBuilder } from "./ScheduleCronBuilder";
 
 // API 側 schema と同じ：scheduleCron は「スペース区切り 5 フィールド」のみ検証。
 const cronFieldFormat = /^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/;
@@ -42,11 +44,20 @@ export function EditRecurringMeetingDialog({
   const queryClient = useQueryClient();
   const nameId = useId();
   const descriptionId = useId();
-  const cronId = useId();
+  const cronTextId = useId();
+
+  // 既存 cron が builder で表現可能か。表現不可能なら fallback として
+  // 生 cron 文字列のテキスト入力を表示する。
+  const isBuilderCompatible = useMemo(
+    () => parseCron(meeting.scheduleCron) !== null,
+    [meeting.scheduleCron],
+  );
+
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<EditFormValues>({
     resolver: zodResolver(editSchema),
@@ -59,7 +70,7 @@ export function EditRecurringMeetingDialog({
 
   const mutation = useMutation({
     mutationFn: async (data: EditFormValues) => {
-      // 変更があったフィールドのみを送る。組織編集と同様、null と "" の混乱を避ける。
+      // 変更があったフィールドのみを送る。null と "" の混乱を避ける。
       const json: {
         name?: string;
         description?: string;
@@ -73,8 +84,6 @@ export function EditRecurringMeetingDialog({
       if (data.scheduleCron !== meeting.scheduleCron) {
         json.scheduleCron = data.scheduleCron;
       }
-      // 変更が無ければ API を呼ばずに success 扱いで閉じる
-      // （API 側 schema が「1 項目以上」を要求するため、空 PATCH は 400 になる）。
       if (
         json.name === undefined &&
         json.description === undefined &&
@@ -102,8 +111,7 @@ export function EditRecurringMeetingDialog({
     },
   });
 
-  // 親が refetch で新しい meeting を渡してきたとき、閉じている間に
-  // フォーム初期値を最新値に合わせる（組織編集ダイアログと同方針）。
+  // 親が refetch で新しい meeting を渡してきたとき、閉じている間にフォームを同期。
   useEffect(() => {
     if (!open) {
       reset({
@@ -149,15 +157,36 @@ export function EditRecurringMeetingDialog({
             <Label htmlFor={descriptionId}>説明</Label>
             <Input id={descriptionId} {...register("description")} />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={cronId}>開催頻度（cron 形式）</Label>
-            <Input id={cronId} {...register("scheduleCron")} />
-            {errors.scheduleCron && (
-              <p role="alert" className="text-destructive text-sm">
-                {errors.scheduleCron.message}
+          {isBuilderCompatible ? (
+            <Controller
+              name="scheduleCron"
+              control={control}
+              render={({ field }) => (
+                <ScheduleCronBuilder
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.scheduleCron?.message}
+                />
+              )}
+            />
+          ) : (
+            // 範囲指定やステップ指定など、ビルダーで表現できない既存 cron は
+            // テキスト入力で編集する。ビルダーに上書きすると元の cron が
+            // 失われるため、本ダイアログでは切替を提供しない。
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={cronTextId}>開催頻度（cron 形式）</Label>
+              <Input id={cronTextId} {...register("scheduleCron")} />
+              <p className="text-xs text-muted-foreground">
+                この定例には範囲・ステップ指定など複雑な cron 式が使われているため、
+                テキスト形式で編集します。
               </p>
-            )}
-          </div>
+              {errors.scheduleCron && (
+                <p role="alert" className="text-destructive text-sm">
+                  {errors.scheduleCron.message}
+                </p>
+              )}
+            </div>
+          )}
           {mutation.isError && (
             <p className="text-destructive text-sm">定例の更新に失敗しました</p>
           )}
