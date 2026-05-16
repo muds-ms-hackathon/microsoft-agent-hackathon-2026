@@ -15,6 +15,7 @@ import type {
   Member,
   OrganizationDetail,
 } from "@/features/organizations/types";
+import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
 import { api, authHeaders } from "@/lib/api";
 import { authAtom } from "@/lib/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -525,7 +526,10 @@ export function OrganizationDetailView({
       </section>
 
       <section aria-label="定例" className="space-y-3">
-        <h2 className="text-lg font-semibold">定例</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">定例</h2>
+          <CreateRecurringMeetingDialog orgId={id} />
+        </div>
         {org.recurringMeetings.length === 0 ? (
           <p className="text-muted-foreground">定例はまだありません</p>
         ) : (
