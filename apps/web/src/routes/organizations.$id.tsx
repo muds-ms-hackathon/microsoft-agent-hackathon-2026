@@ -15,6 +15,10 @@ import type {
   Member,
   OrganizationDetail,
 } from "@/features/organizations/types";
+import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
+import { DeleteRecurringMeetingDialog } from "@/features/recurring-meetings/components/DeleteRecurringMeetingDialog";
+import { EditRecurringMeetingDialog } from "@/features/recurring-meetings/components/EditRecurringMeetingDialog";
+import { RecurringMeetingCard } from "@/features/recurring-meetings/components/RecurringMeetingCard";
 import { api, authHeaders } from "@/lib/api";
 import { authAtom } from "@/lib/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -525,20 +529,28 @@ export function OrganizationDetailView({
       </section>
 
       <section aria-label="定例" className="space-y-3">
-        <h2 className="text-lg font-semibold">定例</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">定例</h2>
+          <CreateRecurringMeetingDialog orgId={id} />
+        </div>
         {org.recurringMeetings.length === 0 ? (
           <p className="text-muted-foreground">定例はまだありません</p>
         ) : (
-          <ul aria-label="定例一覧" className="divide-y rounded-md border">
+          <ul
+            aria-label="定例一覧"
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
             {org.recurringMeetings.map((meeting) => (
-              <li key={meeting.id} className="px-4 py-3">
-                <span className="font-medium">{meeting.name}</span>
-                {meeting.description ? (
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    {meeting.description}
-                  </span>
-                ) : null}
-              </li>
+              <RecurringMeetingCard
+                key={meeting.id}
+                meeting={meeting}
+                actions={
+                  <>
+                    <EditRecurringMeetingDialog meeting={meeting} />
+                    <DeleteRecurringMeetingDialog meeting={meeting} />
+                  </>
+                }
+              />
             ))}
           </ul>
         )}

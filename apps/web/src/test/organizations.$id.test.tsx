@@ -22,6 +22,13 @@ vi.mock("@/lib/api", () => ({
           $get: vi.fn(),
           ":userId": { $delete: vi.fn() },
         },
+        meetings: { $post: vi.fn() },
+      },
+    },
+    "recurring-meetings": {
+      ":id": {
+        $patch: vi.fn(),
+        $delete: vi.fn(),
       },
     },
   },
@@ -135,9 +142,32 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(within(memberList).getByText("メンバー")).toBeInTheDocument();
   });
 
-  it("定例一覧が表示される", async () => {
+  it("定例一覧がカードで表示され、定例名・scheduleCron・作成日を含む", async () => {
     renderDetail();
-    expect(await screen.findByText("週次定例")).toBeInTheDocument();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const cards = within(list).getAllByRole("listitem");
+    expect(cards).toHaveLength(1);
+    const card = cards[0];
+    expect(within(card).getByText("週次定例")).toBeInTheDocument();
+    expect(within(card).getByText("0 10 * * 1")).toBeInTheDocument();
+    // 作成日は ISO ではなくロケール表示するため、年が含まれていれば OK
+    expect(within(card).getByText(/2026/)).toBeInTheDocument();
+  });
+
+  it("定例カードに description があれば表示される", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail,
+        recurringMeetings: [
+          {
+            ...ownerOrgDetail.recurringMeetings[0],
+            description: "毎週月曜の進捗共有",
+          },
+        ],
+      }),
+    );
+    renderDetail();
+    expect(await screen.findByText("毎週月曜の進捗共有")).toBeInTheDocument();
   });
 
   it("定例が 0 件のときは空状態メッセージが表示される", async () => {
@@ -873,5 +903,419 @@ describe("組織詳細ページ - 組織削除ダイアログ", () => {
       screen.getByRole("dialog", { name: "組織を削除" }),
     ).toBeInTheDocument();
     expect(onOrganizationDeleted).not.toHaveBeenCalled();
+  });
+});
+
+// ===== 定例作成ダイアログ =====
+
+describe("組織詳細ページ - 定例作成ダイアログ", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("「定例を作成」ボタンを押すとダイアログが開く", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    expect(
+      await screen.findByRole("dialog", { name: "定例を作成" }),
+    ).toBeInTheDocument();
+  });
+
+  it("定例作成ボタンは member ロールでも表示される（API 仕様: 組織メンバー全員可）", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "member" }),
+    );
+    renderDetail();
+    expect(
+      await screen.findByRole("button", { name: "定例を作成" }),
+    ).toBeInTheDocument();
+  });
+
+  it("name 未入力で送信するとバリデーションエラー", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    expect(
+      await within(dialog).findByText("定例名は必須です"),
+    ).toBeInTheDocument();
+    expect(api.organizations[":id"].meetings.$post).not.toHaveBeenCalled();
+  });
+
+  it("既定の開催頻度（毎週月曜 10:00）で送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].meetings.$post).mockResolvedValue(
+      mockJson(
+        {
+          id: "meet-new",
+          organizationId: "org-1",
+          name: "新規定例",
+          description: null,
+          scheduleCron: "0 10 * * 1",
+          createdAt: "2026-05-15T00:00:00.000Z",
+          updatedAt: "2026-05-15T00:00:00.000Z",
+        },
+        201,
+      ),
+    );
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: { name: "新規定例", scheduleCron: "0 10 * * 1" },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("頻度を毎日に切り替えると cron が '0 10 * * *' に変わる", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].meetings.$post).mockResolvedValue(
+      mockJson({ id: "meet-new" }, 201),
+    );
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    await user.click(within(dialog).getByRole("radio", { name: "毎日" }));
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: { name: "新規定例", scheduleCron: "0 10 * * *" },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("曜日（水）を追加すると cron に 3 が加わる", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].meetings.$post).mockResolvedValue(
+      mockJson({ id: "meet-new" }, 201),
+    );
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    // 既定で月（1）は選択済み。水（3）を追加で押す。
+    await user.click(within(dialog).getByRole("button", { name: "水" }));
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: { name: "新規定例", scheduleCron: "0 10 * * 1,3" },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("description を入力するとペイロードに含まれる", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].meetings.$post).mockResolvedValue(
+      mockJson({ id: "meet-new" }, 201),
+    );
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    await user.type(within(dialog).getByLabelText("説明"), "毎週月曜");
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: {
+            name: "新規定例",
+            description: "毎週月曜",
+            scheduleCron: "0 10 * * 1",
+          },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("API エラー時はダイアログ内にエラーメッセージを表示する", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].meetings.$post).mockResolvedValue(
+      mockJson({ error: "サーバーエラー" }, 500),
+    );
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    expect(
+      await within(dialog).findByText("定例の作成に失敗しました"),
+    ).toBeInTheDocument();
+  });
+});
+
+// ===== 定例編集ダイアログ =====
+
+describe("組織詳細ページ - 定例編集ダイアログ", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("定例カードの「編集」ボタンを押すとダイアログが開き、ビルダー UI に既存値が反映される", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    const card = (
+      await screen.findByRole("list", { name: "定例一覧" })
+    ).querySelector("li");
+    if (!card) throw new Error("card not found");
+    await user.click(
+      within(card as HTMLElement).getByRole("button", { name: "編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    expect(within(dialog).getByLabelText("定例名")).toHaveValue("週次定例");
+    // 既存 cron "0 10 * * 1" は「毎週 月曜 10:00」として復元される
+    const preview = within(dialog).getByLabelText("開催頻度プレビュー");
+    expect(preview).toHaveTextContent("毎週 月 10:00");
+  });
+
+  it("name のみ変更して保存すると差分のみが送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail.recurringMeetings[0],
+        name: "新しい定例名",
+      }),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    const nameInput = within(dialog).getByLabelText("定例名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "新しい定例名");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$patch).toHaveBeenCalledWith(
+        { param: { id: "meet-1" }, json: { name: "新しい定例名" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "定例を編集" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("変更が無い場合は API を呼ばずに閉じる", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "定例を編集" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(api["recurring-meetings"][":id"].$patch).not.toHaveBeenCalled();
+  });
+
+  it("頻度を毎日に切り替えて保存すると scheduleCron が差分送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail.recurringMeetings[0],
+        scheduleCron: "0 10 * * *",
+      }),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    await user.click(within(dialog).getByRole("radio", { name: "毎日" }));
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$patch).toHaveBeenCalledWith(
+        { param: { id: "meet-1" }, json: { scheduleCron: "0 10 * * *" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("ビルダーで表現できない cron はカスタム入力フィールドで編集できる", async () => {
+    // 範囲指定 "1-5" のような未対応 cron。ビルダーで構築できないため
+    // テキスト入力フィールドを fallback として描画する。
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail,
+        recurringMeetings: [
+          {
+            ...ownerOrgDetail.recurringMeetings[0],
+            scheduleCron: "0 10 * * 1-5",
+          },
+        ],
+      }),
+    );
+    const user = userEvent.setup();
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    const fallback = within(dialog).getByLabelText("開催頻度（cron 形式）");
+    expect(fallback).toHaveValue("0 10 * * 1-5");
+    // ビルダーのプレビュー欄は表示されない
+    expect(
+      within(dialog).queryByLabelText("開催頻度プレビュー"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("API エラー時はダイアログ内にエラーメッセージを表示する", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({ error: "サーバーエラー" }, 500),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    const nameInput = within(dialog).getByLabelText("定例名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "別の名前");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    expect(
+      await within(dialog).findByText("定例の更新に失敗しました"),
+    ).toBeInTheDocument();
+  });
+});
+
+// ===== 定例削除ダイアログ =====
+
+describe("組織詳細ページ - 定例削除ダイアログ", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("定例カードに「削除」ボタンが表示され、押すと確認ダイアログが開く", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    expect(
+      await screen.findByRole("dialog", { name: "定例を削除" }),
+    ).toBeInTheDocument();
+  });
+
+  it("確認ダイアログで「削除を実行」を押すと API が呼ばれてダイアログが閉じる", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$delete).mockResolvedValue(
+      mockJson(null, 204),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を削除" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "削除を実行" }),
+    );
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$delete).toHaveBeenCalledWith(
+        { param: { id: "meet-1" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "定例を削除" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("403 が返った場合は「削除権限がありません」を表示する", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$delete).mockResolvedValue(
+      mockJson({ error: "削除権限がありません" }, 403),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を削除" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "削除を実行" }),
+    );
+    expect(
+      await within(dialog).findByText(
+        "削除権限がありません（定例のオーナーのみ削除可能です）",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "定例を削除" }),
+    ).toBeInTheDocument();
+  });
+
+  it("403 以外のエラーは汎用メッセージを表示する", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$delete).mockResolvedValue(
+      mockJson({ error: "internal" }, 500),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を削除" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "削除を実行" }),
+    );
+    expect(
+      await within(dialog).findByText("定例の削除に失敗しました"),
+    ).toBeInTheDocument();
   });
 });

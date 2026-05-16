@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateOrganizationDialog } from "@/features/organizations/components/CreateOrganizationDialog";
 import type { Organization } from "@/features/organizations/types";
+import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
+import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
 import { api, authHeaders } from "@/lib/api";
 import {
   clearCurrentOrganizationIdAtom,
@@ -65,6 +67,7 @@ export function Sidebar() {
   const setCurrentId = useSetAtom(setCurrentOrganizationIdAtom);
   const clearCurrentId = useSetAtom(clearCurrentOrganizationIdAtom);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createMeetingOpen, setCreateMeetingOpen] = useState(false);
   const navigate = useNavigate();
   // selector で必要な値だけ subscribe し、関係のない state 変化での再描画を抑える。
   const pathname = useRouterState({
@@ -139,16 +142,88 @@ export function Sidebar() {
           ダッシュボード
         </Link>
 
-        {/* 定例セクション（API 実装後に Issue #86 / #89 で連動予定） */}
-        <p className="px-2.5 pt-4 pb-1 text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
-          定例
-        </p>
-        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-foreground/70">
-          <CalendarDays size={15} />
-          <span className="truncate">〜定例会議</span>
+        {/* 定例セクション。選択中組織配下の定例を一覧表示する。
+            クリック時の遷移先は組織詳細画面（定例詳細画面は将来 Issue）。
+            組織が選択されているときだけ「+ 定例を追加」ボタンを表示する。 */}
+        <div className="flex items-center justify-between pt-4 pb-1 pl-2.5 pr-1">
+          <p className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
+            定例
+          </p>
+          {currentId && (
+            <button
+              type="button"
+              aria-label="定例を追加"
+              onClick={() => setCreateMeetingOpen(true)}
+              className="h-6 w-6 rounded-md text-muted-foreground/80 hover:bg-muted hover:text-foreground flex items-center justify-center"
+            >
+              <PlusIcon size={13} />
+            </button>
+          )}
         </div>
+        <SidebarMeetingList orgId={currentId} />
+        {currentId && (
+          <CreateRecurringMeetingDialog
+            orgId={currentId}
+            open={createMeetingOpen}
+            onOpenChange={setCreateMeetingOpen}
+          />
+        )}
       </nav>
     </aside>
+  );
+}
+
+// サイドバーの「定例」セクション。選択中組織配下の定例を一覧表示する。
+// 各項目クリックで組織詳細画面へ遷移し、サイドバー上では現在の組織コンテキストを
+// 保ったまま定例を素早く認識できる状態にする。
+function SidebarMeetingList({ orgId }: { orgId: string | null }) {
+  const { data, isLoading, isError } = useOrganizationMeetings(orgId);
+
+  if (orgId === null) return null;
+
+  if (isLoading) {
+    return (
+      <div
+        role="status"
+        aria-label="定例一覧を読み込み中"
+        className="px-2.5 py-2"
+      >
+        <div className="h-4 w-full rounded-md bg-muted-foreground/15 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <p className="px-2.5 py-2 text-xs text-destructive">
+        定例の取得に失敗しました
+      </p>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <p className="px-2.5 py-2 text-xs text-muted-foreground/70">
+        定例はまだありません
+      </p>
+    );
+  }
+
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {data.map((m) => (
+        <li key={m.id}>
+          <Link
+            to="/organizations/$id"
+            params={{ id: orgId }}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <CalendarDays size={15} className="shrink-0" />
+            <span className="truncate">{m.name}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
