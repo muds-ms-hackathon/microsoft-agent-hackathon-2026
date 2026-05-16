@@ -59,6 +59,7 @@ const ownerOrgDetail: OrganizationDetail = {
       name: "週次定例",
       description: null,
       scheduleCron: "0 10 * * 1",
+      defaultDurationMinutes: 60,
       createdAt: "2026-05-03T00:00:00.000Z",
       updatedAt: "2026-05-03T00:00:00.000Z",
     },
@@ -959,6 +960,7 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
           name: "新規定例",
           description: null,
           scheduleCron: "0 10 * * 1",
+          defaultDurationMinutes: 60,
           createdAt: "2026-05-15T00:00:00.000Z",
           updatedAt: "2026-05-15T00:00:00.000Z",
         },
@@ -974,7 +976,11 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
       expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新規定例", scheduleCron: "0 10 * * 1" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * 1",
+            defaultDurationMinutes: 60,
+          },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
@@ -996,7 +1002,37 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
       expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新規定例", scheduleCron: "0 10 * * *" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * *",
+            defaultDurationMinutes: 60,
+          },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("所要時間プリセット 90 分を選ぶと defaultDurationMinutes が反映される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].meetings.$post).mockResolvedValue(
+      mockJson({ id: "meet-new" }, 201),
+    );
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    await user.click(within(dialog).getByRole("radio", { name: "90 分" }));
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * 1",
+            defaultDurationMinutes: 90,
+          },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
@@ -1019,7 +1055,11 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
       expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新規定例", scheduleCron: "0 10 * * 1,3" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * 1,3",
+            defaultDurationMinutes: 60,
+          },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
@@ -1045,6 +1085,7 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
             name: "新規定例",
             description: "毎週月曜",
             scheduleCron: "0 10 * * 1",
+            defaultDurationMinutes: 60,
           },
         },
         expect.objectContaining({ headers: expect.any(Object) }),

@@ -428,6 +428,7 @@ describe("Sidebar 定例リスト", () => {
           name: "週次定例",
           description: null,
           scheduleCron: "0 10 * * 1",
+          defaultDurationMinutes: 60,
           createdAt: "2026-05-03T00:00:00.000Z",
           updatedAt: "2026-05-03T00:00:00.000Z",
           _count: { members: 2 },
@@ -438,6 +439,7 @@ describe("Sidebar 定例リスト", () => {
           name: "月次レビュー",
           description: null,
           scheduleCron: "0 9 1 * *",
+          defaultDurationMinutes: 90,
           createdAt: "2026-05-01T00:00:00.000Z",
           updatedAt: "2026-05-01T00:00:00.000Z",
           _count: { members: 3 },
@@ -570,6 +572,7 @@ describe("Sidebar 定例リスト", () => {
         name: "新規定例",
         description: null,
         scheduleCron: "0 10 * * 1",
+        defaultDurationMinutes: 60,
         createdAt: "2026-05-16T00:00:00.000Z",
         updatedAt: "2026-05-16T00:00:00.000Z",
       }),
@@ -591,7 +594,11 @@ describe("Sidebar 定例リスト", () => {
       expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新規定例", scheduleCron: "0 10 * * 1" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * 1",
+            defaultDurationMinutes: 60,
+          },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
