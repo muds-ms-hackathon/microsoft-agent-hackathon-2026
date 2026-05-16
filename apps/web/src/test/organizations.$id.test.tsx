@@ -1073,3 +1073,129 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
     ).toBeInTheDocument();
   });
 });
+
+// ===== 定例編集ダイアログ =====
+
+describe("組織詳細ページ - 定例編集ダイアログ", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("定例カードの「編集」ボタンを押すとダイアログが開き、現在の値が初期表示される", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    const card = (
+      await screen.findByRole("list", { name: "定例一覧" })
+    ).querySelector("li");
+    if (!card) throw new Error("card not found");
+    await user.click(
+      within(card as HTMLElement).getByRole("button", { name: "編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    expect(within(dialog).getByLabelText("定例名")).toHaveValue("週次定例");
+    expect(within(dialog).getByLabelText("開催頻度（cron 形式）")).toHaveValue(
+      "0 10 * * 1",
+    );
+  });
+
+  it("name のみ変更して保存すると差分のみが送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail.recurringMeetings[0],
+        name: "新しい定例名",
+      }),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    const nameInput = within(dialog).getByLabelText("定例名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "新しい定例名");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$patch).toHaveBeenCalledWith(
+        { param: { id: "meet-1" }, json: { name: "新しい定例名" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "定例を編集" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("変更が無い場合は API を呼ばずに閉じる", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "定例を編集" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(api["recurring-meetings"][":id"].$patch).not.toHaveBeenCalled();
+  });
+
+  it("scheduleCron を不正な形式に変更するとバリデーションエラー", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    const cronInput = within(dialog).getByLabelText("開催頻度（cron 形式）");
+    await user.clear(cronInput);
+    await user.type(cronInput, "invalid");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    expect(
+      await within(dialog).findByText(
+        "スペース区切りで 5 フィールドを入力してください",
+      ),
+    ).toBeInTheDocument();
+    expect(api["recurring-meetings"][":id"].$patch).not.toHaveBeenCalled();
+  });
+
+  it("API エラー時はダイアログ内にエラーメッセージを表示する", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({ error: "サーバーエラー" }, 500),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    const nameInput = within(dialog).getByLabelText("定例名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "別の名前");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    expect(
+      await within(dialog).findByText("定例の更新に失敗しました"),
+    ).toBeInTheDocument();
+  });
+});

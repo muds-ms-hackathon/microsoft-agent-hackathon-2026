@@ -16,6 +16,7 @@ import type {
   OrganizationDetail,
 } from "@/features/organizations/types";
 import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
+import { EditRecurringMeetingDialog } from "@/features/recurring-meetings/components/EditRecurringMeetingDialog";
 import { RecurringMeetingCard } from "@/features/recurring-meetings/components/RecurringMeetingCard";
 import { api, authHeaders } from "@/lib/api";
 import { authAtom } from "@/lib/auth";
@@ -539,7 +540,11 @@ export function OrganizationDetailView({
             className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
           >
             {org.recurringMeetings.map((meeting) => (
-              <RecurringMeetingCard key={meeting.id} meeting={meeting} />
+              <RecurringMeetingCard
+                key={meeting.id}
+                meeting={meeting}
+                actions={<EditRecurringMeetingDialog meeting={meeting} />}
+              />
             ))}
           </ul>
         )}
