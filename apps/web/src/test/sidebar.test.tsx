@@ -21,6 +21,9 @@ vi.mock("@/lib/api", () => ({
     organizations: {
       $get: vi.fn(),
       $post: vi.fn(),
+      ":id": {
+        meetings: { $get: vi.fn() },
+      },
     },
   },
   authHeaders: () => ({ headers: {} }),
@@ -124,6 +127,11 @@ beforeEach(() => {
   // 使わないため、明示的にリセットしておくだけで十分。
   (api.organizations.$get as Mock).mockReset();
   (api.organizations.$post as Mock).mockReset();
+  (api.organizations[":id"].meetings.$get as Mock).mockReset();
+  // 定例 GET は組織選択直後に走るため、デフォルトでは空配列を返しておく。
+  (api.organizations[":id"].meetings.$get as Mock).mockResolvedValue(
+    mockJson([]),
+  );
   // ルーターモックの状態もデフォルト (ダッシュボード) に戻す。
   currentPathnameRef.value = "/";
   navigateMock.mockReset();
@@ -404,6 +412,95 @@ describe("Sidebar 組織セレクター", () => {
 
     await waitFor(() => {
       expect(localStorage.getItem("current_organization_id")).toBe("org-new");
+    });
+  });
+});
+
+describe("Sidebar 定例リスト", () => {
+  it("選択中の組織配下の定例が表示される", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    (api.organizations[":id"].meetings.$get as Mock).mockResolvedValue(
+      mockJson([
+        {
+          id: "meet-1",
+          organizationId: "org-1",
+          name: "週次定例",
+          description: null,
+          scheduleCron: "0 10 * * 1",
+          createdAt: "2026-05-03T00:00:00.000Z",
+          updatedAt: "2026-05-03T00:00:00.000Z",
+          _count: { members: 2 },
+        },
+        {
+          id: "meet-2",
+          organizationId: "org-1",
+          name: "月次レビュー",
+          description: null,
+          scheduleCron: "0 9 1 * *",
+          createdAt: "2026-05-01T00:00:00.000Z",
+          updatedAt: "2026-05-01T00:00:00.000Z",
+          _count: { members: 3 },
+        },
+      ]),
+    );
+
+    renderSidebar();
+
+    expect(await screen.findByText("週次定例")).toBeInTheDocument();
+    expect(screen.getByText("月次レビュー")).toBeInTheDocument();
+    // クリックは組織詳細画面へリンクする（定例詳細画面は将来 Issue）
+    const links = screen.getAllByRole("link", {
+      name: /週次定例|月次レビュー/,
+    });
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/organizations/org-1");
+    }
+  });
+
+  it("選択中組織の定例が 0 件のとき「定例はまだありません」を表示する", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    (api.organizations[":id"].meetings.$get as Mock).mockResolvedValue(
+      mockJson([]),
+    );
+
+    renderSidebar();
+
+    expect(await screen.findByText("定例はまだありません")).toBeInTheDocument();
+  });
+
+  it("組織が 0 件のときは定例 API を叩かない", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson([]));
+
+    renderSidebar();
+
+    // 組織 CTA が出るまで待ち、定例 API が叩かれないことを確認
+    await screen.findByRole("button", { name: /新しい組織を作成/ });
+    expect(api.organizations[":id"].meetings.$get).not.toHaveBeenCalled();
+  });
+
+  it("組織を切り替えると別組織の定例 API が叩かれる", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    const user = userEvent.setup();
+
+    renderSidebar();
+
+    await waitFor(() => {
+      expect(localStorage.getItem("current_organization_id")).toBe("org-1");
+    });
+
+    // 別組織に切り替え
+    await user.click(
+      await screen.findByRole("button", { name: "組織を切り替え" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: /別の組織/ }),
+    );
+
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$get).toHaveBeenCalledWith(
+        { param: { id: "org-2" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
     });
   });
 });
