@@ -34,6 +34,7 @@ export function RecurringMeetingCard({
       </div>
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="font-mono">{meeting.scheduleCron}</span>
+        <span>{meeting.defaultDurationMinutes} 分</span>
         <span>作成: {formatDate(meeting.createdAt)}</span>
       </div>
     </li>

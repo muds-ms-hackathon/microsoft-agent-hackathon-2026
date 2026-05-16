@@ -143,7 +143,7 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(within(memberList).getByText("メンバー")).toBeInTheDocument();
   });
 
-  it("定例一覧がカードで表示され、定例名・scheduleCron・作成日を含む", async () => {
+  it("定例一覧がカードで表示され、定例名・scheduleCron・所要時間・作成日を含む", async () => {
     renderDetail();
     const list = await screen.findByRole("list", { name: "定例一覧" });
     const cards = within(list).getAllByRole("listitem");
@@ -151,6 +151,7 @@ describe("組織詳細ページ - 基本表示", () => {
     const card = cards[0];
     expect(within(card).getByText("週次定例")).toBeInTheDocument();
     expect(within(card).getByText("0 10 * * 1")).toBeInTheDocument();
+    expect(within(card).getByText("60 分")).toBeInTheDocument();
     // 作成日は ISO ではなくロケール表示するため、年が含まれていれば OK
     expect(within(card).getByText(/2026/)).toBeInTheDocument();
   });

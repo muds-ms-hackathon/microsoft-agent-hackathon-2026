@@ -451,6 +451,9 @@ describe("Sidebar 定例リスト", () => {
 
     expect(await screen.findByText("週次定例")).toBeInTheDocument();
     expect(screen.getByText("月次レビュー")).toBeInTheDocument();
+    // 各リンク内に「60分」「90分」が表示される
+    expect(screen.getByText("60分")).toBeInTheDocument();
+    expect(screen.getByText("90分")).toBeInTheDocument();
     // クリックは組織詳細画面へリンクする（定例詳細画面は将来 Issue）
     const links = screen.getAllByRole("link", {
       name: /週次定例|月次レビュー/,
