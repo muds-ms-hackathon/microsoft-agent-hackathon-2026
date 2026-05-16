@@ -22,6 +22,7 @@ const sampleMeeting: RecurringMeeting = {
   name: "週次定例",
   description: null,
   scheduleCron: "0 10 * * 1",
+  defaultDurationMinutes: 60,
   createdAt: "2026-05-01T00:00:00.000Z",
   updatedAt: "2026-05-01T00:00:00.000Z",
 };

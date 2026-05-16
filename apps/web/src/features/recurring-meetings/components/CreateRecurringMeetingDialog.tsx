@@ -17,6 +17,7 @@ import { type ReactNode, useId, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { buildCron, defaultCronBuilderState } from "../scheduleCron";
+import { DurationMinutesPicker } from "./DurationMinutesPicker";
 import { ScheduleCronBuilder } from "./ScheduleCronBuilder";
 
 // API 側 schema と同じ：scheduleCron は「スペース区切り 5 フィールド」のみ検証する。
@@ -31,6 +32,11 @@ const createSchema = z.object({
     .string()
     .min(1, "開催頻度は必須です")
     .regex(cronFieldFormat, "スペース区切りで 5 フィールドを入力してください"),
+  defaultDurationMinutes: z
+    .number()
+    .int()
+    .min(1, "所要時間は 1 分以上で指定してください")
+    .max(480, "所要時間は 480 分以下で指定してください"),
 });
 
 type CreateFormValues = z.infer<typeof createSchema>;
@@ -70,6 +76,7 @@ export function CreateRecurringMeetingDialog({
       name: "",
       description: "",
       scheduleCron: buildCron(defaultCronBuilderState),
+      defaultDurationMinutes: 60,
     },
   });
 
@@ -80,7 +87,12 @@ export function CreateRecurringMeetingDialog({
         name: string;
         description?: string;
         scheduleCron: string;
-      } = { name: data.name, scheduleCron: data.scheduleCron };
+        defaultDurationMinutes: number;
+      } = {
+        name: data.name,
+        scheduleCron: data.scheduleCron,
+        defaultDurationMinutes: data.defaultDurationMinutes,
+      };
       if (data.description && data.description.length > 0) {
         json.description = data.description;
       }
@@ -163,6 +175,17 @@ export function CreateRecurringMeetingDialog({
                 value={field.value}
                 onChange={field.onChange}
                 error={errors.scheduleCron?.message}
+              />
+            )}
+          />
+          <Controller
+            name="defaultDurationMinutes"
+            control={control}
+            render={({ field }) => (
+              <DurationMinutesPicker
+                value={field.value}
+                onChange={field.onChange}
+                error={errors.defaultDurationMinutes?.message}
               />
             )}
           />

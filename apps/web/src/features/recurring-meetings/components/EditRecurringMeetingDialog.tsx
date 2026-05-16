@@ -18,6 +18,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { parseCron } from "../scheduleCron";
+import { DurationMinutesPicker } from "./DurationMinutesPicker";
 import { ScheduleCronBuilder } from "./ScheduleCronBuilder";
 
 // API 側 schema と同じ：scheduleCron は「スペース区切り 5 フィールド」のみ検証。
@@ -31,6 +32,11 @@ const editSchema = z.object({
     .string()
     .min(1, "開催頻度は必須です")
     .regex(cronFieldFormat, "スペース区切りで 5 フィールドを入力してください"),
+  defaultDurationMinutes: z
+    .number()
+    .int()
+    .min(1, "所要時間は 1 分以上で指定してください")
+    .max(480, "所要時間は 480 分以下で指定してください"),
 });
 
 type EditFormValues = z.infer<typeof editSchema>;
@@ -65,6 +71,7 @@ export function EditRecurringMeetingDialog({
       name: meeting.name,
       description: meeting.description ?? "",
       scheduleCron: meeting.scheduleCron,
+      defaultDurationMinutes: meeting.defaultDurationMinutes,
     },
   });
 
@@ -75,6 +82,7 @@ export function EditRecurringMeetingDialog({
         name?: string;
         description?: string;
         scheduleCron?: string;
+        defaultDurationMinutes?: number;
       } = {};
       if (data.name !== meeting.name) json.name = data.name;
       const prevDescription = meeting.description ?? "";
@@ -84,10 +92,14 @@ export function EditRecurringMeetingDialog({
       if (data.scheduleCron !== meeting.scheduleCron) {
         json.scheduleCron = data.scheduleCron;
       }
+      if (data.defaultDurationMinutes !== meeting.defaultDurationMinutes) {
+        json.defaultDurationMinutes = data.defaultDurationMinutes;
+      }
       if (
         json.name === undefined &&
         json.description === undefined &&
-        json.scheduleCron === undefined
+        json.scheduleCron === undefined &&
+        json.defaultDurationMinutes === undefined
       ) {
         return null;
       }
@@ -118,9 +130,17 @@ export function EditRecurringMeetingDialog({
         name: meeting.name,
         description: meeting.description ?? "",
         scheduleCron: meeting.scheduleCron,
+        defaultDurationMinutes: meeting.defaultDurationMinutes,
       });
     }
-  }, [meeting.name, meeting.description, meeting.scheduleCron, open, reset]);
+  }, [
+    meeting.name,
+    meeting.description,
+    meeting.scheduleCron,
+    meeting.defaultDurationMinutes,
+    open,
+    reset,
+  ]);
 
   return (
     <Dialog
@@ -187,6 +207,17 @@ export function EditRecurringMeetingDialog({
               )}
             </div>
           )}
+          <Controller
+            name="defaultDurationMinutes"
+            control={control}
+            render={({ field }) => (
+              <DurationMinutesPicker
+                value={field.value}
+                onChange={field.onChange}
+                error={errors.defaultDurationMinutes?.message}
+              />
+            )}
+          />
           {mutation.isError && (
             <p className="text-destructive text-sm">定例の更新に失敗しました</p>
           )}

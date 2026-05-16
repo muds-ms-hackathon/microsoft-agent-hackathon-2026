@@ -59,6 +59,7 @@ const ownerOrgDetail: OrganizationDetail = {
       name: "週次定例",
       description: null,
       scheduleCron: "0 10 * * 1",
+      defaultDurationMinutes: 60,
       createdAt: "2026-05-03T00:00:00.000Z",
       updatedAt: "2026-05-03T00:00:00.000Z",
     },
@@ -142,7 +143,7 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(within(memberList).getByText("メンバー")).toBeInTheDocument();
   });
 
-  it("定例一覧がカードで表示され、定例名・scheduleCron・作成日を含む", async () => {
+  it("定例一覧がカードで表示され、定例名・scheduleCron・所要時間・作成日を含む", async () => {
     renderDetail();
     const list = await screen.findByRole("list", { name: "定例一覧" });
     const cards = within(list).getAllByRole("listitem");
@@ -150,6 +151,7 @@ describe("組織詳細ページ - 基本表示", () => {
     const card = cards[0];
     expect(within(card).getByText("週次定例")).toBeInTheDocument();
     expect(within(card).getByText("0 10 * * 1")).toBeInTheDocument();
+    expect(within(card).getByText("60 分")).toBeInTheDocument();
     // 作成日は ISO ではなくロケール表示するため、年が含まれていれば OK
     expect(within(card).getByText(/2026/)).toBeInTheDocument();
   });
@@ -959,6 +961,7 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
           name: "新規定例",
           description: null,
           scheduleCron: "0 10 * * 1",
+          defaultDurationMinutes: 60,
           createdAt: "2026-05-15T00:00:00.000Z",
           updatedAt: "2026-05-15T00:00:00.000Z",
         },
@@ -974,7 +977,11 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
       expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新規定例", scheduleCron: "0 10 * * 1" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * 1",
+            defaultDurationMinutes: 60,
+          },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
@@ -996,7 +1003,37 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
       expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新規定例", scheduleCron: "0 10 * * *" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * *",
+            defaultDurationMinutes: 60,
+          },
+        },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+  });
+
+  it("所要時間プリセット 90 分を選ぶと defaultDurationMinutes が反映される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.organizations[":id"].meetings.$post).mockResolvedValue(
+      mockJson({ id: "meet-new" }, 201),
+    );
+    renderDetail();
+    await user.click(await screen.findByRole("button", { name: "定例を作成" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を作成" });
+    await user.type(within(dialog).getByLabelText("定例名"), "新規定例");
+    await user.click(within(dialog).getByRole("radio", { name: "90 分" }));
+    await user.click(within(dialog).getByRole("button", { name: "作成" }));
+    await waitFor(() => {
+      expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
+        {
+          param: { id: "org-1" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * 1",
+            defaultDurationMinutes: 90,
+          },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
@@ -1019,7 +1056,11 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
       expect(api.organizations[":id"].meetings.$post).toHaveBeenCalledWith(
         {
           param: { id: "org-1" },
-          json: { name: "新規定例", scheduleCron: "0 10 * * 1,3" },
+          json: {
+            name: "新規定例",
+            scheduleCron: "0 10 * * 1,3",
+            defaultDurationMinutes: 60,
+          },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
       );
@@ -1045,6 +1086,7 @@ describe("組織詳細ページ - 定例作成ダイアログ", () => {
             name: "新規定例",
             description: "毎週月曜",
             scheduleCron: "0 10 * * 1",
+            defaultDurationMinutes: 60,
           },
         },
         expect.objectContaining({ headers: expect.any(Object) }),
@@ -1147,6 +1189,32 @@ describe("組織詳細ページ - 定例編集ダイアログ", () => {
       ).not.toBeInTheDocument();
     });
     expect(api["recurring-meetings"][":id"].$patch).not.toHaveBeenCalled();
+  });
+
+  it("所要時間プリセット 90 分を選んで保存すると defaultDurationMinutes が差分送信される", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$patch).mockResolvedValue(
+      mockJson({
+        ...ownerOrgDetail.recurringMeetings[0],
+        defaultDurationMinutes: 90,
+      }),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    await user.click(
+      within(list.querySelector("li") as HTMLElement).getByRole("button", {
+        name: "編集",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "定例を編集" });
+    await user.click(within(dialog).getByRole("radio", { name: "90 分" }));
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$patch).toHaveBeenCalledWith(
+        { param: { id: "meet-1" }, json: { defaultDurationMinutes: 90 } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
   });
 
   it("頻度を毎日に切り替えて保存すると scheduleCron が差分送信される", async () => {

@@ -24,6 +24,8 @@ export type RecurringMeeting = {
   name: string;
   description: string | null;
   scheduleCron: string;
+  // 配下に紐付く個別 Meeting のデフォルト所要時間（分）。個別 Meeting 側で上書き可。
+  defaultDurationMinutes: number;
   createdAt: string;
   updatedAt: string;
 };

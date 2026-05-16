@@ -223,14 +223,17 @@ model OrganizationInvitation {
 }
 
 // 定例会議。組織配下の継続的なミーティング枠。
+// defaultDurationMinutes は配下に紐付く個別 Meeting（別 Issue で導入）の
+// デフォルト所要時間。個別 Meeting 側で上書き調整される想定。
 model RecurringMeeting {
-  id             String   @id @default(cuid())
-  organizationId String
-  name           String
-  description    String?
-  scheduleCron   String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  organizationId         String
+  name                   String
+  description            String?
+  scheduleCron           String
+  defaultDurationMinutes Int      @default(60)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      MeetingMember[]
