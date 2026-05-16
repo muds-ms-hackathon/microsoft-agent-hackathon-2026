@@ -1199,3 +1199,94 @@ describe("組織詳細ページ - 定例編集ダイアログ", () => {
     ).toBeInTheDocument();
   });
 });
+
+// ===== 定例削除ダイアログ =====
+
+describe("組織詳細ページ - 定例削除ダイアログ", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("定例カードに「削除」ボタンが表示され、押すと確認ダイアログが開く", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    expect(
+      await screen.findByRole("dialog", { name: "定例を削除" }),
+    ).toBeInTheDocument();
+  });
+
+  it("確認ダイアログで「削除を実行」を押すと API が呼ばれてダイアログが閉じる", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$delete).mockResolvedValue(
+      mockJson(null, 204),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を削除" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "削除を実行" }),
+    );
+    await waitFor(() => {
+      expect(api["recurring-meetings"][":id"].$delete).toHaveBeenCalledWith(
+        { param: { id: "meet-1" } },
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "定例を削除" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("403 が返った場合は「削除権限がありません」を表示する", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$delete).mockResolvedValue(
+      mockJson({ error: "削除権限がありません" }, 403),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を削除" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "削除を実行" }),
+    );
+    expect(
+      await within(dialog).findByText(
+        "削除権限がありません（定例のオーナーのみ削除可能です）",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "定例を削除" }),
+    ).toBeInTheDocument();
+  });
+
+  it("403 以外のエラーは汎用メッセージを表示する", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api["recurring-meetings"][":id"].$delete).mockResolvedValue(
+      mockJson({ error: "internal" }, 500),
+    );
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = list.querySelector("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "定例を削除" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "削除を実行" }),
+    );
+    expect(
+      await within(dialog).findByText("定例の削除に失敗しました"),
+    ).toBeInTheDocument();
+  });
+});

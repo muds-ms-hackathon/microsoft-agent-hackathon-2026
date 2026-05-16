@@ -16,6 +16,7 @@ import type {
   OrganizationDetail,
 } from "@/features/organizations/types";
 import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
+import { DeleteRecurringMeetingDialog } from "@/features/recurring-meetings/components/DeleteRecurringMeetingDialog";
 import { EditRecurringMeetingDialog } from "@/features/recurring-meetings/components/EditRecurringMeetingDialog";
 import { RecurringMeetingCard } from "@/features/recurring-meetings/components/RecurringMeetingCard";
 import { api, authHeaders } from "@/lib/api";
@@ -543,7 +544,12 @@ export function OrganizationDetailView({
               <RecurringMeetingCard
                 key={meeting.id}
                 meeting={meeting}
-                actions={<EditRecurringMeetingDialog meeting={meeting} />}
+                actions={
+                  <>
+                    <EditRecurringMeetingDialog meeting={meeting} />
+                    <DeleteRecurringMeetingDialog meeting={meeting} />
+                  </>
+                }
               />
             ))}
           </ul>
