@@ -534,6 +534,33 @@ describe("Sidebar 定例リスト", () => {
     ).toBeInTheDocument();
   });
 
+  it("定例取得中は読み込みスケルトンが表示される", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    // 解決しない Promise でローディング状態に固定
+    (api.organizations[":id"].meetings.$get as Mock).mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    renderSidebar();
+
+    expect(
+      await screen.findByLabelText("定例一覧を読み込み中"),
+    ).toBeInTheDocument();
+  });
+
+  it("定例取得に失敗すると専用のエラー表示が出る", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+    (api.organizations[":id"].meetings.$get as Mock).mockRejectedValue(
+      new Error("network"),
+    );
+
+    renderSidebar();
+
+    expect(
+      await screen.findByText("定例の取得に失敗しました"),
+    ).toBeInTheDocument();
+  });
+
   it("サイドバーから作成すると現在組織配下に POST される", async () => {
     (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
     (api.organizations[":id"].meetings.$post as Mock).mockResolvedValue(
