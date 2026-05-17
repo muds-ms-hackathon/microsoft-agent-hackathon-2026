@@ -2,10 +2,13 @@ import { DeleteTaskDialog } from "@/features/tasks/components/DeleteTaskDialog";
 import { EditTaskDialog } from "@/features/tasks/components/EditTaskDialog";
 import { KanbanCard } from "@/features/tasks/components/KanbanCard";
 import { KanbanColumn } from "@/features/tasks/components/KanbanColumn";
+import { useKanbanStatusUpdate } from "@/features/tasks/hooks/useKanbanStatusUpdate";
 import { useTaskDetail } from "@/features/tasks/hooks/useTaskDetail";
+import { TaskVersionConflictError } from "@/features/tasks/hooks/useUpdateTask";
 import type { ManualTaskStatus, TaskListItem } from "@/features/tasks/types";
 import {
   DndContext,
+  type DragEndEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -35,7 +38,7 @@ function isManualStatus(status: string): status is ManualTaskStatus {
 // queryKey は楽観的更新の対象キャッシュを特定するために使う（呼び出し元と一致させる）。
 export function KanbanBoard({
   tasks,
-  queryKey: _queryKey, // 楽観的更新で使う。本 commit では未使用
+  queryKey,
   ariaLabel,
   now,
 }: {
@@ -44,6 +47,8 @@ export function KanbanBoard({
   ariaLabel: string;
   now?: Date;
 }) {
+  const statusUpdate = useKanbanStatusUpdate(queryKey);
+  const [dndError, setDndError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -70,13 +75,38 @@ export function KanbanBoard({
     if (isManualStatus(t.status)) byStatus.get(t.status)?.push(t);
   }
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return; // 列外にドロップした場合は何もしない
+    const taskId = String(active.id);
+    const dropStatus = String(over.id);
+    if (!isManualStatus(dropStatus)) return;
+
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    if (task.status === dropStatus) return; // 同じ列に戻したケースは no-op
+
+    setDndError(null);
+    statusUpdate.mutate(
+      { taskId, version: task.version, status: dropStatus },
+      {
+        onError: (err) => {
+          // 409 とそれ以外でメッセージを区別する。useKanbanStatusUpdate 側で rollback 済み。
+          if (err instanceof TaskVersionConflictError) {
+            setDndError(
+              "他のユーザーが先に更新しました。最新を取得して再試行してください。",
+            );
+          } else {
+            setDndError("ステータスの更新に失敗しました");
+          }
+        },
+      },
+    );
+  };
+
   return (
     <>
-      <DndContext
-        sensors={sensors}
-        // 本 commit ではドロップで何もしない（次 commit で楽観的更新を入れる）。
-        onDragEnd={() => {}}
-      >
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         {/* biome-ignore lint/a11y/useSemanticElements: 4 列のレイアウトコンテナで role=group をつけて aria-label を有効化 */}
         <div
           role="group"
@@ -107,6 +137,24 @@ export function KanbanBoard({
           })}
         </div>
       </DndContext>
+
+      {/* DnD によるステータス更新エラーの inline 表示。
+          rollback は楽観的更新側で処理済みなので、表示するメッセージだけここで管理。 */}
+      {dndError !== null && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm flex items-center justify-between gap-2 mt-3"
+        >
+          <span className="text-destructive">{dndError}</span>
+          <button
+            type="button"
+            onClick={() => setDndError(null)}
+            className="text-xs px-2 py-1 rounded-md border border-destructive/40 hover:bg-destructive/10"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
 
       {/* TaskListWithDialogs と同じ詳細取得 → 編集ダイアログ → 削除ダイアログの動線。
           重複は将来 useTaskDialogState 等で共通化する余地あり。 */}
