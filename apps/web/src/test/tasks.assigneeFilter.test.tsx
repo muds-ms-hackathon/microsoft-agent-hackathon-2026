@@ -61,7 +61,7 @@ describe("AssigneeFilter", () => {
         orgId="org-1"
         value={undefined}
         onChange={() => {}}
-        currentUserId={null}
+        currentUserEmail={null}
       />,
     );
 
@@ -76,7 +76,7 @@ describe("AssigneeFilter", () => {
     expect(screen.getByRole("option", { name: "Alice" })).toBeInTheDocument();
   });
 
-  it("currentUserId があるときは「自分のみ」option を出し、メンバー一覧から自分は除外する", async () => {
+  it("currentUserEmail がメンバーに一致すると「自分のみ」option を出し、メンバー一覧から自分を除外する", async () => {
     vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
       mockJson(members),
     );
@@ -86,7 +86,7 @@ describe("AssigneeFilter", () => {
         orgId="org-1"
         value={undefined}
         onChange={() => {}}
-        currentUserId="user-1"
+        currentUserEmail="alice@example.com"
       />,
     );
 
@@ -97,11 +97,37 @@ describe("AssigneeFilter", () => {
     expect(
       screen.getByRole("option", { name: "自分のみ" }),
     ).toBeInTheDocument();
-    // 自分 (user-1) はメンバー一覧の Alice option として重複表示されない
+    // 自分 (alice) はメンバー一覧の Alice option として重複表示されない
     expect(screen.queryByRole("option", { name: "Alice" })).toBeNull();
   });
 
-  it("currentUserId が null のときは「自分のみ」option を表示しない", async () => {
+  it("「自分のみ」option の value は メンバー一覧から引いた userId である", async () => {
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(members),
+    );
+    const onChange = vi.fn();
+
+    renderWithQuery(
+      <AssigneeFilter
+        orgId="org-1"
+        value={undefined}
+        onChange={onChange}
+        currentUserEmail="alice@example.com"
+      />,
+    );
+
+    const selfOption = (await screen.findByRole("option", {
+      name: "自分のみ",
+    })) as HTMLOptionElement;
+    expect(selfOption.value).toBe("user-1");
+
+    const select = screen.getByLabelText("担当者フィルタ");
+    await userEvent.selectOptions(select, selfOption);
+    // onChange には DB の user.id（userId）が渡るべき。
+    expect(onChange).toHaveBeenCalledWith("user-1");
+  });
+
+  it("currentUserEmail が null のときは「自分のみ」option を表示しない", async () => {
     vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
       mockJson(members),
     );
@@ -111,12 +137,34 @@ describe("AssigneeFilter", () => {
         orgId="org-1"
         value={undefined}
         onChange={() => {}}
-        currentUserId={null}
+        currentUserEmail={null}
       />,
     );
 
     await screen.findByRole("option", { name: "Bob" });
     expect(screen.queryByRole("option", { name: "自分のみ" })).toBeNull();
+  });
+
+  it("currentUserEmail がメンバーに見つからないときは「自分のみ」option を出さない", async () => {
+    // 認証済みだが、当該組織のメンバーには含まれないケース。
+    // members から userId を引けないため、「自分のみ」は非表示にする（正しい値が決まらないため）。
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(members),
+    );
+
+    renderWithQuery(
+      <AssigneeFilter
+        orgId="org-1"
+        value={undefined}
+        onChange={() => {}}
+        currentUserEmail="outsider@example.com"
+      />,
+    );
+
+    await screen.findByRole("option", { name: "Bob" });
+    expect(screen.queryByRole("option", { name: "自分のみ" })).toBeNull();
+    // 既存メンバーは普通に表示される
+    expect(screen.getByRole("option", { name: "Alice" })).toBeInTheDocument();
   });
 
   it("メンバー option を選ぶと onChange に userId が渡る", async () => {
@@ -130,7 +178,7 @@ describe("AssigneeFilter", () => {
         orgId="org-1"
         value={undefined}
         onChange={onChange}
-        currentUserId={null}
+        currentUserEmail={null}
       />,
     );
 
@@ -151,7 +199,7 @@ describe("AssigneeFilter", () => {
         orgId="org-1"
         value="user-2"
         onChange={onChange}
-        currentUserId={null}
+        currentUserEmail={null}
       />,
     );
 
@@ -172,7 +220,7 @@ describe("AssigneeFilter", () => {
         orgId="org-1"
         value={undefined}
         onChange={onChange}
-        currentUserId={null}
+        currentUserEmail={null}
       />,
     );
 

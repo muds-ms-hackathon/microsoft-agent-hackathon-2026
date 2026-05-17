@@ -113,9 +113,11 @@ export function RecurringMeetingDetailView({
     Object.keys(apiFilters).length > 0 ? apiFilters : undefined;
   const tasksQuery = useRecurringMeetingTasks(id, filtersForQuery);
 
-  // 「自分のみ」option を出すために認証ユーザーの sub を取り出す。
+  // 「自分のみ」option を出すために認証ユーザーの email を取り出す。
+  // API 側で JWT の sub は externalId として扱われ DB の user.id とは別物のため、
+  // 「自分」の userId は組織メンバー一覧から email 一致で引き当てる方式にしている。
   const auth = useAtomValue(authAtom);
-  const currentUserId = auth.user?.sub ?? null;
+  const currentUserEmail = auth.user?.email ?? null;
 
   if (detailQuery.isLoading) {
     return (
@@ -256,7 +258,7 @@ export function RecurringMeetingDetailView({
             orgId={detail.organizationId}
             value={search.assigneeId}
             onChange={(next) => onSearchChange({ ...search, assigneeId: next })}
-            currentUserId={currentUserId}
+            currentUserEmail={currentUserEmail}
           />
 
           {/* Kanban view では列ヘッダで status が可視化されているため、

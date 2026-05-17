@@ -8,23 +8,31 @@ const UNASSIGNED_SENTINEL = "none";
 //   - undefined / ""  → フィルタなし（すべて表示）
 //   - "none"          → 未アサインのみ
 //   - その他の文字列  → 該当 userId のタスクのみ
-// 「自分のみ」は currentUserId をそのまま value にすることで実現する。
-// メンバー一覧では currentUserId を除外し、UI 上の重複を避ける。
+//
+// 「自分のみ」は API には DB の `user.id` を渡す必要がある。JWT の `sub` は
+// API ミドルウェアで User の externalId として扱われ、`user.id` とは別物のため、
+// 認証情報の sub をそのまま value に使うと一致しない（タスクが 0 件になる）。
+// このコンポーネントでは currentUserEmail を受け取り、組織メンバー一覧から
+// email 一致で「自分」の userId を引き当てる。
 export function AssigneeFilter({
   orgId,
   value,
   onChange,
-  currentUserId,
+  currentUserEmail,
 }: {
   orgId: string;
   value: string | undefined;
   onChange: (next: string | undefined) => void;
-  currentUserId: string | null;
+  currentUserEmail: string | null;
 }) {
   const membersQuery = useOrganizationMembers(orgId);
   const members = membersQuery.data ?? [];
-  const otherMembers = currentUserId
-    ? members.filter((m) => m.userId !== currentUserId)
+  const selfMember = currentUserEmail
+    ? (members.find((m) => m.email === currentUserEmail) ?? null)
+    : null;
+  // メンバー一覧から自分を除外し、「自分のみ」option との重複を避ける。
+  const otherMembers = selfMember
+    ? members.filter((m) => m.userId !== selfMember.userId)
     : members;
 
   return (
@@ -42,8 +50,8 @@ export function AssigneeFilter({
       >
         <option value="">すべて</option>
         <optgroup label="クイック選択">
-          {currentUserId ? (
-            <option value={currentUserId}>自分のみ</option>
+          {selfMember ? (
+            <option value={selfMember.userId}>自分のみ</option>
           ) : null}
           <option value={UNASSIGNED_SENTINEL}>未アサイン</option>
         </optgroup>
