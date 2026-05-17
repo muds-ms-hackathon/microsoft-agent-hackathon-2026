@@ -8,9 +8,7 @@ import type { AuthVariables } from "./auth.js";
 // 単一の真実源として集約する。`organizations.ts` / `tasks.ts` /
 // `recurring-meetings.ts` で重複していた実装を本モジュールで一本化する。
 
-type Guard<T> =
-  | { ok: true; membership: T }
-  | { ok: false; res: Response };
+type Guard<T> = { ok: true; membership: T } | { ok: false; res: Response };
 
 // 認証ユーザーが対象組織に所属していることを確認する。
 // 所属していない場合は組織の存在自体を露出させないため 404 で統一する。

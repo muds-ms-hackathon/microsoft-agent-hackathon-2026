@@ -18,7 +18,9 @@ import {
 const mockFindUnique = vi.mocked(prisma.organizationMembership.findUnique);
 
 // テスト用のユーザーを c.var.user にセットしてくれる小さいラッパー
-function buildContextApp(handler: (c: import("hono").Context) => Promise<Response>) {
+function buildContextApp(
+  handler: (c: import("hono").Context) => Promise<Response>,
+) {
   const app = new Hono();
   app.get("/probe/:orgId", async (c) => {
     c.set("user", {

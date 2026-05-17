@@ -14,10 +14,7 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
-import {
-  requireOrgMembership,
-  requireOrgRole,
-} from "../middleware/authz.js";
+import { requireOrgMembership, requireOrgRole } from "../middleware/authz.js";
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -232,7 +229,12 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .delete("/:id", async (c) => {
     const id = c.req.param("id");
 
-    const guard = await requireOrgRole(c, id, ["owner"], "削除権限がありません");
+    const guard = await requireOrgRole(
+      c,
+      id,
+      ["owner"],
+      "削除権限がありません",
+    );
     if (!guard.ok) return guard.res;
 
     // schema 側で Membership / Invitation / RecurringMeeting / MeetingMember は
