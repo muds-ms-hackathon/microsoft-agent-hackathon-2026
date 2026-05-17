@@ -23,6 +23,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   CalendarDays,
+  CheckSquare,
   ChevronDown,
   LayoutDashboard,
   ListIcon,
@@ -140,6 +141,20 @@ export function Sidebar() {
         >
           <LayoutDashboard size={15} />
           ダッシュボード
+        </Link>
+
+        {/* My タスクへの導線。組織非依存（assignee 経由で組織横断）のため
+            選択中組織のステータスを問わず常に表示する。 */}
+        <Link
+          to="/tasks"
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+          activeProps={{
+            className:
+              "flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm bg-foreground/10 text-foreground font-medium",
+          }}
+        >
+          <CheckSquare size={15} />
+          My タスク
         </Link>
 
         {/* 定例セクション。選択中組織配下の定例を一覧表示する。

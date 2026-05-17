@@ -607,3 +607,15 @@ describe("Sidebar 定例リスト", () => {
     });
   });
 });
+
+describe("Sidebar ナビゲーション", () => {
+  it("My タスクへの導線が /tasks で表示される", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+
+    renderSidebar();
+
+    // ダッシュボードと同列に常に表示されるため、組織選択状態を待たずに描画される。
+    const link = await screen.findByRole("link", { name: /My タスク/ });
+    expect(link).toHaveAttribute("href", "/tasks");
+  });
+});
