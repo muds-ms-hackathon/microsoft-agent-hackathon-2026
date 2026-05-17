@@ -1,4 +1,61 @@
-import { Settings, UserCircle } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { authAtom, logoutAtom } from "@/lib/auth";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useNavigate } from "@tanstack/react-router";
+import { Settings } from "lucide-react";
+
+// 名前の頭文字を取り出す。サロゲートペアを Array.from で正しく扱う。
+function initial(name: string | null | undefined): string {
+  if (!name) return "?";
+  return Array.from(name.trim())[0] ?? "?";
+}
+
+function UserAvatar() {
+  const logout = useSetAtom(logoutAtom);
+  const navigate = useNavigate();
+  const { user } = useAtomValue(authAtom);
+
+  const handleLogout = () => {
+    logout();
+    navigate({ to: "/login" });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="ユーザーメニュー"
+          className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold select-none hover:opacity-80 transition-opacity"
+        >
+          {initial(user?.name)}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="font-normal">
+          <p className="font-medium">{user?.name ?? "—"}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {user?.email ?? "—"}
+          </p>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={handleLogout}
+          className="cursor-pointer text-destructive focus:text-destructive"
+        >
+          ログアウト
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function Topbar() {
   return (
@@ -13,13 +70,7 @@ export function Topbar() {
         >
           <Settings size={18} />
         </button>
-        {/* ユーザーアバター（未実装） */}
-        <button
-          type="button"
-          className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <UserCircle size={26} />
-        </button>
+        <UserAvatar />
       </div>
     </header>
   );
