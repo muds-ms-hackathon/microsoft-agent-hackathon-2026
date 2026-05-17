@@ -82,10 +82,7 @@ export function EditOrganizationDialog({
           <DialogTitle>組織情報を編集</DialogTitle>
           <DialogDescription>組織名と説明を更新します。</DialogDescription>
         </DialogHeader>
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="flex flex-col gap-4"
-        >
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor={nameId}>組織名</Label>
             <Input id={nameId} {...register("name")} />
