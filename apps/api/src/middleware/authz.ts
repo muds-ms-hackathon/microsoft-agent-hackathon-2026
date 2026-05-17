@@ -1,4 +1,4 @@
-import type { OrganizationMembership, OrgRole } from "@prisma/client";
+import type { OrganizationMembership, OrgRole, User } from "@prisma/client";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
 import type { AuthVariables } from "./auth.js";
@@ -10,18 +10,27 @@ import type { AuthVariables } from "./auth.js";
 
 type Guard<T> = { ok: true; membership: T } | { ok: false; res: Response };
 
+// 認可判定のための最小単位: membership を引いて返すだけ。
+// 「404 を返すか」「メッセージを差し替えるか」など Response の構築は呼び出し側に委ねる
+// （recurring-meetings のように `定例が見つかりません` で統一したい場合に活用する）。
+export function findOrgMembership(
+  user: User,
+  organizationId: string,
+): Promise<OrganizationMembership | null> {
+  return prisma.organizationMembership.findUnique({
+    where: {
+      userId_organizationId: { userId: user.id, organizationId },
+    },
+  });
+}
+
 // 認証ユーザーが対象組織に所属していることを確認する。
 // 所属していない場合は組織の存在自体を露出させないため 404 で統一する。
 export async function requireOrgMembership(
   c: Context<{ Variables: AuthVariables }>,
   organizationId: string,
 ): Promise<Guard<OrganizationMembership>> {
-  const user = c.var.user;
-  const membership = await prisma.organizationMembership.findUnique({
-    where: {
-      userId_organizationId: { userId: user.id, organizationId },
-    },
-  });
+  const membership = await findOrgMembership(c.var.user, organizationId);
   if (!membership) {
     return {
       ok: false,

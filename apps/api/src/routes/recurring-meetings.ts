@@ -15,7 +15,7 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
-import { requireOrgMembership } from "../middleware/authz.js";
+import { findOrgMembership } from "../middleware/authz.js";
 
 // 定例配下に紐付ける Meeting 作成リクエストの schema。
 // estimatedDurationMinutes は省略・null・数値の 3 形態を許容し、省略 / null は
@@ -39,7 +39,8 @@ const createMeetingSchema = z.object({
 
 // 定例 + 所属組織のメンバーシップを確認する薄いラッパー。
 // 定例不存在・組織非所属いずれも 404 で統一し、定例・組織の存在自体を露出させない。
-// 認可判定は `middleware/authz.ts` の requireOrgMembership に委ねる。
+// 組織判定の DB 問い合わせは `middleware/authz.ts` の findOrgMembership に委ね、
+// レスポンス文言だけ「定例が見つかりません」で揃える。
 async function requireRecurringAccess<T extends RecurringMeeting>(
   c: Context<{ Variables: AuthVariables }>,
   meeting: T | null,
@@ -50,9 +51,11 @@ async function requireRecurringAccess<T extends RecurringMeeting>(
       res: c.json({ error: "定例が見つかりません" }, 404),
     };
   }
-  const guard = await requireOrgMembership(c, meeting.organizationId);
-  if (!guard.ok) {
-    // 組織非所属の場合も「定例が見つかりません」で統一する
+  const membership = await findOrgMembership(
+    c.var.user,
+    meeting.organizationId,
+  );
+  if (!membership) {
     return {
       ok: false,
       res: c.json({ error: "定例が見つかりません" }, 404),
