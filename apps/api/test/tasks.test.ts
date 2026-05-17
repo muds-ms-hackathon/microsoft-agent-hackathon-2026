@@ -15,6 +15,7 @@ vi.mock("../src/lib/prisma.js", () => ({
     },
     task: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       delete: vi.fn(),
       updateMany: vi.fn(),
@@ -72,6 +73,7 @@ const mockMembershipFindMany = vi.mocked(
 const mockRecurringFindMany = vi.mocked(prisma.recurringMeeting.findMany);
 const mockMeetingFindUnique = vi.mocked(prisma.meeting.findUnique);
 const mockTaskFindUnique = vi.mocked(prisma.task.findUnique);
+const mockTaskFindMany = vi.mocked(prisma.task.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member" = "member") {
@@ -599,6 +601,78 @@ describe("PATCH /tasks/:id", () => {
 
     expect(res.status).toBe(200);
     expect(deletedAssignees).toBe(true);
+  });
+});
+
+describe("GET /tasks/me", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("認証ユーザーが assignee のタスクを 200 で返す", async () => {
+    const listTask = {
+      ...sampleTask,
+      assignees: [
+        { user: { id: "user-1", name: "alice", displayName: "alice" } },
+      ],
+      recurringMeetings: [],
+    };
+    mockTaskFindMany.mockResolvedValue([listTask] as never);
+
+    const res = await app.request("/tasks/me");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ id: string }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe("task-1");
+    // assignees 経由の where が user-1 で組まれていることを確認
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          assignees: { some: { userId: "user-1" } },
+        }),
+      }),
+    );
+  });
+
+  it("0 件は空配列で返す", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    const res = await app.request("/tasks/me");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as unknown[];
+    expect(body).toEqual([]);
+  });
+
+  it("status フィルタ（カンマ区切り）を where に反映する", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request("/tasks/me?status=todo,in_progress");
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["todo", "in_progress"] },
+        }),
+      }),
+    );
+  });
+
+  it("dueBefore / dueAfter で期間フィルタが組まれる", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request(
+      "/tasks/me?dueAfter=2026-05-01T00:00:00Z&dueBefore=2026-05-31T00:00:00Z",
+    );
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          dueDate: {
+            gte: new Date("2026-05-01T00:00:00Z"),
+            lte: new Date("2026-05-31T00:00:00Z"),
+          },
+        }),
+      }),
+    );
+  });
+
+  it("不正な status は 400", async () => {
+    const res = await app.request("/tasks/me?status=invalid_status");
+    expect(res.status).toBe(400);
+    expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
 });
 

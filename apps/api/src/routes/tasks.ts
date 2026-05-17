@@ -2,8 +2,18 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
-import { taskCreateSchema, taskUpdateSchema } from "../lib/schemas/task.js";
-import { serializeTask, taskDetailInclude } from "../lib/task-serialization.js";
+import {
+  buildTaskListWhere,
+  taskCreateSchema,
+  taskListQuerySchema,
+  taskUpdateSchema,
+} from "../lib/schemas/task.js";
+import {
+  serializeTask,
+  taskDetailInclude,
+  taskListInclude,
+  taskListOrderBy,
+} from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 
 // 認証ユーザーが対象組織に所属しているか確認する。
@@ -89,6 +99,22 @@ async function requireTaskAccess(
 
 export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
+  .get("/me", zValidator("query", taskListQuerySchema), async (c) => {
+    const user = c.var.user;
+    const filters = c.req.valid("query");
+
+    // 自分が assignee の全組織横断タスクを返す。組織所属確認は不要
+    // （assignees 経由のスコープでユーザー自身に閉じている）。
+    const tasks = await prisma.task.findMany({
+      where: {
+        ...buildTaskListWhere(filters),
+        assignees: { some: { userId: user.id } },
+      },
+      orderBy: taskListOrderBy,
+      include: taskListInclude,
+    });
+    return c.json(tasks.map(serializeTask));
+  })
   .post("/", zValidator("json", taskCreateSchema), async (c) => {
     const input = c.req.valid("json");
 
