@@ -947,4 +947,45 @@ describe("GET /recurring-meetings/:id/tasks", () => {
     expect(res.status).toBe(404);
     expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
+
+  it("assigneeId=none で未アサイン絞り込みが where に組まれる", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+    mockTaskFindMany.mockResolvedValue([]);
+
+    const res = await app.request(
+      "/recurring-meetings/rmtg-1/tasks?assigneeId=none",
+    );
+    expect(res.status).toBe(200);
+    const where = mockTaskFindMany.mock.calls[0][0].where as {
+      assignees?: { some?: unknown; none?: unknown };
+    };
+    // "none" センチネルは未アサインのみのフィルタとして展開される。
+    expect(where.assignees).toEqual({ none: {} });
+  });
+
+  it("assigneeId に userId を渡すと当該ユーザーのタスクのみ絞り込まれる", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+    mockTaskFindMany.mockResolvedValue([]);
+
+    const res = await app.request(
+      "/recurring-meetings/rmtg-1/tasks?assigneeId=user-42",
+    );
+    expect(res.status).toBe(200);
+    const where = mockTaskFindMany.mock.calls[0][0].where as {
+      assignees?: { some?: { userId?: string }; none?: unknown };
+    };
+    expect(where.assignees).toEqual({ some: { userId: "user-42" } });
+  });
 });
