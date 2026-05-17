@@ -1,7 +1,9 @@
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
-import { cn } from "@/lib/utils";
 
 // 定例（プロジェクト相当）の複数選択ピッカー。
+// 「どのプロジェクトに紐付けるか」の選択操作を分かりやすくするため、
+// 可視のチェックボックス UI を採用する（担当者ピッカーの chip スタイルとは
+// 意図的に区別する: 人タグ vs プロジェクト紐付け）。
 // 同一組織配下の定例だけを候補にする（API 側のクロス組織アタッチ禁止と整合）。
 export function RecurringMeetingPicker({
   organizationId,
@@ -35,31 +37,30 @@ export function RecurringMeetingPicker({
   }
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: fieldset の legend がレイアウト崩れを起こすため div + role=group で代替（My タスクと同じ判断）
+    // 定例の数が増えてもダイアログ高さが破綻しないよう、
+    // 6 件超で内部スクロールにする。グリッドは sm 以上で 2 列にして密度を保つ。
+    // biome-ignore lint/a11y/useSemanticElements: fieldset の legend がレイアウト崩れを起こすため div + role=group で代替
     <div
-      className="flex flex-wrap gap-2"
       role="group"
       aria-label="紐付ける定例"
+      className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto rounded-md border border-border/40 p-2"
     >
       {meetings.map((m) => {
         const checked = value.includes(m.id);
         return (
           <label
             key={m.id}
-            className={cn(
-              "text-xs px-2 py-1 rounded-md border cursor-pointer select-none",
-              checked
-                ? "bg-foreground text-background border-foreground"
-                : "bg-card text-foreground border-border/60 hover:bg-accent",
-            )}
+            className="flex items-center gap-2 text-sm cursor-pointer select-none px-1.5 py-1 rounded hover:bg-accent"
           >
+            {/* 可視のチェックボックス。ブラウザ既定 UI を尊重しつつ、
+                accent-color でアプリのテーマカラーに揃える。 */}
             <input
               type="checkbox"
-              className="sr-only"
               checked={checked}
               onChange={() => toggle(m.id)}
+              className="h-4 w-4 cursor-pointer accent-foreground"
             />
-            {m.name}
+            <span className="truncate">{m.name}</span>
           </label>
         );
       })}
