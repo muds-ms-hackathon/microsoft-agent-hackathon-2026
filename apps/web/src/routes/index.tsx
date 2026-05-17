@@ -140,7 +140,7 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
 
   // heldAt が最も近いものを選ぶ
   const nearest =
-    candidates.sort(
+    [...candidates].sort(
       (a, b) =>
         new Date(a.next.heldAt).getTime() - new Date(b.next.heldAt).getTime(),
     )[0] ?? null;
