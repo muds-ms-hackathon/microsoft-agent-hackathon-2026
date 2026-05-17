@@ -8,6 +8,17 @@ vi.mock("@/lib/api", () => ({
   api: {
     tasks: {
       me: { $get: vi.fn() },
+      // CreateTaskDialog から呼ばれる可能性があるエンドポイントを抑止する。
+      // 本テストはダイアログを開かないが、Picker の useQuery が
+      // ダイアログ mount 時に走る可能性があるため最低限のスタブを用意する。
+      $post: vi.fn(),
+      ":id": { $get: vi.fn(), $patch: vi.fn(), $delete: vi.fn() },
+    },
+    organizations: {
+      ":id": {
+        members: { $get: vi.fn() },
+        meetings: { $get: vi.fn() },
+      },
     },
   },
   authHeaders: () => ({ headers: {} }),
@@ -465,5 +476,57 @@ describe("MyTasksView - フィルタ整合", () => {
     expect(options).toHaveLength(3);
     expect(options[1]).toHaveTextContent("ACME");
     expect(options[2]).toHaveTextContent("Beta");
+  });
+});
+
+describe("MyTasksView - タスク作成 CTA", () => {
+  it("currentOrgId ありなら「タスクを追加」ボタンが有効になる", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+
+    renderWithQuery(
+      <MyTasksView
+        search={{}}
+        onSearchChange={() => {}}
+        currentOrgId="org-1"
+      />,
+    );
+
+    // ヘッダ右の CTA。リスト表示後でも常に出ているので findAll で取って先頭を見る。
+    const buttons = await screen.findAllByRole("button", {
+      name: "タスクを追加",
+    });
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) expect(b).not.toBeDisabled();
+  });
+
+  it("currentOrgId が null なら「タスクを追加」ボタンは disabled", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+
+    renderWithQuery(
+      <MyTasksView search={{}} onSearchChange={() => {}} currentOrgId={null} />,
+    );
+
+    const buttons = await screen.findAllByRole("button", {
+      name: "タスクを追加",
+    });
+    for (const b of buttons) expect(b).toBeDisabled();
+  });
+
+  it("0 件時は空状態メッセージの下に「タスクを追加」CTA が出る", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+
+    renderWithQuery(
+      <MyTasksView
+        search={{}}
+        onSearchChange={() => {}}
+        currentOrgId="org-1"
+      />,
+    );
+
+    await screen.findByText("担当中のタスクはありません");
+    // 空状態時は「ヘッダ CTA」+「空状態 CTA」の 2 つが表示される。
+    const buttons = screen.getAllByRole("button", { name: "タスクを追加" });
+    expect(buttons).toHaveLength(2);
+    for (const b of buttons) expect(b).not.toBeDisabled();
   });
 });
