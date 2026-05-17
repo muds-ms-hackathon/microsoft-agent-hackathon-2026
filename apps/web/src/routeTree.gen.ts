@@ -13,6 +13,7 @@ import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OrganizationsIndexRouteImport } from './routes/organizations.index'
+import { Route as RecurringMeetingsIdRouteImport } from './routes/recurring-meetings.$id'
 import { Route as OrganizationsIdRouteImport } from './routes/organizations.$id'
 
 const OrganizationsRoute = OrganizationsRouteImport.update({
@@ -35,6 +36,11 @@ const OrganizationsIndexRoute = OrganizationsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => OrganizationsRoute,
 } as any)
+const RecurringMeetingsIdRoute = RecurringMeetingsIdRouteImport.update({
+  id: '/recurring-meetings/$id',
+  path: '/recurring-meetings/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OrganizationsIdRoute = OrganizationsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -46,12 +52,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
   '/organizations/$id': typeof OrganizationsIdRoute
+  '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations/': typeof OrganizationsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/organizations/$id': typeof OrganizationsIdRoute
+  '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations': typeof OrganizationsIndexRoute
 }
 export interface FileRoutesById {
@@ -60,6 +68,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
   '/organizations/$id': typeof OrganizationsIdRoute
+  '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations/': typeof OrganizationsIndexRoute
 }
 export interface FileRouteTypes {
@@ -69,15 +78,22 @@ export interface FileRouteTypes {
     | '/login'
     | '/organizations'
     | '/organizations/$id'
+    | '/recurring-meetings/$id'
     | '/organizations/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/organizations/$id' | '/organizations'
+  to:
+    | '/'
+    | '/login'
+    | '/organizations/$id'
+    | '/recurring-meetings/$id'
+    | '/organizations'
   id:
     | '__root__'
     | '/'
     | '/login'
     | '/organizations'
     | '/organizations/$id'
+    | '/recurring-meetings/$id'
     | '/organizations/'
   fileRoutesById: FileRoutesById
 }
@@ -85,6 +101,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   OrganizationsRoute: typeof OrganizationsRouteWithChildren
+  RecurringMeetingsIdRoute: typeof RecurringMeetingsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -117,6 +134,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizationsIndexRouteImport
       parentRoute: typeof OrganizationsRoute
     }
+    '/recurring-meetings/$id': {
+      id: '/recurring-meetings/$id'
+      path: '/recurring-meetings/$id'
+      fullPath: '/recurring-meetings/$id'
+      preLoaderRoute: typeof RecurringMeetingsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/organizations/$id': {
       id: '/organizations/$id'
       path: '/$id'
@@ -145,6 +169,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   OrganizationsRoute: OrganizationsRouteWithChildren,
+  RecurringMeetingsIdRoute: RecurringMeetingsIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

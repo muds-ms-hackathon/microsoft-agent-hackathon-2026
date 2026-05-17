@@ -35,6 +35,34 @@ vi.mock("@/lib/api", () => ({
   authHeaders: () => ({ headers: {} }),
 }));
 
+// 定例カードに /recurring-meetings/$id への Link が含まれるようになったため、
+// router モックを追加する。href を持つ <a> として描画して href の検証ができる形に。
+vi.mock("@tanstack/react-router", async () => {
+  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
+    "@tanstack/react-router",
+  );
+  type MockLinkProps = {
+    to: string;
+    params?: Record<string, string>;
+    children?: React.ReactNode;
+    className?: string;
+  };
+  return {
+    ...actual,
+    Link: ({ to, params, children, className }: MockLinkProps) => {
+      const href =
+        typeof to === "string"
+          ? to.replace(/\$(\w+)/g, (_, k: string) => params?.[k] ?? "")
+          : String(to);
+      return (
+        <a href={href} className={className}>
+          {children}
+        </a>
+      );
+    },
+  };
+});
+
 import { api } from "@/lib/api";
 
 function mockJson<T>(data: T, status = 200) {
@@ -154,6 +182,14 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(within(card).getByText("60 分")).toBeInTheDocument();
     // 作成日は ISO ではなくロケール表示するため、年が含まれていれば OK
     expect(within(card).getByText(/2026/)).toBeInTheDocument();
+  });
+
+  it("定例カードに「会議一覧」リンクが表示され、/recurring-meetings/:id へ遷移する", async () => {
+    renderDetail();
+    const list = await screen.findByRole("list", { name: "定例一覧" });
+    const card = within(list).getAllByRole("listitem")[0];
+    const link = within(card).getByRole("link", { name: "会議一覧" });
+    expect(link).toHaveAttribute("href", "/recurring-meetings/meet-1");
   });
 
   it("定例カードに description があれば表示される", async () => {

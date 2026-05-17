@@ -23,7 +23,7 @@ import { api, authHeaders } from "@/lib/api";
 import { authAtom } from "@/lib/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -546,6 +546,13 @@ export function OrganizationDetailView({
                 meeting={meeting}
                 actions={
                   <>
+                    <Link
+                      to="/recurring-meetings/$id"
+                      params={{ id: meeting.id }}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      会議一覧
+                    </Link>
                     <EditRecurringMeetingDialog meeting={meeting} />
                     <DeleteRecurringMeetingDialog meeting={meeting} />
                   </>

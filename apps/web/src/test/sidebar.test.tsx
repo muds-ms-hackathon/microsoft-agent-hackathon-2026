@@ -451,13 +451,15 @@ describe("Sidebar 定例リスト", () => {
 
     expect(await screen.findByText("週次定例")).toBeInTheDocument();
     expect(screen.getByText("月次レビュー")).toBeInTheDocument();
-    // クリックは組織詳細画面へリンクする（定例詳細画面は将来 Issue）
-    const links = screen.getAllByRole("link", {
-      name: /週次定例|月次レビュー/,
-    });
-    for (const link of links) {
-      expect(link).toHaveAttribute("href", "/organizations/org-1");
-    }
+    // クリックで各定例の詳細画面（会議一覧）へ遷移する
+    expect(screen.getByRole("link", { name: /週次定例/ })).toHaveAttribute(
+      "href",
+      "/recurring-meetings/meet-1",
+    );
+    expect(screen.getByRole("link", { name: /月次レビュー/ })).toHaveAttribute(
+      "href",
+      "/recurring-meetings/meet-2",
+    );
   });
 
   it("選択中組織の定例が 0 件のとき「定例はまだありません」を表示する", async () => {
