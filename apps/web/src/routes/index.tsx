@@ -98,12 +98,11 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
 
   // 全定例の会議を並列取得
   const meetingQueries = useQueries({
-    queries: recurringMeetings.map((rm) =>
-      meetingListQueryOptions(rm.id),
-    ),
+    queries: recurringMeetings.map((rm) => meetingListQueryOptions(rm.id)),
   });
 
   const isLoading = isRmLoading || meetingQueries.some((q) => q.isLoading);
+  const isMeetingsError = meetingQueries.some((q) => q.isError);
 
   if (isLoading) {
     return (
@@ -114,7 +113,7 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
       />
     );
   }
-  if (isRmError) {
+  if (isRmError || isMeetingsError) {
     return <p className="text-sm text-destructive">定例の取得に失敗しました</p>;
   }
 
