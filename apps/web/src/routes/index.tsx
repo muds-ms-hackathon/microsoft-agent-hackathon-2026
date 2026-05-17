@@ -212,6 +212,7 @@ function ReviewPendingCard() {
             </div>
           ))
         )}
+        {/* TODO: レビュー画面が実装されたらリンクに変更する */}
         <div className="flex justify-end pt-3">
           <button
             type="button"
@@ -333,6 +334,7 @@ function IncompleteTasksCard() {
             })
           )}
         </div>
+        {/* TODO: タスク一覧画面が実装されたらリンクに変更する */}
         <div className="flex justify-end pt-2">
           <button
             type="button"
