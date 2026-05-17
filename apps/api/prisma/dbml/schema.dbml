@@ -14,8 +14,10 @@ Table Meeting {
   previousMeetingId String
   estimatedDurationMinutes Int
   estimationNote String
+  recurringMeetingId String
   previousMeeting Meeting
   nextMeetings Meeting [not null]
+  recurringMeeting RecurringMeeting
   speakers MeetingSpeaker [not null]
   estimationBreakdowns MeetingEstimationBreakdown [not null]
   ragDocument RagDocument
@@ -98,6 +100,7 @@ Table RecurringMeeting {
   updatedAt DateTime [not null]
   organization Organization [not null]
   members MeetingMember [not null]
+  meetings Meeting [not null]
 }
 
 Table MeetingMember {
@@ -399,6 +402,8 @@ Enum MeetingRole {
 }
 
 Ref: Meeting.previousMeetingId - Meeting.id
+
+Ref: Meeting.recurringMeetingId > RecurringMeeting.id [delete: Set Null]
 
 Ref: OrganizationMembership.userId > User.id [delete: Cascade]
 
