@@ -143,7 +143,7 @@ export function Sidebar() {
         </Link>
 
         {/* 定例セクション。選択中組織配下の定例を一覧表示する。
-            クリック時の遷移先は組織詳細画面（定例詳細画面は将来 Issue）。
+            クリック時の遷移先は定例詳細画面（/recurring-meetings/$id）で配下の会議一覧へ。
             組織が選択されているときだけ「+ 定例を追加」ボタンを表示する。 */}
         <div className="flex items-center justify-between pt-4 pb-1 pl-2.5 pr-1">
           <p className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
@@ -214,8 +214,8 @@ function SidebarMeetingList({ orgId }: { orgId: string | null }) {
       {data.map((m) => (
         <li key={m.id}>
           <Link
-            to="/organizations/$id"
-            params={{ id: orgId }}
+            to="/recurring-meetings/$id"
+            params={{ id: m.id }}
             className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
           >
             <CalendarDays size={15} className="shrink-0" />
