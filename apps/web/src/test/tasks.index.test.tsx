@@ -273,6 +273,142 @@ describe("MyTasksView - TaskRow 詳細", () => {
   });
 });
 
+describe("MyTasksView - currentOrgId 初期フィルタ", () => {
+  it("URL に orgId が無いとき currentOrgId でフィルタされる", async () => {
+    const t1 = {
+      ...baseTask,
+      id: "t1",
+      organization: { id: "org-1", name: "ACME" },
+    };
+    const t2 = {
+      ...baseTask,
+      id: "t2",
+      title: "別組織のタスク",
+      organization: { id: "org-2", name: "Beta" },
+    };
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([t1, t2]));
+
+    renderWithQuery(
+      <MyTasksView
+        search={{}}
+        onSearchChange={() => {}}
+        currentOrgId="org-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("My タスク一覧")).toBeInTheDocument();
+    });
+    const list = screen.getByLabelText("My タスク一覧");
+    expect(within(list).getByText("資料作成")).toBeInTheDocument();
+    expect(within(list).queryByText("別組織のタスク")).not.toBeInTheDocument();
+  });
+
+  it("URL の orgId は currentOrgId より優先される", async () => {
+    const t1 = {
+      ...baseTask,
+      id: "t1",
+      organization: { id: "org-1", name: "ACME" },
+    };
+    const t2 = {
+      ...baseTask,
+      id: "t2",
+      title: "別組織のタスク",
+      organization: { id: "org-2", name: "Beta" },
+    };
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([t1, t2]));
+
+    renderWithQuery(
+      <MyTasksView
+        search={{ orgId: "org-2" }}
+        onSearchChange={() => {}}
+        currentOrgId="org-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("別組織のタスク")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("資料作成")).not.toBeInTheDocument();
+  });
+
+  it("URL の orgId=all は currentOrgId を無視してフィルタ解除", async () => {
+    const t1 = {
+      ...baseTask,
+      id: "t1",
+      organization: { id: "org-1", name: "ACME" },
+    };
+    const t2 = {
+      ...baseTask,
+      id: "t2",
+      title: "別組織のタスク",
+      organization: { id: "org-2", name: "Beta" },
+    };
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([t1, t2]));
+
+    renderWithQuery(
+      <MyTasksView
+        search={{ orgId: "all" }}
+        onSearchChange={() => {}}
+        currentOrgId="org-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("資料作成")).toBeInTheDocument();
+    });
+    expect(screen.getByText("別組織のタスク")).toBeInTheDocument();
+  });
+
+  it("currentOrgId が null なら従来通り全件表示", async () => {
+    const t1 = {
+      ...baseTask,
+      id: "t1",
+      organization: { id: "org-1", name: "ACME" },
+    };
+    const t2 = {
+      ...baseTask,
+      id: "t2",
+      title: "別組織のタスク",
+      organization: { id: "org-2", name: "Beta" },
+    };
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([t1, t2]));
+
+    renderWithQuery(
+      <MyTasksView search={{}} onSearchChange={() => {}} currentOrgId={null} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("資料作成")).toBeInTheDocument();
+    });
+    expect(screen.getByText("別組織のタスク")).toBeInTheDocument();
+  });
+
+  it("select で「すべて」を選ぶと URL に orgId=all がセットされる", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+    const onSearchChange = vi.fn();
+
+    renderWithQuery(
+      <MyTasksView
+        search={{}}
+        onSearchChange={onSearchChange}
+        currentOrgId="org-1"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("担当中のタスクはありません"),
+      ).toBeInTheDocument(),
+    );
+
+    const select = screen.getByLabelText("組織フィルタ") as HTMLSelectElement;
+    await userEvent.selectOptions(select, "all");
+
+    expect(onSearchChange).toHaveBeenCalledWith({ orgId: "all" });
+  });
+});
+
 describe("MyTasksView - フィルタ整合", () => {
   it("status を既に持っていてもう一度同じものを押すと外す（解除）", async () => {
     vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));

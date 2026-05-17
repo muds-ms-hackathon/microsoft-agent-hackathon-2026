@@ -2,9 +2,16 @@ import { TaskRow } from "@/features/tasks/components/TaskRow";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
 import type { TaskListItem, TaskStatus } from "@/features/tasks/types";
+import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { cn } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useAtomValue } from "jotai";
 import { z } from "zod";
+
+// 組織フィルタの「すべて」を URL で明示するためのセンチネル値。
+// `orgId` が未指定の時はサイドバー選択中の組織で初期フィルタする挙動とし、
+// ユーザーが明示的に「すべて」を選んだ場合はこの値を URL に保持する。
+const ALL_ORGS_SENTINEL = "all";
 
 // 手動経路で表示する status の選択肢。draft / reviewing は AI 専用のため UI から除外する。
 const FILTERABLE_STATUSES: TaskStatus[] = [
@@ -41,18 +48,29 @@ function parseStatusParam(raw: string | undefined): TaskStatus[] | undefined {
   return arr.length > 0 ? arr : undefined;
 }
 
-// route component から分離したビュー。テストでは props で初期 search / now を渡して
+// route component から分離したビュー。テストでは props で初期 search / now / currentOrgId を
 // 直接 render する（既存の OrganizationDetailView と同じ流儀）。
+// currentOrgId はサイドバー選択中の組織。URL に orgId が無いときの初期フィルタとして使う。
 export function MyTasksView({
   search,
   onSearchChange,
+  currentOrgId = null,
   now,
 }: {
   search: TasksSearch;
   onSearchChange: (next: TasksSearch) => void;
+  currentOrgId?: string | null;
   now?: Date;
 }) {
   const statusArr = parseStatusParam(search.status);
+
+  // effective orgId の決定ロジック:
+  //  - URL に orgId="all" → フィルタなし（ユーザーが明示的にすべてを選んだ）
+  //  - URL に orgId=<id>  → その組織でフィルタ（URL が常に優先）
+  //  - URL に orgId 未指定 → サイドバーの currentOrgId にフォールバック（初期表示用）
+  // currentOrgId が null（未選択）の場合は結果的にフィルタなしになる。
+  const effectiveOrgId: string | null =
+    search.orgId === ALL_ORGS_SENTINEL ? null : (search.orgId ?? currentOrgId);
 
   // API には組織フィルタが無いため、status のみを API に渡してクライアント側で組織を絞り込む。
   // タスクは全件返却前提のため、組織でさらに削ってもパフォーマンス問題は出ない想定。
@@ -63,8 +81,8 @@ export function MyTasksView({
   const tasks = data ?? [];
   // 組織候補は取得した tasks から動的に構築する。useMyOrganizations を別途呼ばない方針。
   const organizations = uniqueOrganizations(tasks);
-  const filtered = search.orgId
-    ? tasks.filter((t) => t.organization.id === search.orgId)
+  const filtered = effectiveOrgId
+    ? tasks.filter((t) => t.organization.id === effectiveOrgId)
     : tasks;
 
   const toggleStatus = (s: TaskStatus) => {
@@ -125,16 +143,25 @@ export function MyTasksView({
           組織
           <select
             aria-label="組織フィルタ"
-            value={search.orgId ?? ""}
+            // select の value は effective な状態を反映する。
+            // 「すべて」を選んだ後は URL に "all" が入り、select も "all" を選ぶ。
+            // 初期表示で URL 未指定かつ currentOrg がある場合はその org を選んだ状態にする。
+            value={
+              search.orgId === ALL_ORGS_SENTINEL
+                ? ALL_ORGS_SENTINEL
+                : (search.orgId ?? currentOrgId ?? ALL_ORGS_SENTINEL)
+            }
             onChange={(e) =>
               onSearchChange({
                 ...search,
-                orgId: e.target.value || undefined,
+                // 「すべて」も含めて常に URL に値を残す。これにより
+                // 「明示的にすべて」と「未指定（currentOrg を初期値）」を識別できる。
+                orgId: e.target.value,
               })
             }
             className="text-xs px-2 py-1 rounded-md border border-border/60 bg-card text-foreground"
           >
-            <option value="">すべて</option>
+            <option value={ALL_ORGS_SENTINEL}>すべて</option>
             {organizations.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
@@ -162,13 +189,16 @@ export function MyTasksView({
 }
 
 // route コンポーネントは search を URL と同期させる薄いラッパー。
+// サイドバー選択中の組織を jotai atom から取り出し、初期フィルタとして渡す。
 function MyTasksPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+  const currentOrgId = useAtomValue(currentOrganizationIdAtom);
   return (
     <MyTasksView
       search={search}
       onSearchChange={(next) => navigate({ search: next })}
+      currentOrgId={currentOrgId}
     />
   );
 }
