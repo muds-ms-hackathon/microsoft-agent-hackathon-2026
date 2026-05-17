@@ -99,6 +99,27 @@ async function validateOriginMeetingInOrg(
   return meeting.recurringMeeting.organizationId === organizationId;
 }
 
+// task を ID から取得し、当該組織のメンバーであることを確認する。
+// Task 不存在・組織非所属いずれも 404 で統一し、存在自体を露出させない。
+async function requireTaskAccess(
+  c: Context<{ Variables: AuthVariables }>,
+  taskId: string,
+): Promise<
+  // biome-ignore lint/suspicious/noExplicitAny: include 結果の型が広いので any で受ける
+  { ok: true; task: any } | { ok: false; res: Response }
+> {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: taskInclude,
+  });
+  if (!task) {
+    return { ok: false, res: c.json({ error: "タスクが見つかりません" }, 404) };
+  }
+  const guard = await requireOrgMembership(c, task.organizationId);
+  if (!guard.ok) return guard;
+  return { ok: true, task };
+}
+
 export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
   .post("/", zValidator("json", taskCreateSchema), async (c) => {
@@ -179,4 +200,10 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
     });
 
     return c.json(serializeTask(created), 201);
+  })
+  .get("/:id", async (c) => {
+    const id = c.req.param("id");
+    const guard = await requireTaskAccess(c, id);
+    if (!guard.ok) return guard.res;
+    return c.json(serializeTask(guard.task));
   });

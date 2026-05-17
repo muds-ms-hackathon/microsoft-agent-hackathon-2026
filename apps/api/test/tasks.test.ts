@@ -71,6 +71,7 @@ const mockMembershipFindMany = vi.mocked(
 );
 const mockRecurringFindMany = vi.mocked(prisma.recurringMeeting.findMany);
 const mockMeetingFindUnique = vi.mocked(prisma.meeting.findUnique);
+const mockTaskFindUnique = vi.mocked(prisma.task.findUnique);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member" = "member") {
@@ -347,5 +348,55 @@ describe("POST /tasks", () => {
     expect(res.status).toBe(201);
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("todo");
+  });
+});
+
+describe("GET /tasks/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("組織メンバーは関連を含む 200 を取得できる", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      ...sampleTask,
+      assignees: [
+        {
+          user: {
+            id: "user-1",
+            name: "alice",
+            displayName: "alice",
+            email: "a@example.com",
+          },
+        },
+      ],
+      recurringMeetings: [
+        { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+      ],
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+
+    const res = await app.request("/tasks/task-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      id: string;
+      assignees: { id: string }[];
+      recurringMeetings: { id: string }[];
+    };
+    expect(body.id).toBe("task-1");
+    expect(body.assignees).toHaveLength(1);
+    expect(body.assignees[0].id).toBe("user-1");
+    expect(body.recurringMeetings).toHaveLength(1);
+    expect(body.recurringMeetings[0].id).toBe("rmtg-1");
+  });
+
+  it("タスクが存在しない場合は 404", async () => {
+    mockTaskFindUnique.mockResolvedValue(null);
+    const res = await app.request("/tasks/missing");
+    expect(res.status).toBe(404);
+  });
+
+  it("タスク所属組織の非メンバーは 404", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/tasks/task-1");
+    expect(res.status).toBe(404);
   });
 });
