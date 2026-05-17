@@ -1,11 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
-import {
-  type OrganizationMembership,
-  type OrgRole,
-  Prisma,
-} from "@prisma/client";
+import { type OrgRole, Prisma } from "@prisma/client";
 import { Hono } from "hono";
-import type { Context } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingCreateSchema } from "../lib/schemas/recurring-meeting.js";
@@ -19,6 +14,10 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+import {
+  requireOrgMembership,
+  requireOrgRole,
+} from "../middleware/authz.js";
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -57,52 +56,9 @@ const inviteSchema = z.object({
   expiresInDays: z.number().int().positive().max(365).nullable().optional(),
 });
 
-// 認証ユーザーが対象組織に所属していることを確認する。
-// 所属していない場合は組織の存在自体を露出させないため 404 で統一する。
-// 詳細閲覧 (GET /:id) のように「所属していれば誰でも可」のケースで使う。
-async function requireMembership(
-  c: Context<{ Variables: AuthVariables }>,
-  organizationId: string,
-): Promise<
-  | { ok: true; membership: OrganizationMembership }
-  | { ok: false; res: Response }
-> {
-  const user = c.var.user;
-  const membership = await prisma.organizationMembership.findUnique({
-    where: {
-      userId_organizationId: { userId: user.id, organizationId },
-    },
-  });
-  if (!membership) {
-    return {
-      ok: false,
-      res: c.json({ error: "組織が見つかりません" }, 404),
-    };
-  }
-  return { ok: true, membership };
-}
-
-// 所属確認に加えて、許容ロールに含まれているかを判定する。
-// 所属していなければ 404、ロール不足なら 403。
-async function requireRole(
-  c: Context<{ Variables: AuthVariables }>,
-  organizationId: string,
-  allowed: OrgRole[],
-  forbiddenMessage: string,
-): Promise<
-  | { ok: true; membership: OrganizationMembership }
-  | { ok: false; res: Response }
-> {
-  const guard = await requireMembership(c, organizationId);
-  if (!guard.ok) return guard;
-  if (!allowed.includes(guard.membership.role)) {
-    return {
-      ok: false,
-      res: c.json({ error: forbiddenMessage }, 403),
-    };
-  }
-  return guard;
-}
+// 認可ガードは `middleware/authz.ts` に集約済み。
+// 旧 requireMembership / requireRole はそちらの requireOrgMembership /
+// requireOrgRole に統合した。
 
 export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
@@ -161,7 +117,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .get("/:id", async (c) => {
     const id = c.req.param("id");
 
-    const guard = await requireMembership(c, id);
+    const guard = await requireOrgMembership(c, id);
     if (!guard.ok) return guard.res;
 
     // 自分の role はガードで確定済みのものを流用し、追加クエリを避ける。
@@ -182,7 +138,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .get("/:id/members", async (c) => {
     const id = c.req.param("id");
 
-    const guard = await requireMembership(c, id);
+    const guard = await requireOrgMembership(c, id);
     if (!guard.ok) return guard.res;
 
     // OrgRole enum を DB 側で owner→admin→member 順に並べる手段がないため
@@ -217,7 +173,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const targetUserId = c.req.param("userId");
     const callerUserId = c.var.user.id;
 
-    const guard = await requireRole(
+    const guard = await requireOrgRole(
       c,
       id,
       ["owner"],
@@ -259,7 +215,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const id = c.req.param("id");
     const data = c.req.valid("json");
 
-    const guard = await requireRole(
+    const guard = await requireOrgRole(
       c,
       id,
       ["owner", "admin"],
@@ -276,7 +232,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .delete("/:id", async (c) => {
     const id = c.req.param("id");
 
-    const guard = await requireRole(c, id, ["owner"], "削除権限がありません");
+    const guard = await requireOrgRole(c, id, ["owner"], "削除権限がありません");
     if (!guard.ok) return guard.res;
 
     // schema 側で Membership / Invitation / RecurringMeeting / MeetingMember は
@@ -289,7 +245,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const id = c.req.param("id");
     const filters = c.req.valid("query");
 
-    const guard = await requireMembership(c, id);
+    const guard = await requireOrgMembership(c, id);
     if (!guard.ok) return guard.res;
 
     // 組織配下の全タスクをフィルタしつつ返す。フィルタは buildTaskListWhere で
@@ -307,7 +263,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
   .get("/:id/meetings", async (c) => {
     const id = c.req.param("id");
 
-    const guard = await requireMembership(c, id);
+    const guard = await requireOrgMembership(c, id);
     if (!guard.ok) return guard.res;
 
     // 一覧画面でメンバー数バッジを出せるよう _count.members を併せて取得する。
@@ -326,7 +282,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       const id = c.req.param("id");
       const { limit } = c.req.valid("query");
 
-      const guard = await requireMembership(c, id);
+      const guard = await requireOrgMembership(c, id);
       if (!guard.ok) return guard.res;
 
       // ダッシュボード「次回会議」セクションの N+1 解消のため、
@@ -367,7 +323,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       const { name, description, scheduleCron, defaultDurationMinutes } =
         c.req.valid("json");
 
-      const guard = await requireMembership(c, id);
+      const guard = await requireOrgMembership(c, id);
       if (!guard.ok) return guard.res;
 
       // RecurringMeeting 作成と作成者を MeetingMember.owner として登録する処理は
@@ -400,7 +356,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const user = c.var.user;
     const { email, role, expiresInDays } = c.req.valid("json");
 
-    const guard = await requireRole(
+    const guard = await requireOrgRole(
       c,
       id,
       ["owner", "admin"],

@@ -15,6 +15,7 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+import { requireOrgMembership } from "../middleware/authz.js";
 
 // 定例配下に紐付ける Meeting 作成リクエストの schema。
 // estimatedDurationMinutes は省略・null・数値の 3 形態を許容し、省略 / null は
@@ -36,9 +37,9 @@ const createMeetingSchema = z.object({
     .optional(),
 });
 
-// 認証ユーザーが定例の所属組織のメンバーであるかを確認する共通ガード。
-// 定例不存在・所属なしいずれも 404 で統一し、組織や定例の存在自体を
-// 露出させない（organizations.ts の requireMembership と同方針）。
+// 定例 + 所属組織のメンバーシップを確認する薄いラッパー。
+// 定例不存在・組織非所属いずれも 404 で統一し、定例・組織の存在自体を露出させない。
+// 認可判定は `middleware/authz.ts` の requireOrgMembership に委ねる。
 async function requireRecurringAccess<T extends RecurringMeeting>(
   c: Context<{ Variables: AuthVariables }>,
   meeting: T | null,
@@ -49,16 +50,9 @@ async function requireRecurringAccess<T extends RecurringMeeting>(
       res: c.json({ error: "定例が見つかりません" }, 404),
     };
   }
-  const user = c.var.user;
-  const membership = await prisma.organizationMembership.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: user.id,
-        organizationId: meeting.organizationId,
-      },
-    },
-  });
-  if (!membership) {
+  const guard = await requireOrgMembership(c, meeting.organizationId);
+  if (!guard.ok) {
+    // 組織非所属の場合も「定例が見つかりません」で統一する
     return {
       ok: false,
       res: c.json({ error: "定例が見つかりません" }, 404),
