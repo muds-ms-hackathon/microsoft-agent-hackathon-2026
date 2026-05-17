@@ -260,7 +260,7 @@ describe("MyTasksView - TaskRow 詳細", () => {
     expect(screen.getByTestId("task-assignee-count")).toHaveTextContent("2名");
   });
 
-  it("行は onClick 未指定なら disabled になる（ダイアログ未実装の暫定動作）", async () => {
+  it("行はクリック可能（編集ダイアログ起動の準備済み、共通ラッパー経由）", async () => {
     vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
 
     renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);
@@ -268,8 +268,10 @@ describe("MyTasksView - TaskRow 詳細", () => {
     await waitFor(() => {
       expect(screen.getByText("資料作成")).toBeInTheDocument();
     });
+    // TaskListWithDialogs の onClick が紐付くため disabled ではない。
+    // ダイアログ起動自体は TaskListWithDialogs の専用テストでカバー。
     const row = screen.getByRole("button", { name: /タスク 資料作成/ });
-    expect(row).toBeDisabled();
+    expect(row).not.toBeDisabled();
   });
 });
 
