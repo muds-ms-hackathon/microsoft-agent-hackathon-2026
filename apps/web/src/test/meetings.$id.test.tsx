@@ -119,6 +119,10 @@ const sampleTask = {
 beforeEach(() => {
   vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detail));
   vi.mocked(api.meetings[":id"].tasks.$get).mockResolvedValue(mockJson([]));
+  // AssigneeFilter のメンバー取得はデフォルトで空配列。個別テストで上書きしない想定。
+  vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+    mockJson([]),
+  );
 });
 
 afterEach(() => {
@@ -246,5 +250,26 @@ describe("MeetingDetailView", () => {
     expect(
       (call[0] as { query: { status?: string } }).query.status,
     ).toBeUndefined();
+  });
+
+  it("フィルタ行に AssigneeFilter（担当者セレクタ）が描画される", async () => {
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("タスク");
+    expect(screen.getByLabelText("担当者フィルタ")).toBeInTheDocument();
+  });
+
+  it("初期 ?assigneeId=user-42 は API リクエストの query.assigneeId に乗る", async () => {
+    renderWithQuery(
+      <MeetingDetailView
+        id="mtg-1"
+        search={{ assigneeId: "user-42" }}
+        now={NOW}
+      />,
+    );
+    await screen.findByText("タスク");
+    const call = vi.mocked(api.meetings[":id"].tasks.$get).mock.calls[0];
+    expect(
+      (call[0] as { query: { assigneeId?: string } }).query.assigneeId,
+    ).toBe("user-42");
   });
 });
