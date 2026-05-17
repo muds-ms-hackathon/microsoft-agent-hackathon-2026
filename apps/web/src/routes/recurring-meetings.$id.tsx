@@ -8,7 +8,7 @@ import {
   parseCron,
 } from "@/features/recurring-meetings/scheduleCron";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
-import { TaskRow } from "@/features/tasks/components/TaskRow";
+import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
 import { useRecurringMeetingTasks } from "@/features/tasks/hooks/useRecurringMeetingTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
 import type { TaskStatus } from "@/features/tasks/types";
@@ -247,11 +247,11 @@ export function RecurringMeetingDetailView({
             このプロジェクトのタスクはまだありません
           </p>
         ) : (
-          <ul aria-label="プロジェクトのタスク一覧" className="grid gap-2">
-            {(tasksQuery.data ?? []).map((task) => (
-              <TaskRow key={task.id} task={task} now={now} />
-            ))}
-          </ul>
+          <TaskListWithDialogs
+            tasks={tasksQuery.data ?? []}
+            ariaLabel="プロジェクトのタスク一覧"
+            now={now}
+          />
         )}
       </section>
     </section>

@@ -1,6 +1,6 @@
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
-import { TaskRow } from "@/features/tasks/components/TaskRow";
+import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
 import { useMeetingTasks } from "@/features/tasks/hooks/useMeetingTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
 import type { TaskStatus } from "@/features/tasks/types";
@@ -193,11 +193,11 @@ export function MeetingDetailView({
             この会議から発生したタスクはまだありません
           </p>
         ) : (
-          <ul aria-label="会議由来のタスク一覧" className="grid gap-2">
-            {(tasksQuery.data ?? []).map((task) => (
-              <TaskRow key={task.id} task={task} now={now} />
-            ))}
-          </ul>
+          <TaskListWithDialogs
+            tasks={tasksQuery.data ?? []}
+            ariaLabel="会議由来のタスク一覧"
+            now={now}
+          />
         )}
       </section>
     </section>

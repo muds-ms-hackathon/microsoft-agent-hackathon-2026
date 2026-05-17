@@ -1,4 +1,4 @@
-import { TaskRow } from "@/features/tasks/components/TaskRow";
+import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
 import type { TaskListItem, TaskStatus } from "@/features/tasks/types";
@@ -190,11 +190,11 @@ export function MyTasksView({
       ) : filtered.length === 0 ? (
         <p className="text-muted-foreground">担当中のタスクはありません</p>
       ) : (
-        <ul aria-label="My タスク一覧" className="grid gap-2">
-          {filtered.map((task) => (
-            <TaskRow key={task.id} task={task} now={now} />
-          ))}
-        </ul>
+        <TaskListWithDialogs
+          tasks={filtered}
+          ariaLabel="My タスク一覧"
+          now={now}
+        />
       )}
     </section>
   );
