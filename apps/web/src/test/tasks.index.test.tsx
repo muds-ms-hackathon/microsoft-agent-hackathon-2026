@@ -550,6 +550,38 @@ describe("MyTasksView - View 切替", () => {
       expect.objectContaining({ view: "kanban" }),
     );
   });
+
+  it("view=kanban のとき status フィルタ UI は描画されない", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+    renderWithQuery(
+      <MyTasksView search={{ view: "kanban" }} onSearchChange={() => {}} />,
+    );
+    await screen.findByTestId("kanban-board");
+    // status フィルタ UI は Kanban の列で代替されるため非表示。
+    // Kanban のカラムヘッダにも「未着手」等のラベルがあるため、フィルタ UI 固有の
+    // group / 凡例ラベルで存在判定する。
+    expect(
+      screen.queryByRole("group", { name: "ステータス" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("ステータス")).not.toBeInTheDocument();
+  });
+
+  it("view=kanban のとき URL の status は API リクエストに乗らない（全件取得）", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+    renderWithQuery(
+      <MyTasksView
+        search={{ view: "kanban", status: "todo,in_progress" }}
+        onSearchChange={() => {}}
+      />,
+    );
+    await waitFor(() => {
+      expect(api.tasks.me.$get).toHaveBeenCalled();
+    });
+    const call = vi.mocked(api.tasks.me.$get).mock.calls[0];
+    expect(
+      (call[0] as { query: { status?: string } }).query.status,
+    ).toBeUndefined();
+  });
 });
 
 describe("MyTasksView - タスク作成 CTA", () => {

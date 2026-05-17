@@ -348,9 +348,10 @@ describe("定例詳細ページ - タスクセクション", () => {
     );
   });
 
+  type Search = { status?: string; view?: "list" | "kanban" };
   function renderWithSearch(opts?: {
-    search?: { status?: string };
-    onSearchChange?: (next: { status?: string }) => void;
+    search?: Search;
+    onSearchChange?: (next: Search) => void;
   }) {
     return renderWithQuery(
       <RecurringMeetingDetailView
@@ -422,5 +423,32 @@ describe("定例詳細ページ - タスクセクション", () => {
     expect(
       await screen.findByText("タスクの取得に失敗しました"),
     ).toBeInTheDocument();
+  });
+
+  it("view=kanban のとき status フィルタ UI は描画されない", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([sampleTask]),
+    );
+    renderWithSearch({ search: { view: "kanban" } });
+    await screen.findByTestId("kanban-board");
+    // Kanban のカラムヘッダにも「未着手」等のラベルがあるため、
+    // フィルタ UI 固有の group / 凡例ラベルで存在判定する。
+    expect(
+      screen.queryByRole("group", { name: "ステータス" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("ステータス")).not.toBeInTheDocument();
+  });
+
+  it("view=kanban のとき URL の status は API リクエストに乗らない（全件取得）", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch({ search: { view: "kanban", status: "todo" } });
+    await screen.findByText("タスク");
+    const call = vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mock
+      .calls[0];
+    expect(
+      (call[0] as { query: { status?: string } }).query.status,
+    ).toBeUndefined();
   });
 });

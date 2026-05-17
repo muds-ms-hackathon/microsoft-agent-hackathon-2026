@@ -216,4 +216,35 @@ describe("MeetingDetailView", () => {
       await screen.findByRole("heading", { name: "タスクを作成" }),
     ).toBeInTheDocument();
   });
+
+  it("view=kanban のとき status フィルタ UI は描画されない", async () => {
+    vi.mocked(api.meetings[":id"].tasks.$get).mockResolvedValue(
+      mockJson([sampleTask]),
+    );
+    renderWithQuery(
+      <MeetingDetailView id="mtg-1" search={{ view: "kanban" }} now={NOW} />,
+    );
+    await screen.findByTestId("kanban-board");
+    // Kanban のカラムヘッダにも「未着手」等のラベルがあるため、
+    // フィルタ UI 固有の group / 凡例ラベルで存在判定する。
+    expect(
+      screen.queryByRole("group", { name: "ステータス" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("ステータス")).not.toBeInTheDocument();
+  });
+
+  it("view=kanban のとき URL の status は API リクエストに乗らない（全件取得）", async () => {
+    renderWithQuery(
+      <MeetingDetailView
+        id="mtg-1"
+        search={{ view: "kanban", status: "todo" }}
+        now={NOW}
+      />,
+    );
+    await screen.findByText("タスク");
+    const call = vi.mocked(api.meetings[":id"].tasks.$get).mock.calls[0];
+    expect(
+      (call[0] as { query: { status?: string } }).query.status,
+    ).toBeUndefined();
+  });
 });
