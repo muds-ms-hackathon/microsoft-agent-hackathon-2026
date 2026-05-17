@@ -1,0 +1,38 @@
+import { api, authHeaders } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+
+// 会議詳細レスポンス。API 側 (apps/api/src/routes/meetings.ts) の整形に揃える。
+// 議事録メタ・解析結果などは別 Issue で拡張予定なので、ここでは最小限に絞っている。
+export type MeetingDetail = {
+  id: string;
+  title: string;
+  heldAt: string;
+  estimatedDurationMinutes: number | null;
+  estimationNote: string | null;
+  sequenceNumber: number | null;
+  previousMeetingId: string | null;
+  transcriptionQuality: string | null;
+  supplementaryMemo: string | null;
+  meetingType: string;
+  recurringMeetingId: string | null;
+  createdAt: string;
+  recurringMeeting: { id: string; name: string };
+  organization: { id: string; name: string };
+};
+
+// 会議詳細を取得する hook。クエリキーは ["meetings", id, "detail"]。
+export function useMeetingDetail(id: string) {
+  return useQuery<MeetingDetail>({
+    queryKey: ["meetings", id, "detail"],
+    queryFn: async () => {
+      const res = await api.meetings[":id"].$get(
+        { param: { id } },
+        authHeaders(),
+      );
+      if (!res.ok) {
+        throw new Error(`Failed to fetch meeting: ${res.status}`);
+      }
+      return (await res.json()) as MeetingDetail;
+    },
+  });
+}
