@@ -19,12 +19,15 @@ const idArraySchema = z
 
 // 共通の入力可能フィールド（POST/PATCH で共有）。
 // AI 由来 (sourceQuote / dueDateRaw / ambiguityFlags 等) や decisionItemId は受け付けない。
+// assigneeUserIds / recurringMeetingIds は省略・null のいずれも「未指定」として扱い、
+// ハンドラ側で `?? []` に丸めて空配列扱いにする。JSON では undefined を表現できない
+// ため、クライアントが「未指定」を null で送る慣習に合わせる。
 const taskInputBaseSchema = z.object({
   title: z.string().min(1, "title は必須です"),
   body: z.string().optional(),
   priority: taskPrioritySchema.optional(),
-  assigneeUserIds: idArraySchema.optional(),
-  recurringMeetingIds: idArraySchema.optional(),
+  assigneeUserIds: idArraySchema.nullable().optional(),
+  recurringMeetingIds: idArraySchema.nullable().optional(),
   originMeetingId: z.string().min(1).optional(),
   dueDate: z
     .string()
