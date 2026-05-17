@@ -50,4 +50,16 @@ describe("toTaskListQueryParams", () => {
       dueBefore: "2026-06-30T23:59:59Z",
     });
   });
+
+  it("overdueOnly が true のときは overdueOnly=\"true\" を含める", () => {
+    expect(toTaskListQueryParams({ overdueOnly: true })).toEqual({
+      overdueOnly: "true",
+    });
+  });
+
+  it("overdueOnly が false / undefined のときは URL に乗せない", () => {
+    // 「期限超過のみ」OFF 状態は URL からパラメータごと消し、API も全件扱いにする。
+    expect(toTaskListQueryParams({ overdueOnly: false })).toEqual({});
+    expect(toTaskListQueryParams({})).toEqual({});
+  });
 });

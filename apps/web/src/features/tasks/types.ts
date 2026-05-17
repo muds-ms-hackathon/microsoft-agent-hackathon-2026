@@ -94,4 +94,7 @@ export type TaskListFilters = {
   assigneeId?: string;
   dueBefore?: string;
   dueAfter?: string;
+  // 「期限超過のみ」クイックトグル。true のとき API 側で
+  // dueDate < now AND status NOT IN (done, rejected) で絞り込む。
+  overdueOnly?: boolean;
 };
