@@ -601,3 +601,31 @@ describe("PATCH /tasks/:id", () => {
     expect(deletedAssignees).toBe(true);
   });
 });
+
+describe("DELETE /tasks/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("組織メンバーは 204 でタスクを削除できる", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const mockTaskDelete = vi.mocked(prisma.task.delete);
+    mockTaskDelete.mockResolvedValue(sampleTask as never);
+
+    const res = await app.request("/tasks/task-1", { method: "DELETE" });
+    expect(res.status).toBe(204);
+    expect(mockTaskDelete).toHaveBeenCalledWith({ where: { id: "task-1" } });
+  });
+
+  it("タスク不存在は 404", async () => {
+    mockTaskFindUnique.mockResolvedValue(null);
+    const res = await app.request("/tasks/missing", { method: "DELETE" });
+    expect(res.status).toBe(404);
+  });
+
+  it("非メンバーは 404", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/tasks/task-1", { method: "DELETE" });
+    expect(res.status).toBe(404);
+  });
+});

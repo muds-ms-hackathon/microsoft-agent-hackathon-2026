@@ -319,4 +319,14 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
       );
     }
     return c.json(serializeTask(result.task));
+  })
+  .delete("/:id", async (c) => {
+    const id = c.req.param("id");
+    const guard = await requireTaskAccess(c, id);
+    if (!guard.ok) return guard.res;
+
+    // 配下の TaskAssignee / TaskRecurringMeeting は schema 側で onDelete: Cascade のため
+    // delete 一発で連鎖削除される。削除済みボディは返さず 204 で統一。
+    await prisma.task.delete({ where: { id } });
+    return c.body(null, 204);
   });
