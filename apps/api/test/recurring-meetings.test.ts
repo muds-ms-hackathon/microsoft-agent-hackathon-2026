@@ -789,6 +789,35 @@ describe("POST /recurring-meetings/:id/meetings", () => {
     });
   });
 
+  it("estimatedDurationMinutes: null は未指定とみなし defaultDurationMinutes を採用する", async () => {
+    // JSON では undefined を表現できないため、クライアントが「未指定」を null で
+    // 送るのは一般的な慣習。スキーマがそれを拒否せず、ハンドラ側の ?? フォールバックに
+    // 載せて defaultDurationMinutes (60) を採用することを検証する。
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockMeetingCreate.mockResolvedValue(createdMeeting as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例 2026-05-20",
+        heldAt: "2026-05-20T01:00:00.000Z",
+        estimatedDurationMinutes: null,
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(mockMeetingCreate).toHaveBeenCalledWith({
+      data: {
+        title: "週次定例 2026-05-20",
+        heldAt: new Date("2026-05-20T01:00:00.000Z"),
+        estimatedDurationMinutes: 60,
+        recurringMeetingId: "rmtg-1",
+      },
+      select: expect.any(Object),
+    });
+  });
+
   it("title 欠落は 400 を返す", async () => {
     const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
       method: "POST",

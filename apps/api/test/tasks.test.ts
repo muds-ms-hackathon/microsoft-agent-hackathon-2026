@@ -138,6 +138,30 @@ describe("POST /tasks", () => {
     expect(mockTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it("assigneeUserIds / recurringMeetingIds に null を渡しても 201 を返す（空配列扱い）", async () => {
+    // JSON では undefined を表現できないため、クライアントが「未指定」を null で
+    // 送る慣習がある。スキーマで弾かず、ハンドラ側の `?? []` フォールバックに載せて
+    // 空配列として扱う。validate 関数は空配列で早期 true を返すため副作用は無い。
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTransaction.mockResolvedValue(sampleTask);
+
+    const res = await app.request("/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "org-1",
+        title: "資料作成",
+        assigneeUserIds: null,
+        recurringMeetingIds: null,
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    // 空配列扱いになるため、中間テーブル整合の DB 問い合わせは行われない。
+    expect(mockMembershipFindMany).not.toHaveBeenCalled();
+    expect(mockRecurringFindMany).not.toHaveBeenCalled();
+  });
+
   it("assignees / recurringMeetings / originMeeting を含む 201", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
     // 担当候補が全員 org メンバーであることの検証

@@ -17,7 +17,10 @@ import {
 import { auth, type AuthVariables } from "../middleware/auth.js";
 
 // 定例配下に紐付ける Meeting 作成リクエストの schema。
-// estimatedDurationMinutes 未指定なら定例の defaultDurationMinutes を採用する。
+// estimatedDurationMinutes は省略・null・数値の 3 形態を許容し、省略 / null は
+// 「未指定」として扱ってハンドラ側で defaultDurationMinutes へフォールバックする。
+// JSON では undefined を表現できないため、クライアントは「未指定」を null で送る
+// ことが多い。許容範囲を広げるだけで、不正値（範囲外・型違い）は従来どおり 400。
 // 範囲は RecurringMeeting.defaultDurationMinutes と同じ 1〜480 分。
 const createMeetingSchema = z.object({
   title: z.string().min(1, "title は必須です"),
@@ -29,6 +32,7 @@ const createMeetingSchema = z.object({
     .int()
     .min(1, "estimatedDurationMinutes は 1 分以上で指定してください")
     .max(480, "estimatedDurationMinutes は 480 分以下で指定してください")
+    .nullable()
     .optional(),
 });
 
