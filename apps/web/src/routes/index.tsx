@@ -89,6 +89,12 @@ function NextMeetingCard({
 // ===== 次回会議セクション =====
 // 全定例の会議を並列取得し、最も直近の upcoming 会議を1件だけ表示する。
 
+type Candidate = {
+  recurringMeetingId: string;
+  recurringMeetingName: string;
+  next: MeetingListItem;
+};
+
 function NextMeetingsSection({ orgId }: { orgId: string }) {
   const {
     data: recurringMeetings = [],
@@ -118,12 +124,6 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
   }
 
   // 全定例から最も直近の upcoming 会議を1件選ぶ
-  type Candidate = {
-    recurringMeetingId: string;
-    recurringMeetingName: string;
-    next: MeetingListItem;
-  };
-
   const candidates: Candidate[] = [];
   for (let i = 0; i < recurringMeetings.length; i++) {
     const meetings = meetingQueries[i]?.data ?? [];
