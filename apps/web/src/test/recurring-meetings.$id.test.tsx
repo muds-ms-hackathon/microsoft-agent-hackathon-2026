@@ -372,7 +372,7 @@ describe("定例詳細ページ - タスクセクション", () => {
     expect(within(list).getByText("資料作成")).toBeInTheDocument();
   });
 
-  it("0 件時は空状態メッセージと disabled の「タスクを追加」ボタンを表示する", async () => {
+  it("0 件時は空状態メッセージと「タスクを追加」ボタンを表示する", async () => {
     vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
       mockJson([]),
     );
@@ -380,8 +380,9 @@ describe("定例詳細ページ - タスクセクション", () => {
     expect(
       await screen.findByText("このプロジェクトのタスクはまだありません"),
     ).toBeInTheDocument();
+    // #169 のダイアログ完成により、ボタンは有効化された。
     const addBtn = screen.getByRole("button", { name: "タスクを追加" });
-    expect(addBtn).toBeDisabled();
+    expect(addBtn).not.toBeDisabled();
   });
 
   it("status チェックボックスを切り替えると onSearchChange が呼ばれる", async () => {
