@@ -25,7 +25,7 @@ Table Meeting {
   relatedMeetingRefs RelatedPastMeeting [not null]
   decisionItems DecisionItem [not null]
   decisionItemsPlanned DecisionItem [not null]
-  tasks Task [not null]
+  originTasks Task [not null]
   ambiguousInfos AmbiguousInfo [not null]
 }
 
@@ -57,6 +57,7 @@ Table Organization {
   memberships OrganizationMembership [not null]
   invitations OrganizationInvitation [not null]
   recurringMeetings RecurringMeeting [not null]
+  tasks Task [not null]
 }
 
 Table OrganizationMembership {
@@ -101,6 +102,7 @@ Table RecurringMeeting {
   organization Organization [not null]
   members MeetingMember [not null]
   meetings Meeting [not null]
+  taskAttachments TaskRecurringMeeting [not null]
 }
 
 Table MeetingMember {
@@ -218,7 +220,8 @@ Table DecisionItemAssignee {
 
 Table Task {
   id String [pk]
-  meetingId String [not null]
+  organizationId String [not null]
+  originMeetingId String
   decisionItemId String
   title String [not null]
   body String
@@ -232,16 +235,19 @@ Table Task {
   blockingItemId String
   carriedOverCount Int
   ambiguityFlags Json
+  progressNote String
   dueDate DateTime
   startDate DateTime
   followUpDate DateTime
   version Int [not null, default: 0]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
-  meeting Meeting [not null]
+  organization Organization [not null]
+  originMeeting Meeting
   decisionItem DecisionItem
   assignees TaskAssignee [not null]
   ambiguousInfos AmbiguousInfo [not null]
+  recurringMeetings TaskRecurringMeeting [not null]
 }
 
 Table TaskAssignee {
@@ -253,6 +259,17 @@ Table TaskAssignee {
 
   indexes {
     (taskId, userId) [unique]
+  }
+}
+
+Table TaskRecurringMeeting {
+  taskId String [not null]
+  recurringMeetingId String [not null]
+  task Task [not null]
+  recurringMeeting RecurringMeeting [not null]
+
+  indexes {
+    (taskId, recurringMeetingId) [pk]
   }
 }
 
@@ -441,13 +458,19 @@ Ref: DecisionItemAssignee.decisionItemId > DecisionItem.id [delete: Cascade]
 
 Ref: DecisionItemAssignee.userId > User.id [delete: Cascade]
 
-Ref: Task.meetingId > Meeting.id [delete: Cascade]
+Ref: Task.organizationId > Organization.id [delete: Cascade]
+
+Ref: Task.originMeetingId > Meeting.id [delete: Set Null]
 
 Ref: Task.decisionItemId > DecisionItem.id [delete: Set Null]
 
 Ref: TaskAssignee.taskId > Task.id [delete: Cascade]
 
 Ref: TaskAssignee.userId > User.id [delete: Cascade]
+
+Ref: TaskRecurringMeeting.taskId > Task.id [delete: Cascade]
+
+Ref: TaskRecurringMeeting.recurringMeetingId > RecurringMeeting.id [delete: Cascade]
 
 Ref: AmbiguousInfo.meetingId > Meeting.id [delete: Cascade]
 
