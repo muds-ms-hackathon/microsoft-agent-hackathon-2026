@@ -9,6 +9,15 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingCreateSchema } from "../lib/schemas/recurring-meeting.js";
+import {
+  buildTaskListWhere,
+  taskListQuerySchema,
+} from "../lib/schemas/task.js";
+import {
+  serializeTask,
+  taskListInclude,
+  taskListOrderBy,
+} from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 
 const createSchema = z.object({
@@ -265,6 +274,25 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     // 削除済みリソースの本体を返しても利用側で扱いに困るため 204 で返す。
     await prisma.organization.delete({ where: { id } });
     return c.body(null, 204);
+  })
+  .get("/:id/tasks", zValidator("query", taskListQuerySchema), async (c) => {
+    const id = c.req.param("id");
+    const filters = c.req.valid("query");
+
+    const guard = await requireMembership(c, id);
+    if (!guard.ok) return guard.res;
+
+    // 組織配下の全タスクをフィルタしつつ返す。フィルタは buildTaskListWhere で
+    // 共通生成し、ここでは organizationId スコープを追加するだけ。
+    const tasks = await prisma.task.findMany({
+      where: {
+        ...buildTaskListWhere(filters),
+        organizationId: id,
+      },
+      orderBy: taskListOrderBy,
+      include: taskListInclude,
+    });
+    return c.json(tasks.map(serializeTask));
   })
   .get("/:id/meetings", async (c) => {
     const id = c.req.param("id");

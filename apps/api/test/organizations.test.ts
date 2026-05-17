@@ -22,6 +22,9 @@ vi.mock("../src/lib/prisma.js", () => ({
       findFirst: vi.fn(),
       update: vi.fn(),
     },
+    task: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -79,6 +82,7 @@ const mockMembershipFindMany = vi.mocked(
 );
 const mockMembershipDelete = vi.mocked(prisma.organizationMembership.delete);
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
+const mockTaskFindMany = vi.mocked(prisma.task.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 const sampleOrg = {
@@ -1192,5 +1196,89 @@ describe("POST /organizations/:id/join", () => {
     });
     expect(res.status).toBe(200);
     expect(observedEmail).toBe("alice@example.com");
+  });
+});
+
+describe("GET /organizations/:id/tasks", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => resetAuthUser());
+
+  function membership(role: "owner" | "admin" | "member" = "member") {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  const sampleListTask = {
+    id: "task-1",
+    organizationId: "org-1",
+    originMeetingId: null,
+    decisionItemId: null,
+    title: "資料作成",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "todo",
+    priority: null,
+    dueDateRaw: null,
+    dueDateEstimated: null,
+    assigneeRaw: null,
+    blockingItemId: null,
+    carriedOverCount: null,
+    ambiguityFlags: null,
+    progressNote: null,
+    dueDate: null,
+    startDate: null,
+    followUpDate: null,
+    version: 0,
+    createdAt: new Date("2026-05-17T00:00:00Z"),
+    updatedAt: new Date("2026-05-17T00:00:00Z"),
+    organization: { id: "org-1", name: "ACME 株式会社" },
+    originMeeting: null,
+    assignees: [],
+    recurringMeetings: [],
+  };
+
+  it("組織メンバーは 200 でタスク一覧を取得できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTaskFindMany.mockResolvedValue([sampleListTask] as never);
+
+    const res = await app.request("/organizations/org-1/tasks");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ id: string }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe("task-1");
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: "org-1" }),
+      }),
+    );
+  });
+
+  it("非メンバーは 404", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/organizations/org-1/tasks");
+    expect(res.status).toBe(404);
+    expect(mockTaskFindMany).not.toHaveBeenCalled();
+  });
+
+  it("status フィルタと assigneeId フィルタを where に反映する", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request(
+      "/organizations/org-1/tasks?status=todo&assigneeId=user-2",
+    );
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          status: { in: ["todo"] },
+          assignees: { some: { userId: "user-2" } },
+        }),
+      }),
+    );
   });
 });
