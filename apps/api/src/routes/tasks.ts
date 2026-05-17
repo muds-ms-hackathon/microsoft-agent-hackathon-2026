@@ -3,41 +3,8 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
 import { taskCreateSchema, taskUpdateSchema } from "../lib/schemas/task.js";
+import { serializeTask, taskDetailInclude } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
-
-// GET / POST / PATCH のレスポンス整形で共通利用する include 設定。
-// 中間テーブル経由の関連は user / recurringMeeting / originMeeting を最小フィールドで取得する。
-const taskInclude = {
-  assignees: {
-    include: {
-      user: {
-        select: { id: true, name: true, displayName: true, email: true },
-      },
-    },
-  },
-  recurringMeetings: {
-    include: {
-      recurringMeeting: { select: { id: true, name: true } },
-    },
-  },
-  originMeeting: {
-    select: { id: true, title: true, heldAt: true, recurringMeetingId: true },
-  },
-  organization: { select: { id: true, name: true } },
-} as const;
-
-// Prisma が返す中間テーブル経由の構造をフロント向けに平坦化する。
-// biome-ignore lint/suspicious/noExplicitAny: include 結果の型が広いので any で受ける
-function serializeTask(task: any) {
-  const { assignees, recurringMeetings, ...rest } = task;
-  return {
-    ...rest,
-    // biome-ignore lint/suspicious/noExplicitAny: 中間テーブルの行型
-    assignees: assignees.map((a: any) => a.user),
-    // biome-ignore lint/suspicious/noExplicitAny: 中間テーブルの行型
-    recurringMeetings: recurringMeetings.map((r: any) => r.recurringMeeting),
-  };
-}
 
 // 認証ユーザーが対象組織に所属しているか確認する。
 // 所属していない場合は組織の存在自体を露出させないため 404 で統一する。
@@ -110,7 +77,7 @@ async function requireTaskAccess(
 > {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    include: taskInclude,
+    include: taskDetailInclude,
   });
   if (!task) {
     return { ok: false, res: c.json({ error: "タスクが見つかりません" }, 404) };
@@ -195,7 +162,7 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
       }
       return tx.task.findUnique({
         where: { id: task.id },
-        include: taskInclude,
+        include: taskDetailInclude,
       });
     });
 
@@ -307,7 +274,7 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
       }
       const task = await tx.task.findUnique({
         where: { id },
-        include: taskInclude,
+        include: taskDetailInclude,
       });
       return { kind: "ok" as const, task };
     });
