@@ -110,11 +110,23 @@ export function MyTasksView({
         </p>
       </header>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <fieldset className="flex flex-wrap items-center gap-2">
-          <legend className="text-xs text-muted-foreground mr-2">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {/* fieldset/legend だと legend がブロック扱いで「ステータス」が
+            上段に押し出され、組織ラベルとベースラインが揃わない。
+            biome の useSemanticElements は fieldset を勧めるが、本ケースでは
+            視覚整列を優先し、a11y は aria-labelledby で代替する。 */}
+        {/* biome-ignore lint/a11y/useSemanticElements: legend が要素を改行させるため fieldset は使えない。aria-labelledby で代替 */}
+        <div
+          role="group"
+          aria-labelledby="status-filter-label"
+          className="flex flex-wrap items-center gap-2"
+        >
+          <span
+            id="status-filter-label"
+            className="text-xs text-muted-foreground"
+          >
             ステータス
-          </legend>
+          </span>
           {FILTERABLE_STATUSES.map((s) => {
             const checked = statusArr?.includes(s) ?? false;
             return (
@@ -137,7 +149,7 @@ export function MyTasksView({
               </label>
             );
           })}
-        </fieldset>
+        </div>
 
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           組織
