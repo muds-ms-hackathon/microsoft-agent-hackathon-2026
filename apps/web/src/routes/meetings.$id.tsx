@@ -84,9 +84,13 @@ export function MeetingDetailView({
 }) {
   const detailQuery = useMeetingDetail(id);
   const statusArr = parseStatusParam(search.status);
+  // Kanban view では status は列として可視化されるため、フィルタ UI も API への
+  // status 絞り込みも外す（全件取得）。URL の `?status=...` 自体は List に戻したときの
+  // 復元用に保持する。
+  const isKanbanView = search.view === "kanban";
   const tasksQuery = useMeetingTasks(
     id,
-    statusArr ? { status: statusArr } : undefined,
+    isKanbanView ? undefined : statusArr ? { status: statusArr } : undefined,
   );
 
   if (detailQuery.isLoading) {
@@ -163,44 +167,48 @@ export function MeetingDetailView({
           </div>
         </div>
 
-        {/* status フィルタ。My タスク・定例詳細と同じ inline label + aria-labelledby パターン。
-            biome の useSemanticElements は fieldset を勧めるが、legend のレイアウト崩れを
-            避けるため div + role=group で代替する。 */}
-        {/* biome-ignore lint/a11y/useSemanticElements: legend が要素を改行させるため fieldset は使えない。aria-labelledby で代替 */}
-        <div
-          role="group"
-          aria-labelledby="meeting-task-status-filter-label"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <span
-            id="meeting-task-status-filter-label"
-            className="text-xs text-muted-foreground"
+        {/* Kanban view では列ヘッダで status が可視化されているため、
+            フィルタ UI と二重化しないようブロックごと非表示にする。 */}
+        {!isKanbanView && (
+          // status フィルタ。My タスク・定例詳細と同じ inline label + aria-labelledby パターン。
+          // biome の useSemanticElements は fieldset を勧めるが、legend のレイアウト崩れを
+          // 避けるため div + role=group で代替する。
+          // biome-ignore lint/a11y/useSemanticElements: legend が要素を改行させるため fieldset は使えない。aria-labelledby で代替
+          <div
+            role="group"
+            aria-labelledby="meeting-task-status-filter-label"
+            className="flex flex-wrap items-center gap-2"
           >
-            ステータス
-          </span>
-          {FILTERABLE_STATUSES.map((s) => {
-            const checked = statusArr?.includes(s) ?? false;
-            return (
-              <label
-                key={s}
-                className={cn(
-                  "text-xs px-2 py-1 rounded-md border cursor-pointer select-none",
-                  checked
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-card text-foreground border-border/60 hover:bg-accent",
-                )}
-              >
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={checked}
-                  onChange={() => toggleStatus(s)}
-                />
-                {taskStatusLabels[s]}
-              </label>
-            );
-          })}
-        </div>
+            <span
+              id="meeting-task-status-filter-label"
+              className="text-xs text-muted-foreground"
+            >
+              ステータス
+            </span>
+            {FILTERABLE_STATUSES.map((s) => {
+              const checked = statusArr?.includes(s) ?? false;
+              return (
+                <label
+                  key={s}
+                  className={cn(
+                    "text-xs px-2 py-1 rounded-md border cursor-pointer select-none",
+                    checked
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-card text-foreground border-border/60 hover:bg-accent",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={checked}
+                    onChange={() => toggleStatus(s)}
+                  />
+                  {taskStatusLabels[s]}
+                </label>
+              );
+            })}
+          </div>
+        )}
 
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
