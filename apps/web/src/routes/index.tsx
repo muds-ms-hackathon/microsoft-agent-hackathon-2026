@@ -1,8 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
-import type { MeetingListItem } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
+import {
+  type MeetingListItem,
+  meetingListQueryOptions,
+} from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
 import { partitionMeetings } from "@/features/recurring-meetings/meetingSections";
-import { api, authHeaders } from "@/lib/api";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
@@ -96,17 +98,9 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
 
   // 全定例の会議を並列取得
   const meetingQueries = useQueries({
-    queries: recurringMeetings.map((rm) => ({
-      queryKey: ["recurring-meetings", rm.id, "meetings"],
-      queryFn: async () => {
-        const res = await api["recurring-meetings"][":id"].meetings.$get(
-          { param: { id: rm.id } },
-          authHeaders(),
-        );
-        if (!res.ok) throw new Error(`Failed: ${res.status}`);
-        return (await res.json()) as MeetingListItem[];
-      },
-    })),
+    queries: recurringMeetings.map((rm) =>
+      meetingListQueryOptions(rm.id),
+    ),
   });
 
   const isLoading = isRmLoading || meetingQueries.some((q) => q.isLoading);
