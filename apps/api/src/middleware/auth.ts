@@ -45,19 +45,27 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
     );
   }
 
-  // 既存ユーザーは IdP 側で email / name が変更され得るためログイン都度同期する。
-  // displayName はユーザーがアプリ側で編集する想定のため update 対象から外す（プロフィール編集 API は別 Issue で対応）。
-  // 新規作成時のみ displayName を name で初期化する。
-  let user: User;
+  // まず findUnique で取得し、差分があるときのみ update / 不在なら create を発行する。
+  // upsert を毎リクエスト走らせると、同一ユーザーに対する並列リクエストで
+  // 不要な UPDATE 競合を生むため、書き込みは「変更があった時のみ」に絞る。
+  // displayName はユーザーがアプリ側で編集する想定のため update 対象から外す
+  // （プロフィール編集 API は別 Issue）。新規作成時のみ displayName を name で初期化する。
+  let user: User | null;
   try {
-    user = await prisma.user.upsert({
-      where: { externalId },
-      create: { externalId, email, name, displayName: name },
-      update: { email, name },
-    });
+    user = await prisma.user.findUnique({ where: { externalId } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: { externalId, email, name, displayName: name },
+      });
+    } else if (user.email !== email || user.name !== name) {
+      user = await prisma.user.update({
+        where: { externalId },
+        data: { email, name },
+      });
+    }
   } catch (e) {
     // email は @unique のため、別ユーザーが既に同一メールを保有している場合は P2002 になる。
-    // 利用者向けには「メールが他アカウントで使用中」であることを 409 で返し、500 で握り潰さない。
+    // create / update いずれで起きても 409 で利用者向けに通知する。
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&
       e.code === "P2002"
