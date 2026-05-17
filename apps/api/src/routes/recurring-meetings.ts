@@ -2,9 +2,26 @@ import { zValidator } from "@hono/zod-validator";
 import type { MeetingRole, RecurringMeeting } from "@prisma/client";
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingUpdateSchema } from "../lib/schemas/recurring-meeting.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+
+// 定例配下に紐付ける Meeting 作成リクエストの schema。
+// estimatedDurationMinutes 未指定なら定例の defaultDurationMinutes を採用する。
+// 範囲は RecurringMeeting.defaultDurationMinutes と同じ 1〜480 分。
+const createMeetingSchema = z.object({
+  title: z.string().min(1, "title は必須です"),
+  heldAt: z
+    .string()
+    .datetime({ message: "heldAt は ISO8601 で指定してください" }),
+  estimatedDurationMinutes: z
+    .number()
+    .int()
+    .min(1, "estimatedDurationMinutes は 1 分以上で指定してください")
+    .max(480, "estimatedDurationMinutes は 480 分以下で指定してください")
+    .optional(),
+});
 
 // 認証ユーザーが定例の所属組織のメンバーであるかを確認する共通ガード。
 // 定例不存在・所属なしいずれも 404 で統一し、組織や定例の存在自体を
@@ -45,6 +62,42 @@ const meetingRoleOrder: Record<MeetingRole, number> = {
 
 export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
+  .post("/:id/meetings", zValidator("json", createMeetingSchema), async (c) => {
+    const id = c.req.param("id");
+    const { title, heldAt, estimatedDurationMinutes } = c.req.valid("json");
+
+    const meeting = await prisma.recurringMeeting.findUnique({
+      where: { id },
+    });
+    const guard = await requireRecurringAccess(c, meeting);
+    if (!guard.ok) return guard.res;
+
+    // estimatedDurationMinutes 未指定なら定例のデフォルト所要時間を採用する。
+    // 定例ごとに「だいたい N 分」が決まっている前提のもと、個別 Meeting 側で
+    // 必要に応じて上書きできる設計（Issue #155 の設計コンテキスト）。
+    const duration =
+      estimatedDurationMinutes ?? guard.meeting.defaultDurationMinutes;
+
+    // Service Bus 通知（meeting.created）はここでは送らない。
+    // AI 処理（議事録解析）のトリガーは「文字起こし入力時」が正しいトリガーで、
+    // 本エンドポイントは「会議の枠」を確保するだけ。Issue #55 で再設計する。
+    const created = await prisma.meeting.create({
+      data: {
+        title,
+        heldAt: new Date(heldAt),
+        estimatedDurationMinutes: duration,
+        recurringMeetingId: id,
+      },
+      select: {
+        id: true,
+        title: true,
+        heldAt: true,
+        estimatedDurationMinutes: true,
+        recurringMeetingId: true,
+      },
+    });
+    return c.json(created, 201);
+  })
   .get("/:id/meetings", async (c) => {
     const id = c.req.param("id");
 

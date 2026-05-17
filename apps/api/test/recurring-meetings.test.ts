@@ -17,6 +17,7 @@ vi.mock("../src/lib/prisma.js", () => ({
     },
     meeting: {
       findMany: vi.fn(),
+      create: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -63,6 +64,7 @@ const mockRecurringUpdate = vi.mocked(prisma.recurringMeeting.update);
 const mockRecurringDelete = vi.mocked(prisma.recurringMeeting.delete);
 const mockMeetingMemberFindUnique = vi.mocked(prisma.meetingMember.findUnique);
 const mockMeetingFindMany = vi.mocked(prisma.meeting.findMany);
+const mockMeetingCreate = vi.mocked(prisma.meeting.create);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member") {
@@ -698,5 +700,173 @@ describe("GET /recurring-meetings/:id/meetings", () => {
     const res = await app.request("/recurring-meetings/rmtg-1/meetings");
     expect(res.status).toBe(404);
     expect(mockMeetingFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /recurring-meetings/:id/meetings", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const createdMeeting = {
+    id: "mtg-new",
+    title: "週次定例 2026-05-20",
+    heldAt: new Date("2026-05-20T01:00:00Z"),
+    estimatedDurationMinutes: 60,
+    recurringMeetingId: "rmtg-1",
+  };
+
+  it("組織メンバーは Meeting を作成でき、estimatedDurationMinutes 指定値を採用する", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockMeetingCreate.mockResolvedValue({
+      ...createdMeeting,
+      estimatedDurationMinutes: 90,
+    } as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例 2026-05-20",
+        heldAt: "2026-05-20T01:00:00.000Z",
+        estimatedDurationMinutes: 90,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      id: string;
+      title: string;
+      estimatedDurationMinutes: number;
+      recurringMeetingId: string;
+    };
+    expect(body.id).toBe("mtg-new");
+    expect(body.estimatedDurationMinutes).toBe(90);
+    expect(body.recurringMeetingId).toBe("rmtg-1");
+
+    expect(mockMeetingCreate).toHaveBeenCalledWith({
+      data: {
+        title: "週次定例 2026-05-20",
+        heldAt: new Date("2026-05-20T01:00:00.000Z"),
+        estimatedDurationMinutes: 90,
+        recurringMeetingId: "rmtg-1",
+      },
+      select: {
+        id: true,
+        title: true,
+        heldAt: true,
+        estimatedDurationMinutes: true,
+        recurringMeetingId: true,
+      },
+    });
+  });
+
+  it("estimatedDurationMinutes 未指定なら定例の defaultDurationMinutes を採用する", async () => {
+    // sampleRecurring.defaultDurationMinutes は 60。
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+    mockMeetingCreate.mockResolvedValue(createdMeeting as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例 2026-05-20",
+        heldAt: "2026-05-20T01:00:00.000Z",
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(mockMeetingCreate).toHaveBeenCalledWith({
+      data: {
+        title: "週次定例 2026-05-20",
+        heldAt: new Date("2026-05-20T01:00:00.000Z"),
+        estimatedDurationMinutes: 60,
+        recurringMeetingId: "rmtg-1",
+      },
+      select: expect.any(Object),
+    });
+  });
+
+  it("title 欠落は 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ heldAt: "2026-05-20T01:00:00.000Z" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMeetingCreate).not.toHaveBeenCalled();
+  });
+
+  it("heldAt 欠落は 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "週次定例" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("heldAt が ISO8601 でない場合は 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "週次定例", heldAt: "not-a-date" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("estimatedDurationMinutes が 0 以下なら 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例",
+        heldAt: "2026-05-20T01:00:00.000Z",
+        estimatedDurationMinutes: 0,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("estimatedDurationMinutes が 480 を超えると 400 を返す", async () => {
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例",
+        heldAt: "2026-05-20T01:00:00.000Z",
+        estimatedDurationMinutes: 481,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("定例が存在しない場合は 404 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/recurring-meetings/missing/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例",
+        heldAt: "2026-05-20T01:00:00.000Z",
+      }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockMeetingCreate).not.toHaveBeenCalled();
+  });
+
+  it("組織メンバーでなければ 404 を返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "週次定例",
+        heldAt: "2026-05-20T01:00:00.000Z",
+      }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockMeetingCreate).not.toHaveBeenCalled();
   });
 });
