@@ -252,3 +252,76 @@ describe("GET /meetings/:id/tasks", () => {
     expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
 });
+
+describe("GET /meetings/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const detailMeeting = {
+    id: "mtg-1",
+    title: "第3回",
+    heldAt: new Date("2026-05-17T10:00:00Z"),
+    estimatedDurationMinutes: 60,
+    estimationNote: null,
+    sequenceNumber: 3,
+    previousMeetingId: null,
+    transcriptionQuality: null,
+    supplementaryMemo: null,
+    meetingType: "recurring_meeting",
+    recurringMeetingId: "rmtg-1",
+    createdAt: new Date("2026-05-01T00:00:00Z"),
+    recurringMeeting: {
+      id: "rmtg-1",
+      name: "週次定例",
+      organizationId: "org-1",
+      organization: { id: "org-1", name: "ACME" },
+    },
+  };
+
+  it("組織メンバーは 200 で詳細を取得できる", async () => {
+    mockFindUnique.mockResolvedValue(detailMeeting as never);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+
+    const res = await app.request("/meetings/mtg-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      id: string;
+      title: string;
+      recurringMeeting: { id: string; name: string };
+      organization: { id: string; name: string };
+    };
+    expect(body.id).toBe("mtg-1");
+    expect(body.title).toBe("第3回");
+    expect(body.recurringMeeting).toEqual({ id: "rmtg-1", name: "週次定例" });
+    expect(body.organization).toEqual({ id: "org-1", name: "ACME" });
+  });
+
+  it("会議不存在は 404", async () => {
+    mockFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/missing");
+    expect(res.status).toBe(404);
+  });
+
+  it("単発会議（recurringMeetingId=null）は 404", async () => {
+    mockFindUnique.mockResolvedValue({
+      id: "mtg-x",
+      title: "単発",
+      heldAt: new Date(),
+      recurringMeetingId: null,
+      recurringMeeting: null,
+    } as never);
+    const res = await app.request("/meetings/mtg-x");
+    expect(res.status).toBe(404);
+  });
+
+  it("組織非所属は 404", async () => {
+    mockFindUnique.mockResolvedValue(detailMeeting as never);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/mtg-1");
+    expect(res.status).toBe(404);
+  });
+});
