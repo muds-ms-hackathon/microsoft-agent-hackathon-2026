@@ -45,6 +45,32 @@ const meetingRoleOrder: Record<MeetingRole, number> = {
 
 export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
+  .get("/:id/meetings", async (c) => {
+    const id = c.req.param("id");
+
+    // 定例存在チェック → 組織所属確認の順で 404 短絡。
+    // members を取らない軽量クエリで認可だけ通す。
+    const meeting = await prisma.recurringMeeting.findUnique({
+      where: { id },
+    });
+    const guard = await requireRecurringAccess(c, meeting);
+    if (!guard.ok) return guard.res;
+
+    // レスポンスは「会議一覧」用途に必要な 5 フィールドに限定する。
+    // 議事録メタ・タスク・話者などは詳細エンドポイントの責務（別 Issue）。
+    const meetings = await prisma.meeting.findMany({
+      where: { recurringMeetingId: id },
+      orderBy: { heldAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        heldAt: true,
+        estimatedDurationMinutes: true,
+        recurringMeetingId: true,
+      },
+    });
+    return c.json(meetings);
+  })
   .get("/:id", async (c) => {
     const id = c.req.param("id");
 
