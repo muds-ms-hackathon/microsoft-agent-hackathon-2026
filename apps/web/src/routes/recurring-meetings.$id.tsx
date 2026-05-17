@@ -255,9 +255,7 @@ export function RecurringMeetingDetailView({
           <AssigneeFilter
             orgId={detail.organizationId}
             value={search.assigneeId}
-            onChange={(next) =>
-              onSearchChange({ ...search, assigneeId: next })
-            }
+            onChange={(next) => onSearchChange({ ...search, assigneeId: next })}
             currentUserId={currentUserId}
           />
 

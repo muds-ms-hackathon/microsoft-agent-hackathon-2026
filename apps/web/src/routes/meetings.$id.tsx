@@ -201,9 +201,7 @@ export function MeetingDetailView({
           <AssigneeFilter
             orgId={detail.organization.id}
             value={search.assigneeId}
-            onChange={(next) =>
-              onSearchChange({ ...search, assigneeId: next })
-            }
+            onChange={(next) => onSearchChange({ ...search, assigneeId: next })}
             currentUserId={currentUserId}
           />
 

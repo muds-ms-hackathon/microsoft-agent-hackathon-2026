@@ -161,7 +161,7 @@ describe("AssigneeFilter", () => {
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
 
-  it("「未アサイン」を選ぶと onChange に \"none\" が渡る", async () => {
+  it('「未アサイン」を選ぶと onChange に "none" が渡る', async () => {
     vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
       mockJson(members),
     );
