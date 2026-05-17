@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
@@ -101,13 +103,28 @@ export function MyTasksView({
       aria-labelledby="my-tasks-title"
       className="container mx-auto p-8 space-y-6"
     >
-      <header>
-        <h1 id="my-tasks-title" className="text-2xl font-bold">
-          My タスク
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          自分が担当中のタスクを組織横断で表示します
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 id="my-tasks-title" className="text-2xl font-bold">
+            My タスク
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            自分が担当中のタスクを組織横断で表示します
+          </p>
+        </div>
+        {/* currentOrgId が無い場合は組織を特定できないため作成不可。
+            disabled 化して title でガイダンスを出す（toast 未導入のため）。 */}
+        {currentOrgId ? (
+          <CreateTaskDialog organizationId={currentOrgId} />
+        ) : (
+          <Button
+            size="sm"
+            disabled
+            title="タスクを作成するには組織を選択してください"
+          >
+            タスクを追加
+          </Button>
+        )}
       </header>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
@@ -188,7 +205,23 @@ export function MyTasksView({
       ) : isError ? (
         <p className="text-destructive">タスクの取得に失敗しました</p>
       ) : filtered.length === 0 ? (
-        <p className="text-muted-foreground">担当中のタスクはありません</p>
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-muted-foreground">担当中のタスクはありません</p>
+          {/* fast path CTA。ヘッダの CTA と独立した CreateTaskDialog インスタンスだが、
+              成功時に useMyTasks のキャッシュ invalidate で一覧が更新されるため、
+              インスタンスを共有しなくても挙動上の問題はない。 */}
+          {currentOrgId ? (
+            <CreateTaskDialog organizationId={currentOrgId} />
+          ) : (
+            <Button
+              size="sm"
+              disabled
+              title="タスクを作成するには組織を選択してください"
+            >
+              タスクを追加
+            </Button>
+          )}
+        </div>
       ) : (
         <TaskListWithDialogs
           tasks={filtered}
