@@ -100,6 +100,9 @@ const taskStatusValuesSchema = z
 
 export const taskListQuerySchema = z.object({
   status: taskStatusValuesSchema.optional(),
+  // assigneeId は通常 userId（任意の非空文字列）だが、特殊値 "none" を許容する。
+  // "none" は「未アサインのタスクだけ」を意味するセンチネルで、where 構築時に
+  // `assignees: { none: {} }` に展開される。
   assigneeId: z.string().min(1).optional(),
   dueBefore: z
     .string()
@@ -128,7 +131,8 @@ type TaskStatusWhere = {
 };
 type TaskListWhere = {
   status?: TaskStatusWhere;
-  assignees?: { some: { userId: string } };
+  // 通常は some（指定 userId のタスク）、"none" センチネルでは none（未アサインのみ）。
+  assignees?: { some: { userId: string } } | { none: Record<string, never> };
   dueDate?: { gte?: Date; lte?: Date; lt?: Date };
   AND?: Array<{ status: TaskStatusWhere }>;
 };
@@ -144,7 +148,10 @@ export function buildTaskListWhere(
   if (filters.status && filters.status.length > 0) {
     where.status = { in: filters.status };
   }
-  if (filters.assigneeId) {
+  if (filters.assigneeId === "none") {
+    // 「未アサインのみ」絞り込み。任意の assignee を持つタスクを除外する。
+    where.assignees = { none: {} };
+  } else if (filters.assigneeId) {
     where.assignees = { some: { userId: filters.assigneeId } };
   }
   if (filters.dueBefore || filters.dueAfter) {
