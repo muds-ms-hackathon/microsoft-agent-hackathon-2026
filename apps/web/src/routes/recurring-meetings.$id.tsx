@@ -7,6 +7,7 @@ import {
   describeCron,
   parseCron,
 } from "@/features/recurring-meetings/scheduleCron";
+import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { TaskRow } from "@/features/tasks/components/TaskRow";
 import { useRecurringMeetingTasks } from "@/features/tasks/hooks/useRecurringMeetingTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
@@ -190,16 +191,12 @@ export function RecurringMeetingDetailView({
       <section aria-label="タスク" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">タスク</h2>
-          {/* 作成ダイアログは #169 で実装予定。完成までは disabled プレースホルダ。
-              title 属性で意図をホバー時に説明する。 */}
-          <button
-            type="button"
-            disabled
-            title="タスク作成ダイアログは準備中です"
-            className="text-sm px-3 py-1.5 rounded-md border border-border/60 bg-muted/50 text-muted-foreground cursor-not-allowed"
-          >
-            タスクを追加
-          </button>
+          {/* タスク作成ダイアログ (#169) で実装したものを起動する。
+              現定例を初期 attach する。originMeetingId は会議詳細ページ側で扱う。 */}
+          <CreateTaskDialog
+            organizationId={detail.organizationId}
+            recurringMeetingId={detail.id}
+          />
         </div>
 
         {/* status フィルタ。My タスクと同じ inline label + aria-labelledby パターン。

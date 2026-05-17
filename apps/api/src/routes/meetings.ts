@@ -49,6 +49,49 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
     }
     return c.json(meeting, 201);
   })
+  .get("/:id", auth, async (c) => {
+    const id = c.req.param("id");
+    // 会議 + 紐付く定例 + 組織を一度に取得する。単発会議（recurringMeetingId=null）は
+    // 組織判定不能のため 404 で拒否する（/:id/tasks と同方針）。
+    const meeting = await prisma.meeting.findUnique({
+      where: { id },
+      include: {
+        recurringMeeting: {
+          include: {
+            organization: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    if (!meeting?.recurringMeeting) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
+
+    const user = c.var.user;
+    const membership = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: user.id,
+          organizationId: meeting.recurringMeeting.organizationId,
+        },
+      },
+    });
+    if (!membership) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
+
+    // 詳細レスポンス: meeting メタ + 紐付く recurringMeeting (id/name) + organization (id/name) の最小情報。
+    // 議事録メタや解析結果は別 Issue で追加する想定なので、ここでは構造を保ったまま薄く返す。
+    const { recurringMeeting, ...rest } = meeting;
+    return c.json({
+      ...rest,
+      recurringMeeting: {
+        id: recurringMeeting.id,
+        name: recurringMeeting.name,
+      },
+      organization: recurringMeeting.organization,
+    });
+  })
   .get(
     "/:id/tasks",
     auth,
