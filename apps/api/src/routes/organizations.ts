@@ -48,10 +48,13 @@ const nextMeetingsQuerySchema = z.object({
 
 // owner ロールの招待は不可（owner は組織作成者のみ）。
 // expiresInDays は 1〜365 日。email はサーバ側で trim + 小文字化して保存・比較する。
+// role / expiresInDays は省略・null のいずれも「未指定」として扱い、
+// ハンドラ側で role="member" / 7 日のデフォルトにフォールバックする。
+// JSON では undefined を表現できないため、クライアントが null で送る慣習に合わせる。
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
-  role: z.enum(["admin", "member"]).optional(),
-  expiresInDays: z.number().int().positive().max(365).optional(),
+  role: z.enum(["admin", "member"]).nullable().optional(),
+  expiresInDays: z.number().int().positive().max(365).nullable().optional(),
 });
 
 // 認証ユーザーが対象組織に所属していることを確認する。

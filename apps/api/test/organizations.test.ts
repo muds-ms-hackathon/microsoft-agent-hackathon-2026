@@ -817,6 +817,33 @@ describe("POST /organizations/:id/invite", () => {
     });
   });
 
+  it("role / expiresInDays に null を渡しても未指定と同じデフォルトが採用される", async () => {
+    // JSON では undefined を表現できず、クライアントが「未指定」を null で送る
+    // 慣習があるため、null をスキーマで弾かずに ?? フォールバックへ載せる。
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationCreate.mockResolvedValue(sampleInvitation);
+
+    const res = await app.request("/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "bob@example.com",
+        role: null,
+        expiresInDays: null,
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(mockInvitationCreate).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org-1",
+        email: "bob@example.com",
+        invitedBy: "user-1",
+        role: "member",
+        expiresAt: new Date("2026-05-13T00:00:00Z"),
+      },
+    });
+  });
+
   it("member は 403 を返す", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
     const res = await app.request("/organizations/org-1/invite", {
