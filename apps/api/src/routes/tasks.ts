@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
-import { taskCreateSchema } from "../lib/schemas/task.js";
+import { taskCreateSchema, taskUpdateSchema } from "../lib/schemas/task.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 
 // GET / POST / PATCH のレスポンス整形で共通利用する include 設定。
@@ -206,4 +206,117 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
     const guard = await requireTaskAccess(c, id);
     if (!guard.ok) return guard.res;
     return c.json(serializeTask(guard.task));
+  })
+  .patch("/:id", zValidator("json", taskUpdateSchema), async (c) => {
+    const id = c.req.param("id");
+    const input = c.req.valid("json");
+
+    const guard = await requireTaskAccess(c, id);
+    if (!guard.ok) return guard.res;
+
+    const organizationId = guard.task.organizationId as string;
+
+    // assignees / recurringMeetings の置換が指定されたら、クロス組織を再検証する。
+    // 作成時と同じ整合性ルール（同一組織内のみ許可）。
+    if (input.assigneeUserIds !== undefined) {
+      if (
+        !(await validateAssigneesInOrg(organizationId, input.assigneeUserIds))
+      ) {
+        return c.json(
+          { error: "担当者は組織のメンバーである必要があります" },
+          400,
+        );
+      }
+    }
+    if (input.recurringMeetingIds !== undefined) {
+      if (
+        !(await validateRecurringMeetingsInOrg(
+          organizationId,
+          input.recurringMeetingIds,
+        ))
+      ) {
+        return c.json({ error: "定例は組織に属している必要があります" }, 400);
+      }
+    }
+    if (input.originMeetingId) {
+      const ok = await validateOriginMeetingInOrg(
+        organizationId,
+        input.originMeetingId,
+      );
+      if (!ok) {
+        return c.json(
+          { error: "発生源会議が見つからないか組織に属していません" },
+          400,
+        );
+      }
+    }
+
+    // 楽観的ロック: where に id + version を指定して updateMany し、
+    // count === 0 なら version 不一致として 409。Prisma の単一 update は
+    // id + version の AND を unique 制約として扱えないため updateMany を使う。
+    const updateData = {
+      ...(input.title !== undefined && { title: input.title }),
+      ...(input.body !== undefined && { body: input.body }),
+      ...(input.status !== undefined && { status: input.status }),
+      ...(input.priority !== undefined && { priority: input.priority }),
+      ...(input.originMeetingId !== undefined && {
+        originMeetingId: input.originMeetingId,
+      }),
+      ...(input.dueDate !== undefined && {
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+      }),
+      ...(input.startDate !== undefined && {
+        startDate: input.startDate ? new Date(input.startDate) : null,
+      }),
+      ...(input.followUpDate !== undefined && {
+        followUpDate: input.followUpDate ? new Date(input.followUpDate) : null,
+      }),
+      version: { increment: 1 },
+    };
+
+    const result = await prisma.$transaction(async (tx) => {
+      const { count } = await tx.task.updateMany({
+        where: { id, version: input.version },
+        data: updateData,
+      });
+      if (count === 0) {
+        return { kind: "version_conflict" as const };
+      }
+      // assignees / recurringMeetings の全置換。undefined ならスキップ。
+      if (input.assigneeUserIds !== undefined) {
+        await tx.taskAssignee.deleteMany({ where: { taskId: id } });
+        if (input.assigneeUserIds.length > 0) {
+          await tx.taskAssignee.createMany({
+            data: input.assigneeUserIds.map((userId) => ({
+              taskId: id,
+              userId,
+            })),
+          });
+        }
+      }
+      if (input.recurringMeetingIds !== undefined) {
+        await tx.taskRecurringMeeting.deleteMany({ where: { taskId: id } });
+        if (input.recurringMeetingIds.length > 0) {
+          await tx.taskRecurringMeeting.createMany({
+            data: input.recurringMeetingIds.map((recurringMeetingId) => ({
+              taskId: id,
+              recurringMeetingId,
+            })),
+          });
+        }
+      }
+      const task = await tx.task.findUnique({
+        where: { id },
+        include: taskInclude,
+      });
+      return { kind: "ok" as const, task };
+    });
+
+    if (result.kind === "version_conflict") {
+      return c.json(
+        { error: "他のユーザーが先に更新しました。最新を取得してください" },
+        409,
+      );
+    }
+    return c.json(serializeTask(result.task));
   });

@@ -400,3 +400,204 @@ describe("GET /tasks/:id", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("PATCH /tasks/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("title 更新が 200、version は updateMany でインクリメントされる", async () => {
+    // 認可は requireTaskAccess の findUnique + membership で通す
+    mockTaskFindUnique
+      .mockResolvedValueOnce(sampleTask as never) // requireTaskAccess の初回呼び出し
+      .mockResolvedValueOnce({
+        ...sampleTask,
+        title: "更新後",
+        version: 1,
+      } as never); // 再取得
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        task: {
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUnique: vi
+            .fn()
+            .mockResolvedValue({ ...sampleTask, title: "更新後", version: 1 }),
+        },
+        taskAssignee: {
+          deleteMany: vi.fn(),
+          createMany: vi.fn(),
+        },
+        taskRecurringMeeting: {
+          deleteMany: vi.fn(),
+          createMany: vi.fn(),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      const result = await (fn as (t: any) => Promise<unknown>)(tx);
+      expect(tx.task.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "task-1", version: 0 },
+          data: expect.objectContaining({
+            title: "更新後",
+            version: { increment: 1 },
+          }),
+        }),
+      );
+      return result;
+    });
+
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, title: "更新後" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { version: number; title: string };
+    expect(body.version).toBe(1);
+    expect(body.title).toBe("更新後");
+  });
+
+  it("version 不一致は 409", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        task: {
+          // updateMany が 0 件返るのが version 不一致のシグナル
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          findUnique: vi.fn(),
+        },
+        taskAssignee: { deleteMany: vi.fn(), createMany: vi.fn() },
+        taskRecurringMeeting: { deleteMany: vi.fn(), createMany: vi.fn() },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 99, title: "更新後" }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it("status を todo→in_progress に変更できる", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        task: {
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUnique: vi.fn().mockResolvedValue({
+            ...sampleTask,
+            status: "in_progress",
+            version: 1,
+          }),
+        },
+        taskAssignee: { deleteMany: vi.fn(), createMany: vi.fn() },
+        taskRecurringMeeting: { deleteMany: vi.fn(), createMany: vi.fn() },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "in_progress" }),
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it("status=draft は 400（AI 専用なので手動 PATCH で受け付けない）", async () => {
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("全フィールド未指定の更新は 400", async () => {
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0 }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("version 欠落は 400", async () => {
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "更新後" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("タスクが存在しない場合は 404", async () => {
+    mockTaskFindUnique.mockResolvedValue(null);
+    const res = await app.request("/tasks/missing", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, title: "x" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("assigneeUserIds の置換で他組織混入は 400", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    // 2 名指定したが 1 名しか組織メンバーとして見つからない
+    mockMembershipFindMany.mockResolvedValue([membership()]);
+
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: 0,
+        assigneeUserIds: ["user-1", "user-outside"],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it("assigneeUserIds:[] は全削除を行う", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    let deletedAssignees = false;
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        task: {
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUnique: vi.fn().mockResolvedValue(sampleTask),
+        },
+        taskAssignee: {
+          deleteMany: vi.fn(() => {
+            deletedAssignees = true;
+            return Promise.resolve({ count: 0 });
+          }),
+          createMany: vi.fn(),
+        },
+        taskRecurringMeeting: { deleteMany: vi.fn(), createMany: vi.fn() },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, assigneeUserIds: [] }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(deletedAssignees).toBe(true);
+  });
+});
