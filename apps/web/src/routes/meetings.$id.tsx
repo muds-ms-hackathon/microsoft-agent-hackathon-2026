@@ -1,7 +1,13 @@
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
+import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
 import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
+import {
+  ViewToggle,
+  type TaskView,
+} from "@/features/tasks/components/ViewToggle";
 import { useMeetingTasks } from "@/features/tasks/hooks/useMeetingTasks";
+import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import { taskStatusLabels } from "@/features/tasks/labels";
 import type { TaskStatus } from "@/features/tasks/types";
 import { cn } from "@/lib/utils";
@@ -18,6 +24,7 @@ const FILTERABLE_STATUSES: TaskStatus[] = [
 
 const meetingSearchSchema = z.object({
   status: z.string().optional(),
+  view: z.enum(["list", "kanban"]).optional(),
 });
 
 type MeetingSearch = z.infer<typeof meetingSearchSchema>;
@@ -137,12 +144,23 @@ export function MeetingDetailView({
       <section aria-label="タスク" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">タスク</h2>
-          {/* この会議由来として origin を伝播し、紐付け先の定例も初期 attach する。 */}
-          <CreateTaskDialog
-            organizationId={detail.organization.id}
-            recurringMeetingId={detail.recurringMeeting.id}
-            originMeetingId={detail.id}
-          />
+          <div className="flex items-center gap-2">
+            <ViewToggle
+              view={(search.view ?? "list") as TaskView}
+              onChange={(next) =>
+                onSearchChange({
+                  ...search,
+                  view: next === "list" ? undefined : next,
+                })
+              }
+            />
+            {/* この会議由来として origin を伝播し、紐付け先の定例も初期 attach する。 */}
+            <CreateTaskDialog
+              organizationId={detail.organization.id}
+              recurringMeetingId={detail.recurringMeeting.id}
+              originMeetingId={detail.id}
+            />
+          </div>
         </div>
 
         {/* status フィルタ。My タスク・定例詳細と同じ inline label + aria-labelledby パターン。
@@ -192,6 +210,16 @@ export function MeetingDetailView({
           <p className="text-muted-foreground">
             この会議から発生したタスクはまだありません
           </p>
+        ) : search.view === "kanban" ? (
+          <KanbanBoard
+            tasks={tasksQuery.data ?? []}
+            queryKey={taskQueryKeys.meeting(
+              id,
+              statusArr ? { status: statusArr } : {},
+            )}
+            ariaLabel="会議由来のタスク Kanban"
+            now={now}
+          />
         ) : (
           <TaskListWithDialogs
             tasks={tasksQuery.data ?? []}

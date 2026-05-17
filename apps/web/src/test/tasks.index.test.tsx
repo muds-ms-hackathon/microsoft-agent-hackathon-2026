@@ -519,6 +519,39 @@ describe("MyTasksView - フィルタ整合", () => {
   });
 });
 
+describe("MyTasksView - View 切替", () => {
+  it("デフォルト (view 未指定) では List 表示", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+    renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);
+    expect(await screen.findByLabelText("My タスク一覧")).toBeInTheDocument();
+    expect(screen.queryByTestId("kanban-board")).not.toBeInTheDocument();
+  });
+
+  it("view=kanban で KanbanBoard が描画される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+    renderWithQuery(
+      <MyTasksView search={{ view: "kanban" }} onSearchChange={() => {}} />,
+    );
+    expect(await screen.findByTestId("kanban-board")).toBeInTheDocument();
+    expect(screen.queryByLabelText("My タスク一覧")).not.toBeInTheDocument();
+  });
+
+  it("ViewToggle で kanban を選ぶと onSearchChange に view=kanban が渡る", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+    const onSearchChange = vi.fn();
+    renderWithQuery(
+      <MyTasksView search={{}} onSearchChange={onSearchChange} />,
+    );
+
+    await screen.findByLabelText("My タスク一覧");
+    await userEvent.click(screen.getByRole("tab", { name: /Kanban/ }));
+
+    expect(onSearchChange).toHaveBeenCalledWith(
+      expect.objectContaining({ view: "kanban" }),
+    );
+  });
+});
+
 describe("MyTasksView - タスク作成 CTA", () => {
   it("currentOrgId ありなら「タスクを追加」ボタンが有効になる", async () => {
     vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));

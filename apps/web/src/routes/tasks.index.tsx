@@ -1,8 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
+import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
 import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
+import {
+  ViewToggle,
+  type TaskView,
+} from "@/features/tasks/components/ViewToggle";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
+import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import type { TaskListItem, TaskStatus } from "@/features/tasks/types";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { cn } from "@/lib/utils";
@@ -28,6 +34,8 @@ const FILTERABLE_STATUSES: TaskStatus[] = [
 const tasksSearchSchema = z.object({
   status: z.string().optional(),
   orgId: z.string().optional(),
+  // List / Kanban のビュー切替。デフォルトは list。
+  view: z.enum(["list", "kanban"]).optional(),
 });
 
 type TasksSearch = z.infer<typeof tasksSearchSchema>;
@@ -112,19 +120,30 @@ export function MyTasksView({
             自分が担当中のタスクを組織横断で表示します
           </p>
         </div>
-        {/* currentOrgId が無い場合は組織を特定できないため作成不可。
-            disabled 化して title でガイダンスを出す（toast 未導入のため）。 */}
-        {currentOrgId ? (
-          <CreateTaskDialog organizationId={currentOrgId} />
-        ) : (
-          <Button
-            size="sm"
-            disabled
-            title="タスクを作成するには組織を選択してください"
-          >
-            タスクを追加
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ViewToggle
+            view={(search.view ?? "list") as TaskView}
+            onChange={(next) =>
+              onSearchChange({
+                ...search,
+                view: next === "list" ? undefined : next,
+              })
+            }
+          />
+          {/* currentOrgId が無い場合は組織を特定できないため作成不可。
+              disabled 化して title でガイダンスを出す（toast 未導入のため）。 */}
+          {currentOrgId ? (
+            <CreateTaskDialog organizationId={currentOrgId} />
+          ) : (
+            <Button
+              size="sm"
+              disabled
+              title="タスクを作成するには組織を選択してください"
+            >
+              タスクを追加
+            </Button>
+          )}
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
@@ -222,6 +241,13 @@ export function MyTasksView({
             </Button>
           )}
         </div>
+      ) : search.view === "kanban" ? (
+        <KanbanBoard
+          tasks={filtered}
+          queryKey={taskQueryKeys.me(statusArr ? { status: statusArr } : {})}
+          ariaLabel="My タスク Kanban"
+          now={now}
+        />
       ) : (
         <TaskListWithDialogs
           tasks={filtered}
