@@ -44,7 +44,8 @@ model Meeting {
   relatedMeetingRefs   RelatedPastMeeting[] @relation("RelatedMeeting")
   decisionItems        DecisionItem[]
   decisionItemsPlanned DecisionItem[]       @relation("PlannedMeeting")
-  tasks                Task[]
+  // 当該会議を発生源 (originMeetingId) とするタスク。会議削除時は Task 側 SetNull。
+  originTasks          Task[]
   ambiguousInfos       AmbiguousInfo[]
 
   // インデックス
@@ -194,6 +195,8 @@ model Organization {
   memberships       OrganizationMembership[]
   invitations       OrganizationInvitation[]
   recurringMeetings RecurringMeeting[]
+  // 組織スコープのタスク群。組織削除時はタスクごと削除する。
+  tasks             Task[]
 }
 
 // 組織への所属。userId × organizationId を複合主キーとする。
@@ -247,6 +250,9 @@ model RecurringMeeting {
   members      MeetingMember[]
   // 配下に開催される個別 Meeting 群。定例削除時は SetNull で紐付け解除のみ。
   meetings     Meeting[]
+  // 定例に attach されたタスク（M:N 中間テーブル）。定例削除時は中間レコードのみ削除し、
+  // タスク本体は Task.organizationId で組織スコープが保たれる限り残す。
+  taskAttachments TaskRecurringMeeting[]
 
   @@index([organizationId])
 }
@@ -382,10 +388,19 @@ model DecisionItemAssignee {
   @@index([decisionItemId])
 }
 
-// 会議から抽出されたタスク。
+// 会議から抽出された / 手動作成されたタスク。
+// 組織スコープ必須 (organizationId)・発生源会議は任意 (originMeetingId)・
+// 複数の定例（Project 相当）に M:N で紐付け可能 (TaskRecurringMeeting)。
+// 将来 #153 で Project 層を導入する際は TaskRecurringMeeting の参照先を
+// RecurringMeeting → Project に張り替えるだけで吸収できる構造としている。
 model Task {
   id               String    @id @default(cuid())
-  meetingId        String
+  // 組織スコープ。recurringMeetings / originMeeting から派生可能だが、
+  // 認可・フィルタの単純化のため非正規化で保持する。組織削除時はカスケード削除。
+  organizationId   String
+  // 発生源会議。AI 抽出タスクは抽出元の会議 ID が入る。手動作成タスクは null。
+  // 会議が削除されてもタスク本体は残したいので SetNull。
+  originMeetingId  String?
   decisionItemId   String?
   title            String
   body             String?
@@ -399,6 +414,9 @@ model Task {
   blockingItemId   String?
   carriedOverCount Int?
   ambiguityFlags   Json?
+  // AI フェーズ2 の進捗メモ。前回タスクが次回会議で言及・進捗報告された場合に記録する。
+  // 手動経路では使用しない（API 層で書き込み禁止）。
+  progressNote     String?
   dueDate          DateTime?
   startDate        DateTime?
   followUpDate     DateTime?
@@ -406,12 +424,15 @@ model Task {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  meeting      Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  decisionItem DecisionItem? @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
-  assignees    TaskAssignee[]
-  ambiguousInfos AmbiguousInfo[]
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  originMeeting    Meeting?      @relation(fields: [originMeetingId], references: [id], onDelete: SetNull)
+  decisionItem     DecisionItem? @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
+  assignees        TaskAssignee[]
+  ambiguousInfos   AmbiguousInfo[]
+  recurringMeetings TaskRecurringMeeting[]
 
-  @@index([meetingId])
+  @@index([organizationId])
+  @@index([originMeetingId])
   @@index([decisionItemId])
   @@index([dueDate])
   @@index([startDate])
@@ -429,6 +450,23 @@ model TaskAssignee {
 
   @@unique([taskId, userId])
   @@index([taskId])
+}
+
+// タスクと定例（Project 相当）の M:N 紐付け中間テーブル。
+// Asana ライクに 1 つのタスクを複数の定例に attach 可能とする。
+// 将来 #153 で Project 層を導入する場合、本テーブルの recurringMeetingId を
+// projectId に張り替える（または TaskProject テーブルに移行する）方針。
+// 中間レコードの整合性: task.organizationId と recurringMeeting.organizationId が
+// 一致することを API 層で必須バリデーションとする（クロス組織アタッチ禁止）。
+model TaskRecurringMeeting {
+  taskId             String
+  recurringMeetingId String
+
+  task             Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  recurringMeeting RecurringMeeting @relation(fields: [recurringMeetingId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, recurringMeetingId])
+  @@index([recurringMeetingId])
 }
 
 // 会議中に発生した曖昧な情報。

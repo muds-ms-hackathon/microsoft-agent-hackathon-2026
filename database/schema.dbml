@@ -197,9 +197,10 @@ Table decision_item_assignees {
 }
 
 Table tasks {
-  Note: '会議から抽出されたタスク'
+  Note: '会議から抽出された / 手動作成されたタスク。組織スコープ必須・発生源会議は任意・複数の定例（Project相当）に M:N で紐付け可能'
   id               varchar  [pk]
-  meetingId        varchar  [ref: > meetings.id]
+  organizationId   varchar  [ref: > organizations.id, note: '組織スコープ。認可・フィルタの単純化のため非正規化で保持']
+  originMeetingId  varchar  [ref: > meetings.id, note: 'NULLの場合は手動作成タスク。会議削除時は SetNull でタスク本体は残す']
   decisionItemId   varchar  [ref: > decision_items.id, note: 'NULLの場合は独立したタスク']
   title            varchar
   body             text
@@ -213,6 +214,7 @@ Table tasks {
   blockingItemId   varchar  [note: 'ブロッキング対象のアイテムID']
   carriedOverCount int      [note: '累計持ち越し回数']
   ambiguityFlags   json
+  progressNote     text     [note: 'AI フェーズ2 の進捗メモ。手動経路では使用しない']
   dueDate          timestamp
   startDate        timestamp
   followUpDate     timestamp
@@ -221,10 +223,12 @@ Table tasks {
   updatedAt        timestamp
 
   indexes {
-    meetingId
+    organizationId
+    originMeetingId
     decisionItemId
     dueDate
     startDate
+    status
   }
 }
 
@@ -237,6 +241,17 @@ Table task_assignees {
   indexes {
     (taskId, userId) [unique]
     taskId
+  }
+}
+
+Table task_recurring_meetings {
+  Note: 'タスクと定例（Project相当）の M:N 紐付け中間テーブル。1 タスクを複数の定例に attach 可能。将来 #153 で Project 層を導入する際は recurringMeetingId を projectId に張り替える。task.organizationId と recurringMeeting.organizationId の一致は API 層で必須バリデーション'
+  taskId             varchar [ref: > tasks.id]
+  recurringMeetingId varchar [ref: > recurring_meetings.id]
+
+  indexes {
+    (taskId, recurringMeetingId) [pk]
+    recurringMeetingId
   }
 }
 
