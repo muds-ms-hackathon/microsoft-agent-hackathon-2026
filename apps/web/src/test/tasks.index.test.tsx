@@ -174,8 +174,8 @@ describe("MyTasksView", () => {
     await waitFor(() => {
       expect(screen.getByText("期限切れタスク")).toBeInTheDocument();
     });
-    const dueLabel = screen.getByTestId("task-due-date");
-    expect(dueLabel.className).toMatch(/text-destructive/);
+    const dateLabel = screen.getByTestId("task-dates");
+    expect(dateLabel.className).toMatch(/text-destructive/);
   });
 
   it("done のタスクは期限切れでも強調されない", async () => {
@@ -199,8 +199,8 @@ describe("MyTasksView", () => {
     await waitFor(() => {
       expect(screen.getByText("完了済み")).toBeInTheDocument();
     });
-    const dueLabel = screen.getByTestId("task-due-date");
-    expect(dueLabel.className).not.toMatch(/text-destructive/);
+    const dateLabel = screen.getByTestId("task-dates");
+    expect(dateLabel.className).not.toMatch(/text-destructive/);
   });
 
   it("status 文字列フィルタは API リクエストに含まれる", async () => {
@@ -235,7 +235,7 @@ describe("MyTasksView", () => {
 });
 
 describe("MyTasksView - TaskRow 詳細", () => {
-  it("attached 定例が複数あれば +N で表示する", async () => {
+  it("attached 定例は全件タグとして列挙される（+N 省略をやめた）", async () => {
     const multiRm = {
       ...baseTask,
       recurringMeetings: [
@@ -249,26 +249,66 @@ describe("MyTasksView - TaskRow 詳細", () => {
     renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/週次定例 \+2/)).toBeInTheDocument();
+      expect(screen.getByText("週次定例")).toBeInTheDocument();
     });
+    expect(screen.getByText("月次定例")).toBeInTheDocument();
+    expect(screen.getByText("臨時会")).toBeInTheDocument();
+    expect(screen.getAllByTestId("task-recurring-tag")).toHaveLength(3);
   });
 
-  it("担当者数を 'N名' で表示する", async () => {
-    const twoAssignees = {
+  it("担当者はアバタースタックで表示される（イニシャル + +N）", async () => {
+    const manyAssignees = {
       ...baseTask,
       assignees: [
-        { id: "user-1", name: "alice", displayName: "alice" },
-        { id: "user-2", name: "bob", displayName: "bob" },
+        { id: "user-1", name: "alice", displayName: "Alice" },
+        { id: "user-2", name: "bob", displayName: "Bob" },
+        { id: "user-3", name: "charlie", displayName: "Charlie" },
+        { id: "user-4", name: "dave", displayName: "Dave" },
+        { id: "user-5", name: "eve", displayName: "Eve" },
       ],
     };
-    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([twoAssignees]));
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([manyAssignees]));
 
     renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("task-assignee-count")).toBeInTheDocument();
+      expect(screen.getByTestId("task-assignee-avatars")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("task-assignee-count")).toHaveTextContent("2名");
+    const stack = screen.getByTestId("task-assignee-avatars");
+    // 最大 4 件まで表示、5 件目以降は +1
+    expect(stack).toHaveTextContent("A");
+    expect(stack).toHaveTextContent("B");
+    expect(stack).toHaveTextContent("C");
+    expect(stack).toHaveTextContent("D");
+    expect(stack).toHaveTextContent("+1");
+  });
+
+  it("startDate と dueDate が両方ある時は両方表示される", async () => {
+    const withDates = {
+      ...baseTask,
+      startDate: "2026-05-15T00:00:00.000Z",
+      dueDate: "2026-05-20T00:00:00.000Z",
+    };
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([withDates]));
+
+    renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("task-dates")).toBeInTheDocument();
+    });
+    const dates = screen.getByTestId("task-dates");
+    expect(dates).toHaveTextContent("着手 5/15");
+    expect(dates).toHaveTextContent("期日 5/20");
+  });
+
+  it("startDate も dueDate も無い時は '—' を表示する", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+
+    renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("task-dates")).toHaveTextContent("—");
+    });
   });
 
   it("行はクリック可能（編集ダイアログ起動の準備済み、共通ラッパー経由）", async () => {
