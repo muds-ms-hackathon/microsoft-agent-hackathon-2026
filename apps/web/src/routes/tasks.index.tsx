@@ -73,6 +73,10 @@ export function MyTasksView({
   now?: Date;
 }) {
   const statusArr = parseStatusParam(search.status);
+  // Kanban view では status は列として可視化されるため、フィルタ UI も API への
+  // status 絞り込みも外す（全件取得）。URL の `?status=...` 自体は List に戻したときの
+  // 復元用に保持する。
+  const isKanbanView = search.view === "kanban";
 
   // effective orgId の決定ロジック:
   //  - URL に orgId="all" → フィルタなし（ユーザーが明示的にすべてを選んだ）
@@ -85,7 +89,7 @@ export function MyTasksView({
   // API には組織フィルタが無いため、status のみを API に渡してクライアント側で組織を絞り込む。
   // タスクは全件返却前提のため、組織でさらに削ってもパフォーマンス問題は出ない想定。
   const { data, isLoading, isError } = useMyTasks(
-    statusArr ? { status: statusArr } : undefined,
+    isKanbanView ? undefined : statusArr ? { status: statusArr } : undefined,
   );
 
   const tasks = data ?? [];
@@ -147,45 +151,49 @@ export function MyTasksView({
       </header>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        {/* fieldset/legend だと legend がブロック扱いで「ステータス」が
-            上段に押し出され、組織ラベルとベースラインが揃わない。
-            biome の useSemanticElements は fieldset を勧めるが、本ケースでは
-            視覚整列を優先し、a11y は aria-labelledby で代替する。 */}
-        {/* biome-ignore lint/a11y/useSemanticElements: legend が要素を改行させるため fieldset は使えない。aria-labelledby で代替 */}
-        <div
-          role="group"
-          aria-labelledby="status-filter-label"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <span
-            id="status-filter-label"
-            className="text-xs text-muted-foreground"
+        {/* Kanban view では列ヘッダで status が可視化されているため、
+            フィルタ UI と二重化しないようブロックごと非表示にする。 */}
+        {!isKanbanView && (
+          // fieldset/legend だと legend がブロック扱いで「ステータス」が
+          // 上段に押し出され、組織ラベルとベースラインが揃わない。
+          // biome の useSemanticElements は fieldset を勧めるが、本ケースでは
+          // 視覚整列を優先し、a11y は aria-labelledby で代替する。
+          // biome-ignore lint/a11y/useSemanticElements: legend が要素を改行させるため fieldset は使えない。aria-labelledby で代替
+          <div
+            role="group"
+            aria-labelledby="status-filter-label"
+            className="flex flex-wrap items-center gap-2"
           >
-            ステータス
-          </span>
-          {FILTERABLE_STATUSES.map((s) => {
-            const checked = statusArr?.includes(s) ?? false;
-            return (
-              <label
-                key={s}
-                className={cn(
-                  "text-xs px-2 py-1 rounded-md border cursor-pointer select-none",
-                  checked
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-card text-foreground border-border/60 hover:bg-accent",
-                )}
-              >
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={checked}
-                  onChange={() => toggleStatus(s)}
-                />
-                {taskStatusLabels[s]}
-              </label>
-            );
-          })}
-        </div>
+            <span
+              id="status-filter-label"
+              className="text-xs text-muted-foreground"
+            >
+              ステータス
+            </span>
+            {FILTERABLE_STATUSES.map((s) => {
+              const checked = statusArr?.includes(s) ?? false;
+              return (
+                <label
+                  key={s}
+                  className={cn(
+                    "text-xs px-2 py-1 rounded-md border cursor-pointer select-none",
+                    checked
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-card text-foreground border-border/60 hover:bg-accent",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={checked}
+                    onChange={() => toggleStatus(s)}
+                  />
+                  {taskStatusLabels[s]}
+                </label>
+              );
+            })}
+          </div>
+        )}
 
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           組織
