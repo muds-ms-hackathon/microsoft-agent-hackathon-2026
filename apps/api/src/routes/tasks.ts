@@ -82,10 +82,7 @@ async function validateOriginMeetingInOrg(
 async function requireTaskAccess(
   c: Context<{ Variables: AuthVariables }>,
   taskId: string,
-): Promise<
-  | { ok: true; task: TaskWithDetail }
-  | { ok: false; res: Response }
-> {
+): Promise<{ ok: true; task: TaskWithDetail } | { ok: false; res: Response }> {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     include: taskDetailInclude,
