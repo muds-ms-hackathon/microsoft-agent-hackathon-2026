@@ -674,6 +674,46 @@ describe("GET /tasks/me", () => {
     expect(res.status).toBe(400);
     expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
+
+  it("overdueOnly=true で dueDate.lt と status.notIn が where に乗る", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request("/tasks/me?overdueOnly=true");
+    const where = mockTaskFindMany.mock.calls[0][0].where as {
+      dueDate?: { lt?: Date };
+      status?: { notIn?: string[] };
+    };
+    // now はサーバ側現在時刻のため、Date インスタンスが入っていることだけ確認する。
+    expect(where.dueDate?.lt).toBeInstanceOf(Date);
+    expect(where.status).toEqual({ notIn: ["done", "rejected"] });
+  });
+
+  it("overdueOnly=true と status=todo の併用は AND で結合される", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request("/tasks/me?overdueOnly=true&status=todo");
+    const where = mockTaskFindMany.mock.calls[0][0].where as {
+      AND?: Array<{ status: { in?: string[]; notIn?: string[] } }>;
+      status?: unknown;
+    };
+    // AND で「ユーザー指定の in」と「done/rejected を外す notIn」を結合し、
+    // トップレベルの status は AND に移動するので存在しないこと。
+    expect(where.AND).toEqual([
+      { status: { in: ["todo"] } },
+      { status: { notIn: ["done", "rejected"] } },
+    ]);
+    expect(where.status).toBeUndefined();
+  });
+
+  it("overdueOnly=true と dueBefore を併用すると dueDate.lt と lte の両方が乗る", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request(
+      "/tasks/me?overdueOnly=true&dueBefore=2026-05-31T00:00:00Z",
+    );
+    const where = mockTaskFindMany.mock.calls[0][0].where as {
+      dueDate?: { lt?: Date; lte?: Date };
+    };
+    expect(where.dueDate?.lt).toBeInstanceOf(Date);
+    expect(where.dueDate?.lte).toEqual(new Date("2026-05-31T00:00:00Z"));
+  });
 });
 
 describe("DELETE /tasks/:id", () => {

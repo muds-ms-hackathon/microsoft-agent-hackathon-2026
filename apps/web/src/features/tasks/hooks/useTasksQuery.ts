@@ -13,5 +13,8 @@ export function toTaskListQueryParams(
   if (filters.assigneeId) params.assigneeId = filters.assigneeId;
   if (filters.dueBefore) params.dueBefore = filters.dueBefore;
   if (filters.dueAfter) params.dueAfter = filters.dueAfter;
+  // overdueOnly は ON のときだけ URL に乗せる。OFF（false / undefined）はパラメータごと消す
+  // ことで、API 側の判定（"true" 完全一致）と整合させる。
+  if (filters.overdueOnly) params.overdueOnly = "true";
   return params;
 }

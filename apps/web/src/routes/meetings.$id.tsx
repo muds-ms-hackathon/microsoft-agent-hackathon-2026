@@ -1,6 +1,7 @@
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
+import { OverdueOnlyToggle } from "@/features/tasks/components/OverdueOnlyToggle";
 import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
 import {
   ViewToggle,
@@ -9,7 +10,7 @@ import {
 import { useMeetingTasks } from "@/features/tasks/hooks/useMeetingTasks";
 import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import { taskStatusLabels } from "@/features/tasks/labels";
-import type { TaskStatus } from "@/features/tasks/types";
+import type { TaskListFilters, TaskStatus } from "@/features/tasks/types";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
@@ -25,6 +26,8 @@ const FILTERABLE_STATUSES: TaskStatus[] = [
 const meetingSearchSchema = z.object({
   status: z.string().optional(),
   view: z.enum(["list", "kanban"]).optional(),
+  // 「期限超過のみ」クイックトグル。API 仕様と整合させるため "true" 文字列で永続化する。
+  overdueOnly: z.string().optional(),
 });
 
 type MeetingSearch = z.infer<typeof meetingSearchSchema>;
@@ -88,10 +91,15 @@ export function MeetingDetailView({
   // status 絞り込みも外す（全件取得）。URL の `?status=...` 自体は List に戻したときの
   // 復元用に保持する。
   const isKanbanView = search.view === "kanban";
-  const tasksQuery = useMeetingTasks(
-    id,
-    isKanbanView ? undefined : statusArr ? { status: statusArr } : undefined,
-  );
+  // 「期限超過のみ」トグル。Kanban view でも有効（列との情報重複なし）。
+  const overdueOnly = search.overdueOnly === "true";
+
+  const apiFilters: TaskListFilters = {};
+  if (!isKanbanView && statusArr) apiFilters.status = statusArr;
+  if (overdueOnly) apiFilters.overdueOnly = true;
+  const filtersForQuery: TaskListFilters | undefined =
+    Object.keys(apiFilters).length > 0 ? apiFilters : undefined;
+  const tasksQuery = useMeetingTasks(id, filtersForQuery);
 
   if (detailQuery.isLoading) {
     return (
@@ -167,48 +175,61 @@ export function MeetingDetailView({
           </div>
         </div>
 
-        {/* Kanban view では列ヘッダで status が可視化されているため、
-            フィルタ UI と二重化しないようブロックごと非表示にする。 */}
-        {!isKanbanView && (
-          // status フィルタ。My タスク・定例詳細と同じ inline label + aria-labelledby パターン。
-          // biome の useSemanticElements は fieldset を勧めるが、legend のレイアウト崩れを
-          // 避けるため div + role=group で代替する。
-          // biome-ignore lint/a11y/useSemanticElements: legend が要素を改行させるため fieldset は使えない。aria-labelledby で代替
-          <div
-            role="group"
-            aria-labelledby="meeting-task-status-filter-label"
-            className="flex flex-wrap items-center gap-2"
-          >
-            <span
-              id="meeting-task-status-filter-label"
-              className="text-xs text-muted-foreground"
+        {/* フィルタ行。「期限超過のみ」は両 view で表示、status フィルタは List view のみ。 */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <OverdueOnlyToggle
+            value={overdueOnly}
+            onChange={(next) =>
+              onSearchChange({
+                ...search,
+                overdueOnly: next ? "true" : undefined,
+              })
+            }
+          />
+
+          {/* Kanban view では列ヘッダで status が可視化されているため、
+              フィルタ UI と二重化しないようブロックごと非表示にする。 */}
+          {!isKanbanView && (
+            // status フィルタ。My タスク・定例詳細と同じ inline label + aria-labelledby パターン。
+            // biome の useSemanticElements は fieldset を勧めるが、legend のレイアウト崩れを
+            // 避けるため div + role=group で代替する。
+            // biome-ignore lint/a11y/useSemanticElements: legend が要素を改行させるため fieldset は使えない。aria-labelledby で代替
+            <div
+              role="group"
+              aria-labelledby="meeting-task-status-filter-label"
+              className="flex flex-wrap items-center gap-2"
             >
-              ステータス
-            </span>
-            {FILTERABLE_STATUSES.map((s) => {
-              const checked = statusArr?.includes(s) ?? false;
-              return (
-                <label
-                  key={s}
-                  className={cn(
-                    "text-xs px-2 py-1 rounded-md border cursor-pointer select-none",
-                    checked
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-card text-foreground border-border/60 hover:bg-accent",
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={checked}
-                    onChange={() => toggleStatus(s)}
-                  />
-                  {taskStatusLabels[s]}
-                </label>
-              );
-            })}
-          </div>
-        )}
+              <span
+                id="meeting-task-status-filter-label"
+                className="text-xs text-muted-foreground"
+              >
+                ステータス
+              </span>
+              {FILTERABLE_STATUSES.map((s) => {
+                const checked = statusArr?.includes(s) ?? false;
+                return (
+                  <label
+                    key={s}
+                    className={cn(
+                      "text-xs px-2 py-1 rounded-md border cursor-pointer select-none",
+                      checked
+                        ? "bg-foreground text-background border-foreground"
+                        : "bg-card text-foreground border-border/60 hover:bg-accent",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={checked}
+                      onChange={() => toggleStatus(s)}
+                    />
+                    {taskStatusLabels[s]}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
@@ -221,10 +242,7 @@ export function MeetingDetailView({
         ) : search.view === "kanban" ? (
           <KanbanBoard
             tasks={tasksQuery.data ?? []}
-            queryKey={taskQueryKeys.meeting(
-              id,
-              statusArr ? { status: statusArr } : {},
-            )}
+            queryKey={taskQueryKeys.meeting(id, filtersForQuery ?? {})}
             ariaLabel="会議由来のタスク Kanban"
             now={now}
           />

@@ -109,18 +109,38 @@ export const taskListQuerySchema = z.object({
     .string()
     .datetime({ message: "dueAfter は ISO8601 で指定してください" })
     .optional(),
+  // 「期限超過のみ」クイックトグル用。"true" の完全一致だけを真と扱い、
+  // それ以外の文字列（未指定含む）は false にする（z.coerce.boolean だと
+  // "false" や任意文字列も true になってしまうため避ける）。
+  overdueOnly: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 export type TaskListQuery = z.infer<typeof taskListQuerySchema>;
 
+// buildTaskListWhere の戻り値型。overdueOnly と既存 status filter の併用時に
+// AND を使うため、AND 配列も含めて型を明示する。
+type TaskStatusWhere = {
+  in?: TaskListQuery["status"];
+  notIn?: Array<"done" | "rejected">;
+};
+type TaskListWhere = {
+  status?: TaskStatusWhere;
+  assignees?: { some: { userId: string } };
+  dueDate?: { gte?: Date; lte?: Date; lt?: Date };
+  AND?: Array<{ status: TaskStatusWhere }>;
+};
+
 // 一覧 API のクエリフィルタを Prisma の where 句に変換する。
 // スコープ別の where 条件（例: organizationId 等）と AND 合成する想定。
-export function buildTaskListWhere(filters: TaskListQuery) {
-  const where: {
-    status?: { in: TaskListQuery["status"] };
-    assignees?: { some: { userId: string } };
-    dueDate?: { gte?: Date; lte?: Date };
-  } = {};
+// now はテストでの注入を許すために引数化しているが、本番ではデフォルトのリクエスト時刻を使う。
+export function buildTaskListWhere(
+  filters: TaskListQuery,
+  now: Date = new Date(),
+): TaskListWhere {
+  const where: TaskListWhere = {};
   if (filters.status && filters.status.length > 0) {
     where.status = { in: filters.status };
   }
@@ -131,6 +151,22 @@ export function buildTaskListWhere(filters: TaskListQuery) {
     where.dueDate = {};
     if (filters.dueAfter) where.dueDate.gte = new Date(filters.dueAfter);
     if (filters.dueBefore) where.dueDate.lte = new Date(filters.dueBefore);
+  }
+  // overdueOnly: 「期限超過 かつ 未完了」に絞る。
+  // - dueDate.lt = now（dueBefore があれば lte と共存させる）
+  // - status は「done/rejected を外す」が、ユーザーの status filter と両立させるため
+  //   filter が既にあるときは AND で結合する（Prisma は同一フィールドの上書きになるため）。
+  if (filters.overdueOnly === true) {
+    where.dueDate = { ...(where.dueDate ?? {}), lt: now };
+    if (where.status) {
+      where.AND = [
+        { status: where.status },
+        { status: { notIn: ["done", "rejected"] } },
+      ];
+      delete where.status;
+    } else {
+      where.status = { notIn: ["done", "rejected"] };
+    }
   }
   return where;
 }
