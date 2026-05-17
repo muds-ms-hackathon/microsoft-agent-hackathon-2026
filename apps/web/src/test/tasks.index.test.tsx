@@ -584,6 +584,55 @@ describe("MyTasksView - View 切替", () => {
   });
 });
 
+describe("MyTasksView - 期限超過のみトグル", () => {
+  it("OFF 状態のトグルをクリックすると onSearchChange に overdueOnly=true が渡る", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+    const onSearchChange = vi.fn();
+    renderWithQuery(
+      <MyTasksView search={{}} onSearchChange={onSearchChange} />,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("担当中のタスクはありません"),
+      ).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "期限超過のみ" }));
+    expect(onSearchChange).toHaveBeenCalledWith(
+      expect.objectContaining({ overdueOnly: "true" }),
+    );
+  });
+
+  it("初期 ?overdueOnly=true で API リクエストに overdueOnly が乗る", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+    renderWithQuery(
+      <MyTasksView
+        search={{ overdueOnly: "true" }}
+        onSearchChange={() => {}}
+      />,
+    );
+    await waitFor(() => {
+      expect(api.tasks.me.$get).toHaveBeenCalled();
+    });
+    const call = vi.mocked(api.tasks.me.$get).mock.calls[0];
+    expect(
+      (call[0] as { query: { overdueOnly?: string } }).query.overdueOnly,
+    ).toBe("true");
+  });
+
+  it("view=kanban でもトグルは描画される（status フィルタとは独立）", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));
+    renderWithQuery(
+      <MyTasksView search={{ view: "kanban" }} onSearchChange={() => {}} />,
+    );
+    await screen.findByTestId("kanban-board");
+    expect(
+      screen.getByRole("button", { name: "期限超過のみ" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("MyTasksView - タスク作成 CTA", () => {
   it("currentOrgId ありなら「タスクを追加」ボタンが有効になる", async () => {
     vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([baseTask]));

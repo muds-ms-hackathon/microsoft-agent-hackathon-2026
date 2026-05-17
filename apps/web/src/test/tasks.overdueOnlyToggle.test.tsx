@@ -31,18 +31,14 @@ describe("OverdueOnlyToggle", () => {
   it("OFF からクリックすると onChange(true) を呼ぶ", async () => {
     const onChange = vi.fn();
     render(<OverdueOnlyToggle value={false} onChange={onChange} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "期限超過のみ" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "期限超過のみ" }));
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
   it("ON からクリックすると onChange(false) を呼ぶ", async () => {
     const onChange = vi.fn();
     render(<OverdueOnlyToggle value={true} onChange={onChange} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "期限超過のみ" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "期限超過のみ" }));
     expect(onChange).toHaveBeenCalledWith(false);
   });
 });

@@ -51,7 +51,7 @@ describe("toTaskListQueryParams", () => {
     });
   });
 
-  it("overdueOnly が true のときは overdueOnly=\"true\" を含める", () => {
+  it('overdueOnly が true のときは overdueOnly="true" を含める', () => {
     expect(toTaskListQueryParams({ overdueOnly: true })).toEqual({
       overdueOnly: "true",
     });

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
+import { OverdueOnlyToggle } from "@/features/tasks/components/OverdueOnlyToggle";
 import { TaskListWithDialogs } from "@/features/tasks/components/TaskListWithDialogs";
 import {
   ViewToggle,
@@ -9,7 +10,11 @@ import {
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { taskStatusLabels } from "@/features/tasks/labels";
 import { taskQueryKeys } from "@/features/tasks/queryKeys";
-import type { TaskListItem, TaskStatus } from "@/features/tasks/types";
+import type {
+  TaskListFilters,
+  TaskListItem,
+  TaskStatus,
+} from "@/features/tasks/types";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { cn } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -36,6 +41,9 @@ const tasksSearchSchema = z.object({
   orgId: z.string().optional(),
   // List / Kanban のビュー切替。デフォルトは list。
   view: z.enum(["list", "kanban"]).optional(),
+  // 「期限超過のみ」クイックトグル。API 仕様と整合させるため "true" 文字列で永続化する。
+  // OFF 時は URL からキーごと消す（toTaskListQueryParams 側の挙動と対称）。
+  overdueOnly: z.string().optional(),
 });
 
 type TasksSearch = z.infer<typeof tasksSearchSchema>;
@@ -77,6 +85,8 @@ export function MyTasksView({
   // status 絞り込みも外す（全件取得）。URL の `?status=...` 自体は List に戻したときの
   // 復元用に保持する。
   const isKanbanView = search.view === "kanban";
+  // 「期限超過のみ」トグル。URL では "true" 完全一致を真として扱う。
+  const overdueOnly = search.overdueOnly === "true";
 
   // effective orgId の決定ロジック:
   //  - URL に orgId="all" → フィルタなし（ユーザーが明示的にすべてを選んだ）
@@ -86,11 +96,15 @@ export function MyTasksView({
   const effectiveOrgId: string | null =
     search.orgId === ALL_ORGS_SENTINEL ? null : (search.orgId ?? currentOrgId);
 
-  // API には組織フィルタが無いため、status のみを API に渡してクライアント側で組織を絞り込む。
+  // API に渡すフィルタを組み立てる。Kanban view では status を外し、overdueOnly は両 view で有効。
+  const apiFilters: TaskListFilters = {};
+  if (!isKanbanView && statusArr) apiFilters.status = statusArr;
+  if (overdueOnly) apiFilters.overdueOnly = true;
+  const filtersForQuery: TaskListFilters | undefined =
+    Object.keys(apiFilters).length > 0 ? apiFilters : undefined;
+  // API には組織フィルタが無いため、status / overdueOnly のみを API に渡し、組織はクライアントで絞り込む。
   // タスクは全件返却前提のため、組織でさらに削ってもパフォーマンス問題は出ない想定。
-  const { data, isLoading, isError } = useMyTasks(
-    isKanbanView ? undefined : statusArr ? { status: statusArr } : undefined,
-  );
+  const { data, isLoading, isError } = useMyTasks(filtersForQuery);
 
   const tasks = data ?? [];
   // 組織候補は取得した tasks から動的に構築する。useMyOrganizations を別途呼ばない方針。
@@ -151,6 +165,17 @@ export function MyTasksView({
       </header>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {/* 「期限超過のみ」クイックトグル。Kanban view でも有効（列との情報重複なし）。 */}
+        <OverdueOnlyToggle
+          value={overdueOnly}
+          onChange={(next) =>
+            onSearchChange({
+              ...search,
+              overdueOnly: next ? "true" : undefined,
+            })
+          }
+        />
+
         {/* Kanban view では列ヘッダで status が可視化されているため、
             フィルタ UI と二重化しないようブロックごと非表示にする。 */}
         {!isKanbanView && (
@@ -252,7 +277,7 @@ export function MyTasksView({
       ) : search.view === "kanban" ? (
         <KanbanBoard
           tasks={filtered}
-          queryKey={taskQueryKeys.me(statusArr ? { status: statusArr } : {})}
+          queryKey={taskQueryKeys.me(filtersForQuery ?? {})}
           ariaLabel="My タスク Kanban"
           now={now}
         />
