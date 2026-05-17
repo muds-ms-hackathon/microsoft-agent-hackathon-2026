@@ -25,6 +25,9 @@ vi.mock("../src/lib/prisma.js", () => ({
     task: {
       findMany: vi.fn(),
     },
+    meeting: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -83,6 +86,7 @@ const mockMembershipFindMany = vi.mocked(
 const mockMembershipDelete = vi.mocked(prisma.organizationMembership.delete);
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
 const mockTaskFindMany = vi.mocked(prisma.task.findMany);
+const mockMeetingFindMany = vi.mocked(prisma.meeting.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 const sampleOrg = {
@@ -1280,5 +1284,175 @@ describe("GET /organizations/:id/tasks", () => {
         }),
       }),
     );
+  });
+});
+
+describe("GET /organizations/:id/next-meetings", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => resetAuthUser());
+
+  function membership(role: "owner" | "admin" | "member" = "member") {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  // findMany が select 句で返す形（recurringMeeting がネスト）
+  const sampleMeetingRows = [
+    {
+      id: "mtg-near",
+      title: "週次定例 2026-05-20",
+      heldAt: new Date("2026-05-20T01:00:00Z"),
+      estimatedDurationMinutes: 60,
+      recurringMeetingId: "rmtg-1",
+      recurringMeeting: { name: "週次定例" },
+    },
+    {
+      id: "mtg-far",
+      title: "月次レビュー 2026-06-01",
+      heldAt: new Date("2026-06-01T00:00:00Z"),
+      estimatedDurationMinutes: 90,
+      recurringMeetingId: "rmtg-2",
+      recurringMeeting: { name: "月次レビュー" },
+    },
+  ];
+
+  it("組織メンバーは 200 で upcoming な会議を limit 件まで取得できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockMeetingFindMany.mockResolvedValue(sampleMeetingRows as never);
+
+    const res = await app.request("/organizations/org-1/next-meetings?limit=5");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      title: string;
+      heldAt: string;
+      estimatedDurationMinutes: number | null;
+      recurringMeetingId: string | null;
+      recurringMeetingName: string | null;
+    }>;
+    expect(body).toHaveLength(2);
+    expect(body[0]).toEqual({
+      id: "mtg-near",
+      title: "週次定例 2026-05-20",
+      heldAt: "2026-05-20T01:00:00.000Z",
+      estimatedDurationMinutes: 60,
+      recurringMeetingId: "rmtg-1",
+      recurringMeetingName: "週次定例",
+    });
+    // ネストされた recurringMeeting は平坦化され、レスポンスに残らないこと
+    expect(body[0]).not.toHaveProperty("recurringMeeting");
+  });
+
+  it("組織配下の定例の会議のみを heldAt 昇順・upcoming のみで take する", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockMeetingFindMany.mockResolvedValue([]);
+
+    await app.request("/organizations/org-1/next-meetings?limit=3");
+
+    expect(mockMeetingFindMany).toHaveBeenCalledTimes(1);
+    const args = mockMeetingFindMany.mock.calls[0][0] as {
+      where: {
+        recurringMeeting: { organizationId: string };
+        heldAt: { gte: Date };
+      };
+      orderBy: { heldAt: "asc" };
+      take: number;
+      select: Record<string, unknown>;
+    };
+    expect(args.where.recurringMeeting).toEqual({ organizationId: "org-1" });
+    expect(args.where.heldAt.gte).toBeInstanceOf(Date);
+    expect(args.orderBy).toEqual({ heldAt: "asc" });
+    expect(args.take).toBe(3);
+    // recurringMeeting.name を含めて select している
+    expect(args.select).toMatchObject({
+      id: true,
+      title: true,
+      heldAt: true,
+      estimatedDurationMinutes: true,
+      recurringMeetingId: true,
+      recurringMeeting: { select: { name: true } },
+    });
+  });
+
+  it("結果 0 件のときは空配列を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockMeetingFindMany.mockResolvedValue([]);
+
+    const res = await app.request(
+      "/organizations/org-1/next-meetings?limit=10",
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it("非メンバーは 404 を返し findMany は呼ばれない", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/organizations/org-1/next-meetings?limit=5");
+    expect(res.status).toBe(404);
+    expect(mockMeetingFindMany).not.toHaveBeenCalled();
+  });
+
+  it("limit 未指定は 400 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+
+    const res = await app.request("/organizations/org-1/next-meetings");
+    expect(res.status).toBe(400);
+    expect(mockMeetingFindMany).not.toHaveBeenCalled();
+  });
+
+  it("limit=0 は 400 を返す（下限 1）", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+
+    const res = await app.request("/organizations/org-1/next-meetings?limit=0");
+    expect(res.status).toBe(400);
+    expect(mockMeetingFindMany).not.toHaveBeenCalled();
+  });
+
+  it("limit=51 は 400 を返す（上限 50）", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+
+    const res = await app.request(
+      "/organizations/org-1/next-meetings?limit=51",
+    );
+    expect(res.status).toBe(400);
+    expect(mockMeetingFindMany).not.toHaveBeenCalled();
+  });
+
+  it("limit が数値でない場合は 400 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership());
+
+    const res = await app.request(
+      "/organizations/org-1/next-meetings?limit=abc",
+    );
+    expect(res.status).toBe(400);
+    expect(mockMeetingFindMany).not.toHaveBeenCalled();
+  });
+
+  it("recurringMeetingName が null のときも安全に直列化される", async () => {
+    // 防御的ケース: include の関係フィルタにより通常は発生しないが、
+    // recurringMeeting 側が null の場合に NPE を起こさないことを担保する。
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockMeetingFindMany.mockResolvedValue([
+      {
+        id: "mtg-x",
+        title: "edge",
+        heldAt: new Date("2026-05-20T01:00:00Z"),
+        estimatedDurationMinutes: null,
+        recurringMeetingId: null,
+        recurringMeeting: null,
+      },
+    ] as never);
+
+    const res = await app.request("/organizations/org-1/next-meetings?limit=1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      recurringMeetingName: string | null;
+    }>;
+    expect(body[0].recurringMeetingName).toBeNull();
   });
 });

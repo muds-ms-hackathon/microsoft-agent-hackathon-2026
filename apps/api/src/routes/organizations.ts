@@ -39,6 +39,13 @@ const updateSchema = z
     message: "更新する項目を 1 つ以上指定してください",
   });
 
+// ダッシュボードの「次回会議」表示用に、組織配下の定例の会議のうち
+// heldAt が現在以降のものを最大 limit 件取得する。limit は無制限を許すと
+// 一覧 API と区別が付かなくなるため必須 + 1〜50 で制限する。
+const nextMeetingsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50),
+});
+
 // owner ロールの招待は不可（owner は組織作成者のみ）。
 // expiresInDays は 1〜365 日。email はサーバ側で trim + 小文字化して保存・比較する。
 const inviteSchema = z.object({
@@ -309,6 +316,45 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(meetings);
   })
+  .get(
+    "/:id/next-meetings",
+    zValidator("query", nextMeetingsQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const { limit } = c.req.valid("query");
+
+      const guard = await requireMembership(c, id);
+      if (!guard.ok) return guard.res;
+
+      // ダッシュボード「次回会議」セクションの N+1 解消のため、
+      // 組織配下の全定例を横断して heldAt 昇順で limit 件を 1 クエリで取得する。
+      // 単発会議（recurringMeetingId が null）は関係フィルタで自然に除外される。
+      const now = new Date();
+      const meetings = await prisma.meeting.findMany({
+        where: {
+          recurringMeeting: { organizationId: id },
+          heldAt: { gte: now },
+        },
+        orderBy: { heldAt: "asc" },
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          heldAt: true,
+          estimatedDurationMinutes: true,
+          recurringMeetingId: true,
+          recurringMeeting: { select: { name: true } },
+        },
+      });
+
+      // クライアント側で扱いやすいよう recurringMeeting.name を平坦化する。
+      const result = meetings.map(({ recurringMeeting, ...m }) => ({
+        ...m,
+        recurringMeetingName: recurringMeeting?.name ?? null,
+      }));
+      return c.json(result);
+    },
+  )
   .post(
     "/:id/meetings",
     zValidator("json", recurringMeetingCreateSchema),
