@@ -7,6 +7,7 @@ import {
   describeCron,
   parseCron,
 } from "@/features/recurring-meetings/scheduleCron";
+import { AssigneeFilter } from "@/features/tasks/components/AssigneeFilter";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
 import { OverdueOnlyToggle } from "@/features/tasks/components/OverdueOnlyToggle";
@@ -19,8 +20,10 @@ import { useRecurringMeetingTasks } from "@/features/tasks/hooks/useRecurringMee
 import { taskStatusLabels } from "@/features/tasks/labels";
 import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import type { TaskListFilters, TaskStatus } from "@/features/tasks/types";
+import { authAtom } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useAtomValue } from "jotai";
 import { z } from "zod";
 
 // タスクセクションのフィルタ用 status 選択肢。
@@ -38,6 +41,8 @@ const recurringMeetingSearchSchema = z.object({
   view: z.enum(["list", "kanban"]).optional(),
   // 「期限超過のみ」クイックトグル。API 仕様と整合させるため "true" 文字列で永続化する。
   overdueOnly: z.string().optional(),
+  // 担当者フィルタ。値は userId / "none"（未アサイン）/ undefined（すべて）の 3 系統。
+  assigneeId: z.string().optional(),
 });
 
 type RecurringMeetingSearch = z.infer<typeof recurringMeetingSearchSchema>;
@@ -102,9 +107,15 @@ export function RecurringMeetingDetailView({
   const apiFilters: TaskListFilters = {};
   if (!isKanbanView && statusArr) apiFilters.status = statusArr;
   if (overdueOnly) apiFilters.overdueOnly = true;
+  // 担当者フィルタ。"none"（未アサイン）も API センチネルとして素通しする。
+  if (search.assigneeId) apiFilters.assigneeId = search.assigneeId;
   const filtersForQuery: TaskListFilters | undefined =
     Object.keys(apiFilters).length > 0 ? apiFilters : undefined;
   const tasksQuery = useRecurringMeetingTasks(id, filtersForQuery);
+
+  // 「自分のみ」option を出すために認証ユーザーの sub を取り出す。
+  const auth = useAtomValue(authAtom);
+  const currentUserId = auth.user?.sub ?? null;
 
   if (detailQuery.isLoading) {
     return (
@@ -229,7 +240,7 @@ export function RecurringMeetingDetailView({
           </div>
         </div>
 
-        {/* フィルタ行。「期限超過のみ」は両 view で表示、status フィルタは List view のみ。 */}
+        {/* フィルタ行。「期限超過のみ」「担当者」は両 view で表示、status フィルタは List view のみ。 */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <OverdueOnlyToggle
             value={overdueOnly}
@@ -239,6 +250,15 @@ export function RecurringMeetingDetailView({
                 overdueOnly: next ? "true" : undefined,
               })
             }
+          />
+
+          <AssigneeFilter
+            orgId={detail.organizationId}
+            value={search.assigneeId}
+            onChange={(next) =>
+              onSearchChange({ ...search, assigneeId: next })
+            }
+            currentUserId={currentUserId}
           />
 
           {/* Kanban view では列ヘッダで status が可視化されているため、

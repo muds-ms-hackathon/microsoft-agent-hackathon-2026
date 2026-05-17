@@ -18,6 +18,13 @@ vi.mock("@/lib/api", () => ({
         },
       },
     },
+    // AssigneeFilter が useOrganizationMembers 経由で叩くエンドポイント。
+    // 値はテスト個別で上書きしないかぎり空配列を返すデフォルトを後段で設定する。
+    organizations: {
+      ":id": {
+        members: { $get: vi.fn() },
+      },
+    },
   },
   authHeaders: () => ({ headers: {} }),
 }));
@@ -346,9 +353,17 @@ describe("定例詳細ページ - タスクセクション", () => {
     vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
       mockJson([]),
     );
+    // AssigneeFilter のメンバー取得は本テスト群では中身を検証しないので空でよい。
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson([]),
+    );
   });
 
-  type Search = { status?: string; view?: "list" | "kanban" };
+  type Search = {
+    status?: string;
+    view?: "list" | "kanban";
+    assigneeId?: string;
+  };
   function renderWithSearch(opts?: {
     search?: Search;
     onSearchChange?: (next: Search) => void;
@@ -450,5 +465,27 @@ describe("定例詳細ページ - タスクセクション", () => {
     expect(
       (call[0] as { query: { status?: string } }).query.status,
     ).toBeUndefined();
+  });
+
+  it("フィルタ行に AssigneeFilter（担当者セレクタ）が描画される", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch();
+    await screen.findByText("タスク");
+    expect(screen.getByLabelText("担当者フィルタ")).toBeInTheDocument();
+  });
+
+  it("初期 ?assigneeId=user-42 は API リクエストの query.assigneeId に乗る", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch({ search: { assigneeId: "user-42" } });
+    await screen.findByText("タスク");
+    const call = vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mock
+      .calls[0];
+    expect(
+      (call[0] as { query: { assigneeId?: string } }).query.assigneeId,
+    ).toBe("user-42");
   });
 });
