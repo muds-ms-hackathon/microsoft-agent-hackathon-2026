@@ -5,6 +5,15 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingUpdateSchema } from "../lib/schemas/recurring-meeting.js";
+import {
+  buildTaskListWhere,
+  taskListQuerySchema,
+} from "../lib/schemas/task.js";
+import {
+  serializeTask,
+  taskListInclude,
+  taskListOrderBy,
+} from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 
 // 定例配下に紐付ける Meeting 作成リクエストの schema。
@@ -97,6 +106,28 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
       },
     });
     return c.json(created, 201);
+  })
+  .get("/:id/tasks", zValidator("query", taskListQuerySchema), async (c) => {
+    const id = c.req.param("id");
+    const filters = c.req.valid("query");
+
+    // 定例存在チェック → 組織所属確認の順で 404 短絡。
+    const meeting = await prisma.recurringMeeting.findUnique({
+      where: { id },
+    });
+    const guard = await requireRecurringAccess(c, meeting);
+    if (!guard.ok) return guard.res;
+
+    // 当該定例に attach されたタスクのみ。中間テーブル経由 some 条件で絞る。
+    const tasks = await prisma.task.findMany({
+      where: {
+        ...buildTaskListWhere(filters),
+        recurringMeetings: { some: { recurringMeetingId: id } },
+      },
+      orderBy: taskListOrderBy,
+      include: taskListInclude,
+    });
+    return c.json(tasks.map(serializeTask));
   })
   .get("/:id/meetings", async (c) => {
     const id = c.req.param("id");

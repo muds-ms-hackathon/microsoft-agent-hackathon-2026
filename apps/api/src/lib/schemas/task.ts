@@ -80,3 +80,57 @@ export const taskUpdateSchema = z
 
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
 export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;
+
+// 一覧 API 共通のクエリパラメータ。
+// status: カンマ区切りで複数指定可（例: ?status=todo,in_progress）
+// assigneeId / dueBefore / dueAfter: 単一値
+const taskStatusValuesSchema = z
+  .string()
+  .transform((s) =>
+    s
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean),
+  )
+  .pipe(
+    z.array(
+      z.enum(["draft", "reviewing", "todo", "in_progress", "done", "rejected"]),
+    ),
+  );
+
+export const taskListQuerySchema = z.object({
+  status: taskStatusValuesSchema.optional(),
+  assigneeId: z.string().min(1).optional(),
+  dueBefore: z
+    .string()
+    .datetime({ message: "dueBefore は ISO8601 で指定してください" })
+    .optional(),
+  dueAfter: z
+    .string()
+    .datetime({ message: "dueAfter は ISO8601 で指定してください" })
+    .optional(),
+});
+
+export type TaskListQuery = z.infer<typeof taskListQuerySchema>;
+
+// 一覧 API のクエリフィルタを Prisma の where 句に変換する。
+// スコープ別の where 条件（例: organizationId 等）と AND 合成する想定。
+export function buildTaskListWhere(filters: TaskListQuery) {
+  const where: {
+    status?: { in: TaskListQuery["status"] };
+    assignees?: { some: { userId: string } };
+    dueDate?: { gte?: Date; lte?: Date };
+  } = {};
+  if (filters.status && filters.status.length > 0) {
+    where.status = { in: filters.status };
+  }
+  if (filters.assigneeId) {
+    where.assignees = { some: { userId: filters.assigneeId } };
+  }
+  if (filters.dueBefore || filters.dueAfter) {
+    where.dueDate = {};
+    if (filters.dueAfter) where.dueDate.gte = new Date(filters.dueAfter);
+    if (filters.dueBefore) where.dueDate.lte = new Date(filters.dueBefore);
+  }
+  return where;
+}

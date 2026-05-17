@@ -19,6 +19,9 @@ vi.mock("../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       create: vi.fn(),
     },
+    task: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -65,6 +68,7 @@ const mockRecurringDelete = vi.mocked(prisma.recurringMeeting.delete);
 const mockMeetingMemberFindUnique = vi.mocked(prisma.meetingMember.findUnique);
 const mockMeetingFindMany = vi.mocked(prisma.meeting.findMany);
 const mockMeetingCreate = vi.mocked(prisma.meeting.create);
+const mockTaskFindMany = vi.mocked(prisma.task.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member") {
@@ -868,5 +872,79 @@ describe("POST /recurring-meetings/:id/meetings", () => {
     });
     expect(res.status).toBe(404);
     expect(mockMeetingCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /recurring-meetings/:id/tasks", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const sampleListTask = {
+    id: "task-1",
+    organizationId: "org-1",
+    originMeetingId: null,
+    decisionItemId: null,
+    title: "資料作成",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "todo",
+    priority: null,
+    dueDateRaw: null,
+    dueDateEstimated: null,
+    assigneeRaw: null,
+    blockingItemId: null,
+    carriedOverCount: null,
+    ambiguityFlags: null,
+    progressNote: null,
+    dueDate: null,
+    startDate: null,
+    followUpDate: null,
+    version: 0,
+    createdAt: new Date("2026-05-17T00:00:00Z"),
+    updatedAt: new Date("2026-05-17T00:00:00Z"),
+    organization: { id: "org-1", name: "ACME" },
+    originMeeting: null,
+    assignees: [],
+    recurringMeetings: [
+      { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+    ],
+  };
+
+  it("定例配下のタスクを 200 で返す", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+    mockTaskFindMany.mockResolvedValue([sampleListTask] as never);
+
+    const res = await app.request("/recurring-meetings/rmtg-1/tasks");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ id: string }>;
+    expect(body).toHaveLength(1);
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          recurringMeetings: { some: { recurringMeetingId: "rmtg-1" } },
+        }),
+      }),
+    );
+  });
+
+  it("定例不存在は 404", async () => {
+    mockRecurringFindUnique.mockResolvedValue(null);
+    const res = await app.request("/recurring-meetings/missing/tasks");
+    expect(res.status).toBe(404);
+    expect(mockTaskFindMany).not.toHaveBeenCalled();
+  });
+
+  it("組織非所属は 404", async () => {
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/recurring-meetings/rmtg-1/tasks");
+    expect(res.status).toBe(404);
+    expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
 });
