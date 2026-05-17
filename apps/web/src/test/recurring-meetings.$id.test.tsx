@@ -1,5 +1,6 @@
 import type { MeetingListItem } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithQuery } from "./test-utils";
 
@@ -217,6 +218,69 @@ describe("定例詳細ページ - 会議のセクション分け", () => {
     render();
     expect(await screen.findByText("予定はまだありません")).toBeInTheDocument();
     expect(screen.getByText("過去の開催はまだありません")).toBeInTheDocument();
+  });
+
+  it("「会議を追加」ボタンを押すとダイアログが開き、defaultDurationMinutes が初期値になる", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "会議を追加" }));
+    const dialog = await screen.findByRole("dialog", { name: "会議を追加" });
+    // 既定で 60 分プリセットがアクティブ（aria-checked="true"）
+    const preset60 = within(dialog).getByRole("radio", { name: "60 分" });
+    expect(preset60).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("会議を追加して POST が呼ばれる", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    vi.mocked(
+      api["recurring-meetings"][":id"].meetings.$post,
+    ).mockResolvedValue(
+      mockJson(
+        {
+          id: "mtg-new",
+          title: "新規会議",
+          heldAt: "2026-05-20T01:00:00.000Z",
+          estimatedDurationMinutes: 60,
+          recurringMeetingId: "rmtg-1",
+        },
+        201,
+      ),
+    );
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "会議を追加" }));
+    const dialog = await screen.findByRole("dialog", { name: "会議を追加" });
+    await user.type(within(dialog).getByLabelText("タイトル"), "新規会議");
+    // datetime-local の値は "YYYY-MM-DDTHH:mm" 形式。fireEvent.change を使う方が
+    // jsdom 上で安定するが、userEvent.type でも入力できる。
+    const heldAtInput = within(dialog).getByLabelText("開催日時");
+    await user.type(heldAtInput, "2026-05-20T10:00");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
+    await waitFor(() => {
+      expect(
+        api["recurring-meetings"][":id"].meetings.$post,
+      ).toHaveBeenCalled();
+    });
+    // ペイロード検証: title / estimatedDurationMinutes は確実な値、
+    // heldAt はローカル時刻からの ISO 変換なのでテスト環境タイムゾーン依存になり得るが、
+    // ISO8601 文字列であることだけ確認する。
+    const call = vi.mocked(api["recurring-meetings"][":id"].meetings.$post).mock
+      .calls[0];
+    expect(call[0]).toMatchObject({
+      param: { id: "rmtg-1" },
+      json: {
+        title: "新規会議",
+        estimatedDurationMinutes: 60,
+      },
+    });
+    expect((call[0] as { json: { heldAt: string } }).json.heldAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+    );
   });
 
   it("会議取得だけ失敗した場合はエラー表示し、ヘッダは残る", async () => {

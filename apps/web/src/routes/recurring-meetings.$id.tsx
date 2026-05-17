@@ -1,3 +1,4 @@
+import { CreateMeetingDialog } from "@/features/recurring-meetings/components/CreateMeetingDialog";
 import { MeetingCard } from "@/features/recurring-meetings/components/MeetingCard";
 import { useRecurringMeetingDetail } from "@/features/recurring-meetings/hooks/useRecurringMeetingDetail";
 import { useRecurringMeetingMeetings } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
@@ -87,7 +88,13 @@ export function RecurringMeetingDetailView({
       ) : (
         <>
           <section aria-label="今後の会議" className="space-y-3">
-            <h2 className="text-lg font-semibold">今後の会議</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">今後の会議</h2>
+              <CreateMeetingDialog
+                recurringMeetingId={detail.id}
+                defaultDurationMinutes={detail.defaultDurationMinutes}
+              />
+            </div>
             {upcoming.length === 0 ? (
               <p className="text-muted-foreground">予定はまだありません</p>
             ) : (
