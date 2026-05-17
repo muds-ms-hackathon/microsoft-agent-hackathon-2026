@@ -191,7 +191,7 @@ function ReviewPendingCard() {
           </span>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-0 divide-y divide-border/80">
+      <CardContent className="flex flex-col gap-0">
         {MOCK_REVIEW_ROWS.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-sm text-muted-foreground">
@@ -202,7 +202,7 @@ function ReviewPendingCard() {
           MOCK_REVIEW_ROWS.map((row) => (
             <div
               key={row.label}
-              className="flex items-center justify-between py-3"
+              className="flex items-center justify-between py-3 border-b border-border/80"
             >
               <span className="text-sm">{row.label}</span>
               <span className="flex items-center gap-1 text-sm text-destructive font-medium">
