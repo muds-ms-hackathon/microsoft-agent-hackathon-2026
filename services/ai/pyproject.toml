@@ -5,6 +5,8 @@ requires-python = ">=3.12"
 dependencies = [
   "azure-servicebus>=7.14.3",
   "fastapi[standard]>=0.136.1",
+  "httpx>=0.28.1",
+  "openai>=1.0.0",
 ]
 
 [dependency-groups]
