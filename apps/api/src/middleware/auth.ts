@@ -35,7 +35,8 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
 
   // 自動作成に必要な claim が揃っていることを保証する
   const externalId = typeof payload.sub === "string" ? payload.sub : undefined;
-  const rawEmail = typeof payload.email === "string" ? payload.email : undefined;
+  const rawEmail =
+    typeof payload.email === "string" ? payload.email : undefined;
   const name = typeof payload.name === "string" ? payload.name : undefined;
 
   if (!externalId || !rawEmail || !name) {
