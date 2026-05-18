@@ -1186,48 +1186,9 @@ describe("POST /organizations/:id/join", () => {
     expect(res.status).toBe(500);
   });
 
-  it("認証ユーザーの email に大文字や前後空白が含まれていても招待を一致させる", async () => {
-    // IdP が "  Alice@Example.COM  " のように非正規化された email を返した場合でも、
-    // 招待保存時と同じく trim + 小文字化してから照合する必要がある（さもないと
-    // 招待を出したのに /join が永久に 404 になる）。
-    authState.current = {
-      ...authState.current,
-      email: "  Alice@Example.COM  ",
-    };
-    mockMembershipFindUnique.mockResolvedValue(null);
-
-    let observedEmail: string | undefined;
-    mockTransaction.mockImplementation(async (fn) => {
-      const tx = {
-        organizationInvitation: {
-          findFirst: vi.fn(async (args: { where: { email: string } }) => {
-            observedEmail = args.where.email;
-            return pendingInvitation;
-          }),
-          update: vi.fn().mockResolvedValue({
-            ...pendingInvitation,
-            status: "accepted",
-          }),
-        },
-        organizationMembership: {
-          create: vi.fn().mockResolvedValue({
-            userId: "user-1",
-            organizationId: "org-1",
-            role: "member",
-            joinedAt: new Date("2026-05-06T00:00:00Z"),
-          }),
-        },
-      };
-      // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ
-      return await (fn as (t: any) => Promise<unknown>)(tx);
-    });
-
-    const res = await app.request("/organizations/org-1/join", {
-      method: "POST",
-    });
-    expect(res.status).toBe(200);
-    expect(observedEmail).toBe("alice@example.com");
-  });
+  // 注: 「user.email が非正規化な場合でも /join で正規化する」テストは
+  // auth ミドルウェア側に正規化責務が移った (#103) ため削除した。
+  // 非正規化 email の正規化は test/auth.test.ts でカバー済み。
 });
 
 describe("GET /organizations/:id/tasks", () => {

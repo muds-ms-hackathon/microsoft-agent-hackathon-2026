@@ -428,10 +428,8 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     // （expired への自動遷移はバッチジョブ前提）。
     // 外側の existing チェックは高速パスとして残し、並列 /join による
     // membership 主キー (userId, organizationId) 重複は P2002 を捕捉して 409 にする。
-    // 招待は invite 側で email を trim + 小文字化して保存しているため、
-    // 認証ユーザーの email も同様に正規化してから照合する（IdP が大文字を
-    // 含む email を返してもマッチさせるため）。
-    const normalizedEmail = user.email.trim().toLowerCase();
+    // 招待 (invite 側) と user.email (auth ミドルウェア側) の双方が保存前に
+    // trim + 小文字化されている前提で raw 比較する。
     let result: {
       userId: string;
       organizationId: string;
@@ -442,7 +440,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         const invitation = await tx.organizationInvitation.findFirst({
           where: {
             organizationId: id,
-            email: normalizedEmail,
+            email: user.email,
             status: "pending",
             expiresAt: { gt: new Date() },
           },
