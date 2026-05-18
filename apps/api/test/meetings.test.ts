@@ -39,8 +39,24 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
+import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import type { TaskWithList } from "../src/lib/task-serialization.js";
+
+// ハンドラの include / select 形に対応する Prisma 型エイリアス。
+// GET /meetings/:id/tasks ハンドラ用: recurringMeeting.organizationId のみ
+type MeetingWithRecurringOrgId = Prisma.MeetingGetPayload<{
+  include: { recurringMeeting: { select: { organizationId: true } } };
+}>;
+// GET /meetings/:id ハンドラ用: recurringMeeting に organization (id/name) を含む詳細形
+type MeetingDetail = Prisma.MeetingGetPayload<{
+  include: {
+    recurringMeeting: {
+      include: { organization: { select: { id: true; name: true } } };
+    };
+  };
+}>;
 
 const mockFindUnique = vi.mocked(prisma.meeting.findUnique);
 const mockMembershipFindUnique = vi.mocked(
@@ -78,9 +94,9 @@ describe("GET /meetings/:id/tasks", () => {
     heldAt: new Date("2026-05-17T10:00:00Z"),
     recurringMeetingId: "rmtg-1",
     recurringMeeting: { organizationId: "org-1" },
-  };
+  } satisfies Partial<MeetingWithRecurringOrgId>;
 
-  const sampleListTask = {
+  const sampleListTask: TaskWithList = {
     id: "task-1",
     organizationId: "org-1",
     originMeetingId: "mtg-1",
@@ -111,14 +127,16 @@ describe("GET /meetings/:id/tasks", () => {
   };
 
   it("組織メンバーは origin タスクを 200 で取得できる", async () => {
-    mockFindUnique.mockResolvedValue(meetingWithRecurring as never);
+    mockFindUnique.mockResolvedValue(
+      meetingWithRecurring as MeetingWithRecurringOrgId,
+    );
     mockMembershipFindUnique.mockResolvedValue({
       userId: "user-1",
       organizationId: "org-1",
       role: "member",
       joinedAt: new Date(),
     });
-    mockTaskFindMany.mockResolvedValue([sampleListTask] as never);
+    mockTaskFindMany.mockResolvedValue([sampleListTask]);
 
     const res = await app.request("/meetings/mtg-1/tasks");
     expect(res.status).toBe(200);
@@ -139,20 +157,23 @@ describe("GET /meetings/:id/tasks", () => {
   });
 
   it("単発会議（recurringMeetingId=null）は 404（組織判定不能）", async () => {
-    mockFindUnique.mockResolvedValue({
+    const standalone = {
       id: "mtg-x",
       title: "単発",
       heldAt: new Date(),
       recurringMeetingId: null,
       recurringMeeting: null,
-    } as never);
+    } satisfies Partial<MeetingWithRecurringOrgId>;
+    mockFindUnique.mockResolvedValue(standalone as MeetingWithRecurringOrgId);
     const res = await app.request("/meetings/mtg-x/tasks");
     expect(res.status).toBe(404);
     expect(mockTaskFindMany).not.toHaveBeenCalled();
   });
 
   it("組織非所属は 404", async () => {
-    mockFindUnique.mockResolvedValue(meetingWithRecurring as never);
+    mockFindUnique.mockResolvedValue(
+      meetingWithRecurring as MeetingWithRecurringOrgId,
+    );
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/meetings/mtg-1/tasks");
     expect(res.status).toBe(404);
@@ -182,10 +203,10 @@ describe("GET /meetings/:id", () => {
       organizationId: "org-1",
       organization: { id: "org-1", name: "ACME" },
     },
-  };
+  } satisfies Partial<MeetingDetail>;
 
   it("組織メンバーは 200 で詳細を取得できる", async () => {
-    mockFindUnique.mockResolvedValue(detailMeeting as never);
+    mockFindUnique.mockResolvedValue(detailMeeting as MeetingDetail);
     mockMembershipFindUnique.mockResolvedValue({
       userId: "user-1",
       organizationId: "org-1",
@@ -214,19 +235,20 @@ describe("GET /meetings/:id", () => {
   });
 
   it("単発会議（recurringMeetingId=null）は 404", async () => {
-    mockFindUnique.mockResolvedValue({
+    const standalone = {
       id: "mtg-x",
       title: "単発",
       heldAt: new Date(),
       recurringMeetingId: null,
       recurringMeeting: null,
-    } as never);
+    } satisfies Partial<MeetingDetail>;
+    mockFindUnique.mockResolvedValue(standalone as MeetingDetail);
     const res = await app.request("/meetings/mtg-x");
     expect(res.status).toBe(404);
   });
 
   it("組織非所属は 404", async () => {
-    mockFindUnique.mockResolvedValue(detailMeeting as never);
+    mockFindUnique.mockResolvedValue(detailMeeting as MeetingDetail);
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/meetings/mtg-1");
     expect(res.status).toBe(404);

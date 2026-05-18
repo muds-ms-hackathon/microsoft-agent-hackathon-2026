@@ -61,8 +61,19 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
+import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import type {
+  TaskWithDetail,
+  TaskWithList,
+} from "../src/lib/task-serialization.js";
+
+// ハンドラ側で利用している include / select 形に合わせた Prisma 型エイリアス。
+// validateOriginMeetingInOrg ヘルパーが使う meeting.findUnique 形に対応。
+type MeetingWithRecurringOrgId = Prisma.MeetingGetPayload<{
+  include: { recurringMeeting: { select: { organizationId: true } } };
+}>;
 
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
@@ -85,7 +96,7 @@ function membership(role: "owner" | "admin" | "member" = "member") {
   };
 }
 
-const sampleTask = {
+const sampleTask: TaskWithDetail = {
   id: "task-1",
   organizationId: "org-1",
   originMeetingId: null,
@@ -169,17 +180,14 @@ describe("POST /tasks", () => {
       membership(),
       { ...membership(), userId: "user-2" },
     ]);
-    // attached 定例が同一組織に属することの検証
-    mockRecurringFindMany.mockResolvedValue([
-      { id: "rmtg-1", organizationId: "org-1" },
-      { id: "rmtg-2", organizationId: "org-1" },
-    ] as never);
+    // attached 定例が同一組織に属することの検証 (ハンドラの select は { id: true } のみ)
+    mockRecurringFindMany.mockResolvedValue([{ id: "rmtg-1" }, { id: "rmtg-2" }]);
     // originMeeting の組織判定（紐付く recurringMeeting 経由）
     mockMeetingFindUnique.mockResolvedValue({
       id: "mtg-1",
       recurringMeetingId: "rmtg-1",
       recurringMeeting: { organizationId: "org-1" },
-    } as never);
+    } as MeetingWithRecurringOrgId);
     mockTransaction.mockResolvedValue({
       ...sampleTask,
       originMeetingId: "mtg-1",
@@ -278,10 +286,8 @@ describe("POST /tasks", () => {
 
   it("recurringMeeting に他組織のものが混在する場合は 400", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
-    // 指定した 2 件のうち 1 件が他組織
-    mockRecurringFindMany.mockResolvedValue([
-      { id: "rmtg-1", organizationId: "org-1" },
-    ] as never);
+    // 指定した 2 件のうち 1 件が他組織 (ハンドラの select は { id: true } のみ)
+    mockRecurringFindMany.mockResolvedValue([{ id: "rmtg-1" }]);
 
     const res = await app.request("/tasks", {
       method: "POST",
@@ -303,7 +309,7 @@ describe("POST /tasks", () => {
       id: "mtg-1",
       recurringMeetingId: "rmtg-other",
       recurringMeeting: { organizationId: "org-other" },
-    } as never);
+    } as MeetingWithRecurringOrgId);
 
     const res = await app.request("/tasks", {
       method: "POST",
@@ -324,7 +330,7 @@ describe("POST /tasks", () => {
       id: "mtg-1",
       recurringMeetingId: null,
       recurringMeeting: null,
-    } as never);
+    } as MeetingWithRecurringOrgId);
 
     const res = await app.request("/tasks", {
       method: "POST",
@@ -381,7 +387,7 @@ describe("GET /tasks/:id", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("組織メンバーは関連を含む 200 を取得できる", async () => {
-    mockTaskFindUnique.mockResolvedValue({
+    const taskWithAttachments: TaskWithDetail = {
       ...sampleTask,
       assignees: [
         {
@@ -396,7 +402,8 @@ describe("GET /tasks/:id", () => {
       recurringMeetings: [
         { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
       ],
-    } as never);
+    } as TaskWithDetail;
+    mockTaskFindUnique.mockResolvedValue(taskWithAttachments);
     mockMembershipFindUnique.mockResolvedValue(membership());
 
     const res = await app.request("/tasks/task-1");
@@ -420,7 +427,7 @@ describe("GET /tasks/:id", () => {
   });
 
   it("タスク所属組織の非メンバーは 404", async () => {
-    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/tasks/task-1");
     expect(res.status).toBe(404);
@@ -433,12 +440,12 @@ describe("PATCH /tasks/:id", () => {
   it("title 更新が 200、version は updateMany でインクリメントされる", async () => {
     // 認可は requireTaskAccess の findUnique + membership で通す
     mockTaskFindUnique
-      .mockResolvedValueOnce(sampleTask as never) // requireTaskAccess の初回呼び出し
+      .mockResolvedValueOnce(sampleTask) // requireTaskAccess の初回呼び出し
       .mockResolvedValueOnce({
         ...sampleTask,
         title: "更新後",
         version: 1,
-      } as never); // 再取得
+      }); // 再取得
     mockMembershipFindUnique.mockResolvedValue(membership());
     mockTransaction.mockImplementation(async (fn) => {
       const tx = {
@@ -484,7 +491,7 @@ describe("PATCH /tasks/:id", () => {
   });
 
   it("version 不一致は 409", async () => {
-    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
     mockMembershipFindUnique.mockResolvedValue(membership());
     mockTransaction.mockImplementation(async (fn) => {
       const tx = {
@@ -510,7 +517,7 @@ describe("PATCH /tasks/:id", () => {
   });
 
   it("status を todo→in_progress に変更できる", async () => {
-    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
     mockMembershipFindUnique.mockResolvedValue(membership());
     mockTransaction.mockImplementation(async (fn) => {
       const tx = {
@@ -576,7 +583,7 @@ describe("PATCH /tasks/:id", () => {
   });
 
   it("assigneeUserIds の置換で他組織混入は 400", async () => {
-    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
     mockMembershipFindUnique.mockResolvedValue(membership());
     // 2 名指定したが 1 名しか組織メンバーとして見つからない
     mockMembershipFindMany.mockResolvedValue([membership()]);
@@ -595,7 +602,7 @@ describe("PATCH /tasks/:id", () => {
   });
 
   it("assigneeUserIds:[] は全削除を行う", async () => {
-    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
     mockMembershipFindUnique.mockResolvedValue(membership());
     let deletedAssignees = false;
     mockTransaction.mockImplementation(async (fn) => {
@@ -639,7 +646,7 @@ describe("GET /tasks/me", () => {
       ],
       recurringMeetings: [],
     };
-    mockTaskFindMany.mockResolvedValue([listTask] as never);
+    mockTaskFindMany.mockResolvedValue([listTask]);
 
     const res = await app.request("/tasks/me");
     expect(res.status).toBe(200);
@@ -744,10 +751,10 @@ describe("DELETE /tasks/:id", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("組織メンバーは 204 でタスクを削除できる", async () => {
-    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
     mockMembershipFindUnique.mockResolvedValue(membership());
     const mockTaskDelete = vi.mocked(prisma.task.delete);
-    mockTaskDelete.mockResolvedValue(sampleTask as never);
+    mockTaskDelete.mockResolvedValue(sampleTask);
 
     const res = await app.request("/tasks/task-1", { method: "DELETE" });
     expect(res.status).toBe(204);
@@ -761,7 +768,7 @@ describe("DELETE /tasks/:id", () => {
   });
 
   it("非メンバーは 404", async () => {
-    mockTaskFindUnique.mockResolvedValue(sampleTask as never);
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/tasks/task-1", { method: "DELETE" });
     expect(res.status).toBe(404);
