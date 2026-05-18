@@ -2,6 +2,7 @@ import { DeleteMemberDialog } from "@/features/organizations/components/DeleteMe
 import { DeleteOrganizationDialog } from "@/features/organizations/components/DeleteOrganizationDialog";
 import { EditOrganizationDialog } from "@/features/organizations/components/EditOrganizationDialog";
 import { InviteMemberDialog } from "@/features/organizations/components/InviteMemberDialog";
+import { PendingInvitationsList } from "@/features/organizations/components/PendingInvitationsList";
 import { RoleBadge } from "@/features/organizations/components/RoleBadge";
 import type {
   Member,
@@ -148,6 +149,10 @@ export function OrganizationDetailView({
           </ul>
         )}
       </section>
+
+      {(org.role === "owner" || org.role === "admin") && (
+        <PendingInvitationsList orgId={id} />
+      )}
 
       <section aria-label="定例" className="space-y-3">
         <div className="flex items-center justify-between gap-2">
