@@ -35,15 +35,20 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
 
   // 自動作成に必要な claim が揃っていることを保証する
   const externalId = typeof payload.sub === "string" ? payload.sub : undefined;
-  const email = typeof payload.email === "string" ? payload.email : undefined;
+  const rawEmail = typeof payload.email === "string" ? payload.email : undefined;
   const name = typeof payload.name === "string" ? payload.name : undefined;
 
-  if (!externalId || !email || !name) {
+  if (!externalId || !rawEmail || !name) {
     return c.json(
       { error: "トークンに必要な claim (sub/email/name) が含まれていません" },
       401,
     );
   }
+
+  // IdP が返す email は大文字や前後空白を含み得るため、保存前に正規化する。
+  // 招待 (`OrganizationInvitation.email`) も小文字化済みで保存しているため、
+  // 比較経路全体で正規化を一貫させる必要がある。
+  const email = rawEmail.trim().toLowerCase();
 
   // まず findUnique で取得し、差分があるときのみ update / 不在なら create を発行する。
   // upsert を毎リクエスト走らせると、同一ユーザーに対する並列リクエストで
