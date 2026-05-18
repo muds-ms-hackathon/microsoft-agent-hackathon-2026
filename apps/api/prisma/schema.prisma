@@ -178,11 +178,14 @@ enum OrgRole {
   member
 }
 
-// 組織への招待状態。pending → accepted/expired のいずれかに遷移する。
+// 組織への招待状態。pending → accepted/expired/revoked のいずれかに遷移する。
+// revoked は owner/admin が招待を取り消したケース。@@unique(organizationId, email, status)
+// の制約により、取消後 (status=revoked) は同一 email への再招待が pending として作成可能。
 enum InvitationStatus {
   pending
   accepted
   expired
+  revoked
 }
 
 // 組織。所属メンバーと配下定例の親エンティティ。

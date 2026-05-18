@@ -440,6 +440,7 @@ Enum InvitationStatus {
   pending
   accepted
   expired
+  revoked
 }
 
 Enum MeetingRole {
