@@ -353,6 +353,82 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(meeting, 201);
     },
   )
+  .get("/:id/invitations", async (c) => {
+    const id = c.req.param("id");
+
+    const guard = await requireOrgRole(
+      c,
+      id,
+      ["owner", "admin"],
+      "招待管理権限がありません",
+    );
+    if (!guard.ok) return guard.res;
+
+    // status=pending のみ取得し、期限切れ判定はレスポンス側の expired フィールドで返す。
+    // expired→DB 値の自動遷移はバッチジョブ前提のため、ここでは status を変更しない。
+    const invitations = await prisma.organizationInvitation.findMany({
+      where: { organizationId: id, status: "pending" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        inviter: {
+          select: { id: true, name: true, displayName: true, email: true },
+        },
+      },
+    });
+
+    const now = new Date();
+    const result = invitations.map((inv) => ({
+      id: inv.id,
+      email: inv.email,
+      role: inv.role,
+      status: inv.status,
+      expiresAt: inv.expiresAt,
+      createdAt: inv.createdAt,
+      expired: inv.expiresAt <= now,
+      inviter: inv.inviter,
+    }));
+    return c.json(result);
+  })
+  .delete("/:id/invitations/:invitationId", async (c) => {
+    const id = c.req.param("id");
+    const invitationId = c.req.param("invitationId");
+
+    const guard = await requireOrgRole(
+      c,
+      id,
+      ["owner", "admin"],
+      "招待管理権限がありません",
+    );
+    if (!guard.ok) return guard.res;
+
+    const invitation = await prisma.organizationInvitation.findUnique({
+      where: { id: invitationId },
+    });
+
+    // 404 条件:
+    //   - 招待が存在しない
+    //   - 招待が path で指定された別組織のもの（横断アクセス防止）
+    if (!invitation || invitation.organizationId !== id) {
+      return c.json({ error: "招待が見つかりません" }, 404);
+    }
+
+    // 既に accepted ⇒ メンバーは既に組織に居るため取消不可。409 で明示する。
+    if (invitation.status === "accepted") {
+      return c.json({ error: "既に受諾済みの招待は取消できません" }, 409);
+    }
+
+    // 既に revoked ⇒ 冪等として 204 を返す。expired は revoke を許す
+    //（owner/admin が「期限切れ招待を整理する」意図を尊重）。
+    if (invitation.status === "revoked") {
+      return c.body(null, 204);
+    }
+
+    await prisma.organizationInvitation.update({
+      where: { id: invitationId },
+      data: { status: "revoked" },
+    });
+    return c.body(null, 204);
+  })
   .post("/:id/invite", zValidator("json", inviteSchema), async (c) => {
     const id = c.req.param("id");
     const user = c.var.user;
