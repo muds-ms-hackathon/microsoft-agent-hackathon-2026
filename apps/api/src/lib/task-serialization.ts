@@ -40,6 +40,17 @@ export const taskListInclude = {
   organization: { select: { id: true, name: true } },
 } as const satisfies Prisma.TaskInclude;
 
+// `taskDetailInclude` / `taskListInclude` を Prisma の include 引数として使った場合に
+// 得られる Task のペイロード型。`serializeTask` の引数で `any` を使わずに済むようにし、
+// 中間テーブル (TaskAssignee / TaskRecurringMeeting) の構造を型レベルで保証する。
+// list 側は assignees.user に email を含めない差分のみで、構造は detail と同じ。
+export type TaskWithDetail = Prisma.TaskGetPayload<{
+  include: typeof taskDetailInclude;
+}>;
+export type TaskWithList = Prisma.TaskGetPayload<{
+  include: typeof taskListInclude;
+}>;
+
 // 一覧のデフォルト並び順。期限が近いタスク優先で、期限未設定 (NULL) は末尾、
 // 同期限内は最近更新されたものを上に出す。
 export const taskListOrderBy: Prisma.TaskOrderByWithRelationInput[] = [
@@ -48,15 +59,12 @@ export const taskListOrderBy: Prisma.TaskOrderByWithRelationInput[] = [
 ];
 
 // Prisma が返す中間テーブル経由の構造をフロント向けに平坦化する。
-// detail / list の両方で共通利用する。
-// biome-ignore lint/suspicious/noExplicitAny: include 結果の型が広いので any で受ける
-export function serializeTask(task: any) {
+// detail / list の両方で共通利用するためユニオン型を受ける。
+export function serializeTask(task: TaskWithDetail | TaskWithList) {
   const { assignees, recurringMeetings, ...rest } = task;
   return {
     ...rest,
-    // biome-ignore lint/suspicious/noExplicitAny: 中間テーブルの行型
-    assignees: assignees.map((a: any) => a.user),
-    // biome-ignore lint/suspicious/noExplicitAny: 中間テーブルの行型
-    recurringMeetings: recurringMeetings.map((r: any) => r.recurringMeeting),
+    assignees: assignees.map((a) => a.user),
+    recurringMeetings: recurringMeetings.map((r) => r.recurringMeeting),
   };
 }

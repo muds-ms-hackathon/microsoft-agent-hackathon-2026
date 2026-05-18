@@ -13,6 +13,7 @@ import {
   taskDetailInclude,
   taskListInclude,
   taskListOrderBy,
+  type TaskWithDetail,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireOrgMembership } from "../middleware/authz.js";
@@ -64,10 +65,7 @@ async function validateOriginMeetingInOrg(
 async function requireTaskAccess(
   c: Context<{ Variables: AuthVariables }>,
   taskId: string,
-): Promise<
-  // biome-ignore lint/suspicious/noExplicitAny: include 結果の型が広いので any で受ける
-  { ok: true; task: any } | { ok: false; res: Response }
-> {
+): Promise<{ ok: true; task: TaskWithDetail } | { ok: false; res: Response }> {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     include: taskDetailInclude,
@@ -169,7 +167,8 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
           })),
         });
       }
-      return tx.task.findUnique({
+      // 直前に作成済みなので必ず存在する。型上も null を排除するため findUniqueOrThrow を使う。
+      return tx.task.findUniqueOrThrow({
         where: { id: task.id },
         include: taskDetailInclude,
       });
@@ -190,7 +189,7 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
     const guard = await requireTaskAccess(c, id);
     if (!guard.ok) return guard.res;
 
-    const organizationId = guard.task.organizationId as string;
+    const organizationId = guard.task.organizationId;
 
     // assignees / recurringMeetings の置換が指定されたら、クロス組織を再検証する。
     // 作成時と同じ整合性ルール（同一組織内のみ許可）。
@@ -281,7 +280,8 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
           });
         }
       }
-      const task = await tx.task.findUnique({
+      // updateMany が count > 0 を返した直後なので必ず存在する。
+      const task = await tx.task.findUniqueOrThrow({
         where: { id },
         include: taskDetailInclude,
       });

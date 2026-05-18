@@ -444,7 +444,7 @@ describe("PATCH /tasks/:id", () => {
       const tx = {
         task: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findUnique: vi
+          findUniqueOrThrow: vi
             .fn()
             .mockResolvedValue({ ...sampleTask, title: "更新後", version: 1 }),
         },
@@ -516,7 +516,7 @@ describe("PATCH /tasks/:id", () => {
       const tx = {
         task: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findUnique: vi.fn().mockResolvedValue({
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
             ...sampleTask,
             status: "in_progress",
             version: 1,
@@ -602,7 +602,7 @@ describe("PATCH /tasks/:id", () => {
       const tx = {
         task: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findUnique: vi.fn().mockResolvedValue(sampleTask),
+          findUniqueOrThrow: vi.fn().mockResolvedValue(sampleTask),
         },
         taskAssignee: {
           deleteMany: vi.fn(() => {
