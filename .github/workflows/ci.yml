@@ -55,6 +55,16 @@ jobs:
       - name: Prisma クライアント生成
         run: pnpm --filter api exec prisma generate
 
+      - name: schema.dbml のドリフト検知
+        # schema.prisma を変更したのに prisma-dbml-generator の出力をコミットし忘れた
+        # PR を検知する。差分があれば非ゼロ終了して CI を失敗させる。
+        run: |
+          if ! git diff --exit-code apps/api/prisma/dbml/schema.dbml; then
+            echo "::error::apps/api/prisma/dbml/schema.dbml がコミットされた内容と一致しません。"
+            echo "::error::ローカルで 'pnpm --filter api exec prisma generate' を実行し、生成された schema.dbml をコミットしてください。"
+            exit 1
+          fi
+
       - name: Lint (Biome)
         run: pnpm turbo run lint
 
@@ -113,6 +123,16 @@ jobs:
 
       - name: Prisma クライアント生成
         run: pnpm --filter api exec prisma generate
+
+      - name: schema.dbml のドリフト検知
+        # lint-typecheck-ts でも同じ検査を行うが、片方のジョブだけがリトライ実行
+        # されたケースでも漏れなく検知できるよう、test-ts 側でも二重に担保する。
+        run: |
+          if ! git diff --exit-code apps/api/prisma/dbml/schema.dbml; then
+            echo "::error::apps/api/prisma/dbml/schema.dbml がコミットされた内容と一致しません。"
+            echo "::error::ローカルで 'pnpm --filter api exec prisma generate' を実行し、生成された schema.dbml をコミットしてください。"
+            exit 1
+          fi
 
       - name: テスト (Vitest)
         run: pnpm turbo run test
