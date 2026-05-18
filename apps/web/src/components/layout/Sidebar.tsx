@@ -9,7 +9,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreateOrganizationDialog } from "@/features/organizations/components/CreateOrganizationDialog";
-import { useOrganizationsQuery } from "@/features/organizations/hooks/useOrganizationsQuery";
+import {
+  type OrganizationListItem,
+  useOrganizationsQuery,
+} from "@/features/organizations/hooks/useOrganizationsQuery";
 import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
 import {
@@ -236,8 +239,8 @@ function OrganizationSelector({
   onOpenCreateDialog,
 }: {
   isLoading: boolean;
-  orgs: Organization[] | null;
-  currentOrg: Organization | null;
+  orgs: OrganizationListItem[] | null;
+  currentOrg: OrganizationListItem | null;
   currentId: string | null;
   onSelect: (id: string) => void;
   onOpenCreateDialog: () => void;
