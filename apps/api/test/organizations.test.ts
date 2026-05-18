@@ -75,6 +75,7 @@ import {
 } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import type { TaskWithList } from "../src/lib/task-serialization.js";
 
 // ハンドラ側で利用している include 形に合わせた Prisma 型エイリアス。
 // findMany / findUnique のモック戻り値を `as never` で渡すのを避けるためのもの。
@@ -93,6 +94,18 @@ type InvitationWithInviter = Prisma.OrganizationInvitationGetPayload<{
     inviter: {
       select: { id: true; name: true; displayName: true; email: true };
     };
+  };
+}>;
+// GET /organizations/:id/next-meetings の findMany が select で取得する形。
+// ハンドラの select 句と一致させる必要がある（ズレるとここで型エラーになる）。
+type NextMeetingRow = Prisma.MeetingGetPayload<{
+  select: {
+    id: true;
+    title: true;
+    heldAt: true;
+    estimatedDurationMinutes: true;
+    recurringMeetingId: true;
+    recurringMeeting: { select: { name: true } };
   };
 }>;
 
@@ -1485,7 +1498,7 @@ describe("GET /organizations/:id/tasks", () => {
     };
   }
 
-  const sampleListTask = {
+  const sampleListTask: TaskWithList = {
     id: "task-1",
     organizationId: "org-1",
     originMeetingId: null,
@@ -1517,7 +1530,7 @@ describe("GET /organizations/:id/tasks", () => {
 
   it("組織メンバーは 200 でタスク一覧を取得できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockTaskFindMany.mockResolvedValue([sampleListTask] as never);
+    mockTaskFindMany.mockResolvedValue([sampleListTask]);
 
     const res = await app.request("/organizations/org-1/tasks");
     expect(res.status).toBe(200);
@@ -1570,7 +1583,7 @@ describe("GET /organizations/:id/next-meetings", () => {
   }
 
   // findMany が select 句で返す形（recurringMeeting がネスト）
-  const sampleMeetingRows = [
+  const sampleMeetingRows: NextMeetingRow[] = [
     {
       id: "mtg-near",
       title: "週次定例 2026-05-20",
@@ -1591,7 +1604,7 @@ describe("GET /organizations/:id/next-meetings", () => {
 
   it("組織メンバーは 200 で upcoming な会議を limit 件まで取得できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockMeetingFindMany.mockResolvedValue(sampleMeetingRows as never);
+    mockMeetingFindMany.mockResolvedValue(sampleMeetingRows);
 
     const res = await app.request("/organizations/org-1/next-meetings?limit=5");
     expect(res.status).toBe(200);
@@ -1706,16 +1719,15 @@ describe("GET /organizations/:id/next-meetings", () => {
     // 防御的ケース: include の関係フィルタにより通常は発生しないが、
     // recurringMeeting 側が null の場合に NPE を起こさないことを担保する。
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockMeetingFindMany.mockResolvedValue([
-      {
-        id: "mtg-x",
-        title: "edge",
-        heldAt: new Date("2026-05-20T01:00:00Z"),
-        estimatedDurationMinutes: null,
-        recurringMeetingId: null,
-        recurringMeeting: null,
-      },
-    ] as never);
+    const edgeRow: NextMeetingRow = {
+      id: "mtg-x",
+      title: "edge",
+      heldAt: new Date("2026-05-20T01:00:00Z"),
+      estimatedDurationMinutes: null,
+      recurringMeetingId: null,
+      recurringMeeting: null,
+    };
+    mockMeetingFindMany.mockResolvedValue([edgeRow]);
 
     const res = await app.request("/organizations/org-1/next-meetings?limit=1");
     expect(res.status).toBe(200);
