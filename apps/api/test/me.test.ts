@@ -1,0 +1,152 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Prisma を全モックしてルートロジックのみ検証する。
+vi.mock("../src/lib/prisma.js", () => ({
+  prisma: {
+    organizationInvitation: {
+      findMany: vi.fn(),
+    },
+  },
+}));
+
+// auth ミドルウェアを差し替え、認証済みユーザーを c.var.user に注入する。
+// テストごとに email を上書きできるよう mutable な hoisted state を介す。
+const authState = vi.hoisted(() => {
+  const defaultUser = {
+    id: "user-1",
+    externalId: "ext-1",
+    email: "alice@example.com",
+    name: "alice",
+    displayName: "alice",
+    createdAt: new Date("2026-05-01T00:00:00Z"),
+    updatedAt: new Date("2026-05-01T00:00:00Z"),
+  };
+  return {
+    defaultUser,
+    current: { ...defaultUser },
+  };
+});
+
+vi.mock("../src/middleware/auth.js", () => ({
+  auth: async (
+    c: { set: (key: string, value: unknown) => void },
+    next: () => Promise<void>,
+  ) => {
+    c.set("user", authState.current);
+    await next();
+  },
+}));
+
+import { app } from "../src/app.js";
+import { prisma } from "../src/lib/prisma.js";
+
+const mockInvitationFindMany = vi.mocked(
+  prisma.organizationInvitation.findMany,
+);
+
+function buildInvitation(
+  overrides: Partial<{
+    id: string;
+    organizationId: string;
+    email: string;
+    invitedBy: string;
+    role: "admin" | "member";
+    expiresAt: Date;
+    status: "pending" | "accepted" | "expired";
+    createdAt: Date;
+    organization: { id: string; name: string };
+    inviter: { id: string; name: string; displayName: string; email: string };
+  }> = {},
+) {
+  return {
+    id: "inv-1",
+    organizationId: "org-1",
+    email: "alice@example.com",
+    invitedBy: "user-2",
+    role: "member" as const,
+    expiresAt: new Date("2099-01-01T00:00:00Z"),
+    status: "pending" as const,
+    createdAt: new Date("2026-05-01T00:00:00Z"),
+    organization: { id: "org-1", name: "ACME 株式会社" },
+    inviter: {
+      id: "user-2",
+      name: "bob",
+      displayName: "Bob",
+      email: "bob@example.com",
+    },
+    ...overrides,
+  };
+}
+
+describe("GET /me/invitations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.current = { ...authState.defaultUser };
+  });
+
+  it("認証ユーザーの email に一致する pending 非期限切れの招待を返す", async () => {
+    const inv = buildInvitation();
+    mockInvitationFindMany.mockResolvedValue([inv] as never);
+
+    const res = await app.request("/me/invitations");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      organization: { id: string; name: string };
+      role: string;
+      inviter: { name: string; email: string };
+      expiresAt: string;
+    }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe("inv-1");
+    expect(body[0].organization).toEqual({
+      id: "org-1",
+      name: "ACME 株式会社",
+    });
+    expect(body[0].role).toBe("member");
+    expect(body[0].inviter.name).toBe("bob");
+    expect(body[0].inviter.email).toBe("bob@example.com");
+  });
+
+  it("認証ユーザーの email・pending・期限内で findMany が呼ばれる", async () => {
+    mockInvitationFindMany.mockResolvedValue([] as never);
+
+    await app.request("/me/invitations");
+    expect(mockInvitationFindMany).toHaveBeenCalledTimes(1);
+    const callArg = mockInvitationFindMany.mock.calls[0]?.[0];
+    expect(callArg?.where).toMatchObject({
+      email: "alice@example.com",
+      status: "pending",
+    });
+    // 期限切れ除外: expiresAt > 現在時刻
+    expect(callArg?.where?.expiresAt).toBeDefined();
+    expect(callArg?.where?.expiresAt.gt).toBeInstanceOf(Date);
+  });
+
+  it("該当する招待が無い場合は空配列を返す", async () => {
+    mockInvitationFindMany.mockResolvedValue([] as never);
+
+    const res = await app.request("/me/invitations");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
+  });
+
+  it("organization と inviter を include して返す", async () => {
+    mockInvitationFindMany.mockResolvedValue([] as never);
+
+    await app.request("/me/invitations");
+    const callArg = mockInvitationFindMany.mock.calls[0]?.[0];
+    expect(callArg?.include).toBeDefined();
+    expect(callArg?.include?.organization).toBeTruthy();
+    expect(callArg?.include?.inviter).toBeTruthy();
+  });
+
+  it("複数件は createdAt 降順で返す（新しい招待を上に）", async () => {
+    mockInvitationFindMany.mockResolvedValue([] as never);
+
+    await app.request("/me/invitations");
+    const callArg = mockInvitationFindMany.mock.calls[0]?.[0];
+    expect(callArg?.orderBy).toEqual({ createdAt: "desc" });
+  });
+});
