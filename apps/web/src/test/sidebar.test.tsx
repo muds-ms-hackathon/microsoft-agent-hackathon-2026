@@ -96,9 +96,7 @@ const mockOrgs: Organization[] = [
   },
 ];
 
-function mockJson<T>(data: T) {
-  return { ok: true, status: 200, json: async () => data } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 function renderSidebar() {
   const client = new QueryClient({
