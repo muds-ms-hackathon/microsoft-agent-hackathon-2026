@@ -237,6 +237,82 @@ describe("auth middleware", () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
+  it("新規ユーザー作成時 email は trim + 小文字化された値で保存される", async () => {
+    mockJwtVerify.mockResolvedValueOnce({
+      payload: {
+        sub: "ext-5",
+        email: "  Bob@Example.COM  ",
+        name: "bob",
+      },
+      protectedHeader: { alg: "RS256" },
+    } as never);
+    mockFindUnique.mockResolvedValueOnce(null);
+    mockCreate.mockResolvedValueOnce({
+      ...sampleUser,
+      id: "cuid-user-5",
+      externalId: "ext-5",
+      email: "bob@example.com",
+      name: "bob",
+      displayName: "bob",
+    });
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: {
+        externalId: "ext-5",
+        email: "bob@example.com",
+        name: "bob",
+        displayName: "bob",
+      },
+    });
+  });
+
+  it("既存ユーザーは payload email の大文字小文字差では update されない（正規化後一致）", async () => {
+    mockJwtVerify.mockResolvedValueOnce({
+      payload: {
+        sub: "ext-1",
+        email: "Alice@Example.COM",
+        name: "alice",
+      },
+      protectedHeader: { alg: "RS256" },
+    } as never);
+    mockFindUnique.mockResolvedValueOnce(sampleUser);
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(200);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("既存ユーザーの IdP 側 email 変更時は正規化済みの値で update される", async () => {
+    mockJwtVerify.mockResolvedValueOnce({
+      payload: {
+        sub: "ext-1",
+        email: "  Alice-Renamed@Example.COM  ",
+        name: "alice",
+      },
+      protectedHeader: { alg: "RS256" },
+    } as never);
+    mockFindUnique.mockResolvedValueOnce(sampleUser);
+    mockUpdate.mockResolvedValueOnce({
+      ...sampleUser,
+      email: "alice-renamed@example.com",
+    });
+    const app = buildTestApp();
+    await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { externalId: "ext-1" },
+      data: { email: "alice-renamed@example.com", name: "alice" },
+    });
+  });
+
   it("payload.sub が文字列以外の場合は 401 を返す", async () => {
     mockJwtVerify.mockResolvedValueOnce({
       payload: { sub: 123, email: "alice@example.com", name: "alice" },
