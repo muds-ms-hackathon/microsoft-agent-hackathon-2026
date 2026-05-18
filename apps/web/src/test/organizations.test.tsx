@@ -173,6 +173,18 @@ describe("組織作成モーダル", () => {
     ).toBeInTheDocument();
   });
 
+  it("説明欄は複数行入力ができる textarea で描画される", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<OrganizationsPage />);
+
+    await user.click(screen.getByRole("button", { name: "組織を作成" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "新しい組織を作成",
+    });
+    const descriptionInput = within(dialog).getByLabelText("説明");
+    expect(descriptionInput.tagName).toBe("TEXTAREA");
+  });
+
   it("name が空のとき送信できずバリデーションエラーが出る", async () => {
     const user = userEvent.setup();
     renderWithQuery(<OrganizationsPage />);

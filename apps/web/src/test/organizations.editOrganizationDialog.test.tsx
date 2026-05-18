@@ -114,6 +114,19 @@ describe("組織詳細ページ - 組織情報編集ダイアログ", () => {
     );
   });
 
+  it("説明欄は複数行入力ができる textarea で描画される", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+    await user.click(
+      await screen.findByRole("button", { name: "組織情報を編集" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "組織情報を編集",
+    });
+    const descriptionInput = within(dialog).getByLabelText("説明");
+    expect(descriptionInput.tagName).toBe("TEXTAREA");
+  });
+
   it("編集ダイアログを開くと現在の name/description がプレフィルされる", async () => {
     const user = userEvent.setup();
     renderDetail();

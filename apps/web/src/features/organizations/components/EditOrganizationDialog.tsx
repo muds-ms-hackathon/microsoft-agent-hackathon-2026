@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useUpdateOrganization } from "@/features/organizations/hooks/useUpdateOrganization";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useId, useState } from "react";
@@ -94,7 +95,11 @@ export function EditOrganizationDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor={descriptionId}>説明</Label>
-            <Input id={descriptionId} {...register("description")} />
+            <Textarea
+              id={descriptionId}
+              rows={3}
+              {...register("description")}
+            />
           </div>
           {mutation.isError && (
             <p className="text-destructive text-sm">更新に失敗しました</p>
