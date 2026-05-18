@@ -88,6 +88,7 @@ function NextMeetingCard({
 
 // ===== 次回会議セクション =====
 // 全定例の会議を並列取得し、最も直近の upcoming 会議を1件だけ表示する。
+// TODO: 表示件数（直近N件・当日・今週など）は別 Issue で検討・対応する。
 
 type Candidate = {
   recurringMeetingId: string;
@@ -137,12 +138,10 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
     }
   }
 
-  // heldAt が最も近いものを選ぶ
-  const nearest =
-    [...candidates].sort(
-      (a, b) =>
-        new Date(a.next.heldAt).getTime() - new Date(b.next.heldAt).getTime(),
-    )[0] ?? null;
+  const nearest = candidates.reduce<Candidate | null>((min, c) => {
+    if (!min) return c;
+    return new Date(c.next.heldAt) < new Date(min.next.heldAt) ? c : min;
+  }, null);
 
   if (!nearest) {
     return (
