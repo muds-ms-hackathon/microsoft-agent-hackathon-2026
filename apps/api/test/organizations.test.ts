@@ -68,9 +68,33 @@ function resetAuthUser() {
   authState.current = { ...authState.defaultUser };
 }
 
-import { Prisma } from "@prisma/client";
+import {
+  Prisma,
+  type OrganizationInvitation,
+  type OrganizationMembership,
+} from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+
+// ハンドラ側で利用している include 形に合わせた Prisma 型エイリアス。
+// findMany / findUnique のモック戻り値を `as never` で渡すのを避けるためのもの。
+// API ハンドラ側で include 句を変更したら、ここの型もコンパイル時に追従させる。
+type OrgWithSelfRoleMembership = Prisma.OrganizationGetPayload<{
+  include: { memberships: { select: { role: true } } };
+}>;
+type OrgWithRecurringMeetings = Prisma.OrganizationGetPayload<{
+  include: { recurringMeetings: true };
+}>;
+type MembershipWithUser = Prisma.OrganizationMembershipGetPayload<{
+  include: { user: true };
+}>;
+type InvitationWithInviter = Prisma.OrganizationInvitationGetPayload<{
+  include: {
+    inviter: {
+      select: { id: true; name: true; displayName: true; email: true };
+    };
+  };
+}>;
 
 const mockOrgFindMany = vi.mocked(prisma.organization.findMany);
 const mockOrgFindUnique = vi.mocked(prisma.organization.findUnique);
@@ -198,9 +222,10 @@ describe("GET /organizations", () => {
   it("200 と認証ユーザーが所属する組織一覧（自分の role を含む）を返す", async () => {
     // findMany は include: { memberships } で自分の membership を含めて取得し、
     // ハンドラ側で role を平坦化して返す。
-    mockOrgFindMany.mockResolvedValue([
+    const rows: OrgWithSelfRoleMembership[] = [
       { ...sampleOrg, memberships: [{ role: "owner" }] },
-    ] as never);
+    ];
+    mockOrgFindMany.mockResolvedValue(rows);
     const res = await app.request("/organizations");
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ id: string; role: string }>;
@@ -222,7 +247,7 @@ describe("GET /organizations", () => {
   });
 
   it("複数所属でそれぞれの role が含まれる", async () => {
-    mockOrgFindMany.mockResolvedValue([
+    const rows: OrgWithSelfRoleMembership[] = [
       { ...sampleOrg, id: "org-1", memberships: [{ role: "owner" }] },
       {
         ...sampleOrg,
@@ -230,7 +255,8 @@ describe("GET /organizations", () => {
         name: "別の組織",
         memberships: [{ role: "member" }],
       },
-    ] as never);
+    ];
+    mockOrgFindMany.mockResolvedValue(rows);
     const res = await app.request("/organizations");
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ id: string; role: string }>;
@@ -282,10 +308,11 @@ describe("GET /organizations/:id", () => {
       role: "owner",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockOrgFindUnique.mockResolvedValue({
+    const orgWithMeetings: OrgWithRecurringMeetings = {
       ...sampleOrg,
       recurringMeetings: sampleRecurringMeetings,
-    } as never);
+    };
+    mockOrgFindUnique.mockResolvedValue(orgWithMeetings);
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(200);
@@ -323,10 +350,11 @@ describe("GET /organizations/:id", () => {
       role: "member",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockOrgFindUnique.mockResolvedValue({
+    const orgEmpty: OrgWithRecurringMeetings = {
       ...sampleOrg,
       recurringMeetings: [],
-    } as never);
+    };
+    mockOrgFindUnique.mockResolvedValue(orgEmpty);
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(200);
@@ -341,10 +369,11 @@ describe("GET /organizations/:id", () => {
       role: "admin",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockOrgFindUnique.mockResolvedValue({
+    const orgEmpty: OrgWithRecurringMeetings = {
       ...sampleOrg,
       recurringMeetings: [],
-    } as never);
+    };
+    mockOrgFindUnique.mockResolvedValue(orgEmpty);
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(200);
@@ -380,7 +409,7 @@ describe("GET /organizations/:id", () => {
 describe("GET /organizations/:id/members", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const sampleMemberships = [
+  const sampleMemberships: MembershipWithUser[] = [
     // 並び順検証用に、意図的に DB 順序を「想定の表示順」と逆にしておく。
     {
       userId: "user-3",
@@ -439,7 +468,7 @@ describe("GET /organizations/:id/members", () => {
       role: "owner",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockMembershipFindMany.mockResolvedValue(sampleMemberships as never);
+    mockMembershipFindMany.mockResolvedValue(sampleMemberships);
 
     const res = await app.request("/organizations/org-1/members");
     expect(res.status).toBe(200);
@@ -482,7 +511,7 @@ describe("GET /organizations/:id/members", () => {
       role: "member",
       joinedAt: new Date("2026-05-05T00:00:00Z"),
     });
-    mockMembershipFindMany.mockResolvedValue(sampleMemberships as never);
+    mockMembershipFindMany.mockResolvedValue(sampleMemberships);
 
     const res = await app.request("/organizations/org-1/members");
     expect(res.status).toBe(200);
@@ -502,7 +531,10 @@ describe("GET /organizations/:id/members", () => {
 describe("DELETE /organizations/:id/members/:userId", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  function membership(role: "owner" | "admin" | "member", userId = "user-1") {
+  function membership(
+    role: "owner" | "admin" | "member",
+    userId = "user-1",
+  ): OrganizationMembership {
     return {
       userId,
       organizationId: "org-1",
@@ -516,9 +548,7 @@ describe("DELETE /organizations/:id/members/:userId", () => {
     mockMembershipFindUnique
       .mockResolvedValueOnce(membership("owner", "user-1"))
       .mockResolvedValueOnce(membership("member", "user-2"));
-    mockMembershipDelete.mockResolvedValue(
-      membership("member", "user-2") as never,
-    );
+    mockMembershipDelete.mockResolvedValue(membership("member", "user-2"));
 
     const res = await app.request("/organizations/org-1/members/user-2", {
       method: "DELETE",
@@ -1015,14 +1045,14 @@ describe("GET /organizations/:id/invitations", () => {
     };
   }
 
-  const pendingInvitation = {
+  const pendingInvitation: InvitationWithInviter = {
     id: "inv-1",
     organizationId: "org-1",
     email: "bob@example.com",
     invitedBy: "user-1",
-    role: "member" as const,
+    role: "member",
     expiresAt: new Date("2026-05-26T00:00:00Z"),
-    status: "pending" as const,
+    status: "pending",
     createdAt: new Date("2026-05-19T00:00:00Z"),
     inviter: {
       id: "user-1",
@@ -1034,7 +1064,7 @@ describe("GET /organizations/:id/invitations", () => {
 
   it("owner は pending 招待一覧を取得できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
-    mockInvitationFindMany.mockResolvedValue([pendingInvitation] as never);
+    mockInvitationFindMany.mockResolvedValue([pendingInvitation]);
 
     const res = await app.request("/organizations/org-1/invitations");
     expect(res.status).toBe(200);
@@ -1054,7 +1084,7 @@ describe("GET /organizations/:id/invitations", () => {
 
   it("admin も pending 招待一覧を取得できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("admin"));
-    mockInvitationFindMany.mockResolvedValue([] as never);
+    mockInvitationFindMany.mockResolvedValue([]);
 
     const res = await app.request("/organizations/org-1/invitations");
     expect(res.status).toBe(200);
@@ -1078,7 +1108,7 @@ describe("GET /organizations/:id/invitations", () => {
 
   it("status=pending で findMany が呼ばれ、期限切れ判定は expired フィールドで返る", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
-    const expiredInvitation = {
+    const expiredInvitation: InvitationWithInviter = {
       ...pendingInvitation,
       id: "inv-expired",
       expiresAt: new Date("2026-05-10T00:00:00Z"),
@@ -1086,7 +1116,7 @@ describe("GET /organizations/:id/invitations", () => {
     mockInvitationFindMany.mockResolvedValue([
       pendingInvitation,
       expiredInvitation,
-    ] as never);
+    ]);
 
     const res = await app.request("/organizations/org-1/invitations");
     expect(res.status).toBe(200);
@@ -1128,24 +1158,24 @@ describe("DELETE /organizations/:id/invitations/:invitationId", () => {
     };
   }
 
-  const pendingInvitation = {
+  const pendingInvitation: OrganizationInvitation = {
     id: "inv-1",
     organizationId: "org-1",
     email: "bob@example.com",
     invitedBy: "user-1",
-    role: "member" as const,
+    role: "member",
     expiresAt: new Date("2026-05-26T00:00:00Z"),
-    status: "pending" as const,
+    status: "pending",
     createdAt: new Date("2026-05-19T00:00:00Z"),
   };
 
   it("owner は pending 招待を取消できる (204)", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
-    mockInvitationFindUnique.mockResolvedValue(pendingInvitation as never);
+    mockInvitationFindUnique.mockResolvedValue(pendingInvitation);
     mockInvitationUpdate.mockResolvedValue({
       ...pendingInvitation,
       status: "revoked",
-    } as never);
+    });
 
     const res = await app.request("/organizations/org-1/invitations/inv-1", {
       method: "DELETE",
@@ -1159,11 +1189,11 @@ describe("DELETE /organizations/:id/invitations/:invitationId", () => {
 
   it("admin も pending 招待を取消できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("admin"));
-    mockInvitationFindUnique.mockResolvedValue(pendingInvitation as never);
+    mockInvitationFindUnique.mockResolvedValue(pendingInvitation);
     mockInvitationUpdate.mockResolvedValue({
       ...pendingInvitation,
       status: "revoked",
-    } as never);
+    });
 
     const res = await app.request("/organizations/org-1/invitations/inv-1", {
       method: "DELETE",
@@ -1198,7 +1228,7 @@ describe("DELETE /organizations/:id/invitations/:invitationId", () => {
     mockInvitationFindUnique.mockResolvedValue({
       ...pendingInvitation,
       organizationId: "other-org",
-    } as never);
+    });
 
     const res = await app.request("/organizations/org-1/invitations/inv-1", {
       method: "DELETE",
@@ -1212,7 +1242,7 @@ describe("DELETE /organizations/:id/invitations/:invitationId", () => {
     mockInvitationFindUnique.mockResolvedValue({
       ...pendingInvitation,
       status: "accepted",
-    } as never);
+    });
 
     const res = await app.request("/organizations/org-1/invitations/inv-1", {
       method: "DELETE",
@@ -1226,7 +1256,7 @@ describe("DELETE /organizations/:id/invitations/:invitationId", () => {
     mockInvitationFindUnique.mockResolvedValue({
       ...pendingInvitation,
       status: "revoked",
-    } as never);
+    });
 
     const res = await app.request("/organizations/org-1/invitations/inv-1", {
       method: "DELETE",
