@@ -125,14 +125,13 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
 
   // 全定例から最も直近の upcoming 会議を1件選ぶ
   const candidates: Candidate[] = [];
-  for (let i = 0; i < recurringMeetings.length; i++) {
+  for (const [i, rm] of recurringMeetings.entries()) {
     const meetings = meetingQueries[i]?.data ?? [];
-    const { upcoming } = partitionMeetings(meetings);
-    const next = upcoming[0];
+    const next = partitionMeetings(meetings).upcoming[0];
     if (next) {
       candidates.push({
-        recurringMeetingId: recurringMeetings[i].id,
-        recurringMeetingName: recurringMeetings[i].name,
+        recurringMeetingId: rm.id,
+        recurringMeetingName: rm.name,
         next,
       });
     }
