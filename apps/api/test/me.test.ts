@@ -40,7 +40,9 @@ vi.mock("../src/middleware/auth.js", () => ({
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 
-const mockInvitationFindMany = vi.mocked(prisma.organizationInvitation.findMany);
+const mockInvitationFindMany = vi.mocked(
+  prisma.organizationInvitation.findMany,
+);
 
 function buildInvitation(
   overrides: Partial<{
@@ -97,7 +99,10 @@ describe("GET /me/invitations", () => {
     }>;
     expect(body).toHaveLength(1);
     expect(body[0].id).toBe("inv-1");
-    expect(body[0].organization).toEqual({ id: "org-1", name: "ACME 株式会社" });
+    expect(body[0].organization).toEqual({
+      id: "org-1",
+      name: "ACME 株式会社",
+    });
     expect(body[0].role).toBe("member");
     expect(body[0].inviter.name).toBe("bob");
     expect(body[0].inviter.email).toBe("bob@example.com");
