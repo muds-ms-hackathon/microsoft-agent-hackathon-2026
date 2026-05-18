@@ -15,24 +15,7 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
-
-// 認証ユーザーが対象組織に所属しているか確認する。
-// 所属していない場合は組織の存在自体を露出させないため 404 で統一する。
-async function requireOrgMembership(
-  c: Context<{ Variables: AuthVariables }>,
-  organizationId: string,
-): Promise<{ ok: true } | { ok: false; res: Response }> {
-  const user = c.var.user;
-  const membership = await prisma.organizationMembership.findUnique({
-    where: {
-      userId_organizationId: { userId: user.id, organizationId },
-    },
-  });
-  if (!membership) {
-    return { ok: false, res: c.json({ error: "組織が見つかりません" }, 404) };
-  }
-  return { ok: true };
-}
+import { requireOrgMembership } from "../middleware/authz.js";
 
 // assigneeUserIds が全員 organizationId のメンバーであるかを検証する。
 // 一括 findMany → 件数比較で OK / NG を判定する。
