@@ -1,9 +1,17 @@
 import asyncio
 import logging
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 _SB_CONN_KEY = "AZURE_SERVICE_BUS_CONNECTION_STRING"
+_DEPLOY_KEY = "AZURE_OPENAI_DEPLOYMENT_NAME"
+_DEPLOY_VAL = "test-deployment"
+
+
+def _mock_openai_client():
+    mock = MagicMock()
+    mock.close = AsyncMock()
+    return mock
 
 
 async def test_lifespan_warns_when_env_not_set(caplog):
@@ -11,10 +19,12 @@ async def test_lifespan_warns_when_env_not_set(caplog):
     import main
 
     env = {k: v for k, v in os.environ.items() if k != _SB_CONN_KEY}
-    with patch.dict(os.environ, env, clear=True):
-        with caplog.at_level(logging.WARNING, logger="main"):
-            async with main.lifespan(main.app):
-                pass
+    env[_DEPLOY_KEY] = _DEPLOY_VAL
+    with patch("main._create_openai_client", return_value=_mock_openai_client()):
+        with patch.dict(os.environ, env):
+            with caplog.at_level(logging.WARNING, logger="main"):
+                async with main.lifespan(main.app):
+                    pass
 
     assert any(_SB_CONN_KEY in r.message for r in caplog.records)
 
@@ -32,11 +42,18 @@ async def test_lifespan_starts_consumer_when_env_set():
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn", "AZURE_SERVICE_BUS_QUEUE_NAME": "test-queue"}
-    with patch.dict(os.environ, env):
-        with patch("main.ServiceBusConsumer", return_value=mock_consumer) as mock_cls:
-            async with main.lifespan(main.app):
-                await asyncio.wait_for(started.wait(), timeout=1.0)
+    env = {
+        _SB_CONN_KEY: "fake://conn",
+        "AZURE_SERVICE_BUS_QUEUE_NAME": "test-queue",
+        _DEPLOY_KEY: _DEPLOY_VAL,
+    }
+    with patch("main._create_openai_client", return_value=_mock_openai_client()):
+        with patch.dict(os.environ, env):
+            with patch(
+                "main.ServiceBusConsumer", return_value=mock_consumer
+            ) as mock_cls:
+                async with main.lifespan(main.app):
+                    await asyncio.wait_for(started.wait(), timeout=1.0)
 
     mock_cls.assert_called_once_with("fake://conn", "test-queue")
 
@@ -57,12 +74,13 @@ async def test_lifespan_cancels_task_on_shutdown():
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn"}
-    with patch.dict(os.environ, env):
-        with patch("main.ServiceBusConsumer", return_value=mock_consumer):
-            async with main.lifespan(main.app):
-                # タスクが起動するまでイベントループを1周させる
-                await asyncio.sleep(0)
+    env = {_SB_CONN_KEY: "fake://conn", _DEPLOY_KEY: _DEPLOY_VAL}
+    with patch("main._create_openai_client", return_value=_mock_openai_client()):
+        with patch.dict(os.environ, env):
+            with patch("main.ServiceBusConsumer", return_value=mock_consumer):
+                async with main.lifespan(main.app):
+                    # タスクが起動するまでイベントループを1周させる
+                    await asyncio.sleep(0)
 
     assert cancelled.is_set()
 
@@ -77,14 +95,15 @@ async def test_lifespan_logs_error_on_consumer_failure(caplog):
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn"}
-    with patch.dict(os.environ, env):
-        with patch("main.ServiceBusConsumer", return_value=mock_consumer):
-            with caplog.at_level(logging.ERROR, logger="main"):
-                async with main.lifespan(main.app):
-                    await asyncio.sleep(0)  # タスクを実行させる
-                    # done callback は call_soon で遅延するため 2 ティック必要
-                    await asyncio.sleep(0)
+    env = {_SB_CONN_KEY: "fake://conn", _DEPLOY_KEY: _DEPLOY_VAL}
+    with patch("main._create_openai_client", return_value=_mock_openai_client()):
+        with patch.dict(os.environ, env):
+            with patch("main.ServiceBusConsumer", return_value=mock_consumer):
+                with caplog.at_level(logging.ERROR, logger="main"):
+                    async with main.lifespan(main.app):
+                        await asyncio.sleep(0)  # タスクを実行させる
+                        # done callback は call_soon で遅延するため 2 ティック必要
+                        await asyncio.sleep(0)
 
     assert any(
         r.levelno == logging.ERROR and "予期せず終了" in r.message
