@@ -27,6 +27,7 @@ Table Meeting {
   decisionItemsPlanned DecisionItem [not null]
   originTasks Task [not null]
   ambiguousInfos AmbiguousInfo [not null]
+  analysisRuns MeetingAnalysisRun [not null]
 }
 
 Table User {
@@ -297,6 +298,34 @@ Table AmbiguousInfo {
   resolvedToDecision DecisionItem
 }
 
+Table MeetingAnalysisRun {
+  id String [pk]
+  meetingId String [not null]
+  status String [not null, default: 'queued']
+  currentStep String
+  triggerType String
+  modelName String
+  apiVersion String
+  promptVersion String
+  pipelineVersion String
+  inputHash String
+  summary String
+  alertLevel String
+  reportJson Json
+  rawOutputsJson Json
+  validationWarnings Json
+  ragRetrievalJson Json
+  recommendedAgenda Json
+  resourceRefsJson Json
+  startedAt DateTime
+  completedAt DateTime
+  failedAt DateTime
+  errorMessage String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+}
+
 Table AuditLog {
   id String [pk]
   actorId String [not null]
@@ -477,6 +506,8 @@ Ref: AmbiguousInfo.meetingId > Meeting.id [delete: Cascade]
 Ref: AmbiguousInfo.resolvedToTaskId > Task.id [delete: Set Null]
 
 Ref: AmbiguousInfo.resolvedToDecisionItemId > DecisionItem.id [delete: Set Null]
+
+Ref: MeetingAnalysisRun.meetingId > Meeting.id [delete: Cascade]
 
 Ref: AuditLog.actorId > User.id [delete: Restrict]
 
