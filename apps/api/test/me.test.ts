@@ -37,6 +37,7 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
+import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 
@@ -44,20 +45,19 @@ const mockInvitationFindMany = vi.mocked(
   prisma.organizationInvitation.findMany,
 );
 
+// GET /me/invitations ハンドラの include 形に対応する型エイリアス。
+type InvitationListRow = Prisma.OrganizationInvitationGetPayload<{
+  include: {
+    organization: { select: { id: true; name: true } };
+    inviter: {
+      select: { id: true; name: true; displayName: true; email: true };
+    };
+  };
+}>;
+
 function buildInvitation(
-  overrides: Partial<{
-    id: string;
-    organizationId: string;
-    email: string;
-    invitedBy: string;
-    role: "admin" | "member";
-    expiresAt: Date;
-    status: "pending" | "accepted" | "expired";
-    createdAt: Date;
-    organization: { id: string; name: string };
-    inviter: { id: string; name: string; displayName: string; email: string };
-  }> = {},
-) {
+  overrides: Partial<InvitationListRow> = {},
+): InvitationListRow {
   return {
     id: "inv-1",
     organizationId: "org-1",
@@ -86,7 +86,7 @@ describe("GET /me/invitations", () => {
 
   it("認証ユーザーの email に一致する pending 非期限切れの招待を返す", async () => {
     const inv = buildInvitation();
-    mockInvitationFindMany.mockResolvedValue([inv] as never);
+    mockInvitationFindMany.mockResolvedValue([inv]);
 
     const res = await app.request("/me/invitations");
     expect(res.status).toBe(200);
@@ -109,7 +109,7 @@ describe("GET /me/invitations", () => {
   });
 
   it("認証ユーザーの email・pending・期限内で findMany が呼ばれる", async () => {
-    mockInvitationFindMany.mockResolvedValue([] as never);
+    mockInvitationFindMany.mockResolvedValue([]);
 
     await app.request("/me/invitations");
     expect(mockInvitationFindMany).toHaveBeenCalledTimes(1);
@@ -124,7 +124,7 @@ describe("GET /me/invitations", () => {
   });
 
   it("該当する招待が無い場合は空配列を返す", async () => {
-    mockInvitationFindMany.mockResolvedValue([] as never);
+    mockInvitationFindMany.mockResolvedValue([]);
 
     const res = await app.request("/me/invitations");
     expect(res.status).toBe(200);
@@ -133,7 +133,7 @@ describe("GET /me/invitations", () => {
   });
 
   it("organization と inviter を include して返す", async () => {
-    mockInvitationFindMany.mockResolvedValue([] as never);
+    mockInvitationFindMany.mockResolvedValue([]);
 
     await app.request("/me/invitations");
     const callArg = mockInvitationFindMany.mock.calls[0]?.[0];
@@ -143,7 +143,7 @@ describe("GET /me/invitations", () => {
   });
 
   it("複数件は createdAt 降順で返す（新しい招待を上に）", async () => {
-    mockInvitationFindMany.mockResolvedValue([] as never);
+    mockInvitationFindMany.mockResolvedValue([]);
 
     await app.request("/me/invitations");
     const callArg = mockInvitationFindMany.mock.calls[0]?.[0];

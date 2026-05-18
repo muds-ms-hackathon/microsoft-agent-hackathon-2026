@@ -96,7 +96,13 @@ describe("auth middleware", () => {
   });
 
   it("jwtVerify には issuer / audience が渡される", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: "ext-1", email: "alice@example.com", name: "alice" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
+        sub: "ext-1",
+        email: "alice@example.com",
+        name: "alice",
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(sampleUser);
     const app = buildTestApp();
     await app.request("/whoami", {
@@ -109,7 +115,9 @@ describe("auth middleware", () => {
   });
 
   it("payload.sub が無い場合は 401 を返す", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ email: "alice@example.com", name: "alice" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ email: "alice@example.com", name: "alice" }),
+    );
     const app = buildTestApp();
     const res = await app.request("/whoami", {
       headers: { Authorization: "Bearer t" },
@@ -119,7 +127,9 @@ describe("auth middleware", () => {
   });
 
   it("payload.email が無い場合は 401 を返す", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: "ext-1", name: "alice" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ sub: "ext-1", name: "alice" }),
+    );
     const app = buildTestApp();
     const res = await app.request("/whoami", {
       headers: { Authorization: "Bearer t" },
@@ -129,7 +139,9 @@ describe("auth middleware", () => {
   });
 
   it("payload.name が無い場合は 401 を返す", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: "ext-1", email: "alice@example.com" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ sub: "ext-1", email: "alice@example.com" }),
+    );
     const app = buildTestApp();
     const res = await app.request("/whoami", {
       headers: { Authorization: "Bearer t" },
@@ -139,7 +151,13 @@ describe("auth middleware", () => {
   });
 
   it("既存ユーザーで email/name が一致する場合は update を発行しない", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: "ext-1", email: "alice@example.com", name: "alice" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
+        sub: "ext-1",
+        email: "alice@example.com",
+        name: "alice",
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(sampleUser);
     const app = buildTestApp();
     const res = await app.request("/whoami", {
@@ -153,7 +171,9 @@ describe("auth middleware", () => {
   });
 
   it("未登録ユーザーは externalId/email/name/displayName=name で create される", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: "ext-2", email: "bob@example.com", name: "bob" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ sub: "ext-2", email: "bob@example.com", name: "bob" }),
+    );
     mockFindUnique.mockResolvedValueOnce(null);
     mockCreate.mockResolvedValueOnce({
       ...sampleUser,
@@ -180,11 +200,13 @@ describe("auth middleware", () => {
   });
 
   it("既存ユーザーは IdP 側で email が変更された場合 update が発行される", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
         sub: "ext-1",
         email: "alice-renamed@example.com",
         name: "alice",
-      }));
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(sampleUser);
     mockUpdate.mockResolvedValueOnce({
       ...sampleUser,
@@ -202,11 +224,13 @@ describe("auth middleware", () => {
   });
 
   it("既存ユーザーは IdP 側で name が変更された場合 update が発行される", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
         sub: "ext-1",
         email: "alice@example.com",
         name: "alice-renamed",
-      }));
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(sampleUser);
     mockUpdate.mockResolvedValueOnce({
       ...sampleUser,
@@ -224,11 +248,13 @@ describe("auth middleware", () => {
   });
 
   it("新規ユーザー作成時 email は trim + 小文字化された値で保存される", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
         sub: "ext-5",
         email: "  Bob@Example.COM  ",
         name: "bob",
-      }));
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(null);
     mockCreate.mockResolvedValueOnce({
       ...sampleUser,
@@ -254,11 +280,13 @@ describe("auth middleware", () => {
   });
 
   it("既存ユーザーは payload email の大文字小文字差では update されない（正規化後一致）", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
         sub: "ext-1",
         email: "Alice@Example.COM",
         name: "alice",
-      }));
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(sampleUser);
     const app = buildTestApp();
     const res = await app.request("/whoami", {
@@ -270,11 +298,13 @@ describe("auth middleware", () => {
   });
 
   it("既存ユーザーの IdP 側 email 変更時は正規化済みの値で update される", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
         sub: "ext-1",
         email: "  Alice-Renamed@Example.COM  ",
         name: "alice",
-      }));
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(sampleUser);
     mockUpdate.mockResolvedValueOnce({
       ...sampleUser,
@@ -291,7 +321,9 @@ describe("auth middleware", () => {
   });
 
   it("payload.sub が文字列以外の場合は 401 を返す", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: 123, email: "alice@example.com", name: "alice" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ sub: 123, email: "alice@example.com", name: "alice" }),
+    );
     const app = buildTestApp();
     const res = await app.request("/whoami", {
       headers: { Authorization: "Bearer t" },
@@ -301,7 +333,13 @@ describe("auth middleware", () => {
   });
 
   it("create 時に email が他ユーザーで使用済み (P2002) の場合は 409 を返す", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: "ext-3", email: "alice@example.com", name: "carol" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
+        sub: "ext-3",
+        email: "alice@example.com",
+        name: "carol",
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(null);
     mockCreate.mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError(
@@ -319,11 +357,13 @@ describe("auth middleware", () => {
   });
 
   it("update 時に email が他ユーザーで使用済み (P2002) の場合は 409 を返す", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
         sub: "ext-1",
         email: "carol@example.com",
         name: "alice",
-      }));
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(sampleUser);
     mockUpdate.mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError(
@@ -339,7 +379,13 @@ describe("auth middleware", () => {
   });
 
   it("P2002 以外の Prisma 既知エラーは握り潰さず例外として伝播する", async () => {
-    mockJwtVerify.mockResolvedValueOnce(jwtVerifyResult({ sub: "ext-4", email: "dave@example.com", name: "dave" }));
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
+        sub: "ext-4",
+        email: "dave@example.com",
+        name: "dave",
+      }),
+    );
     mockFindUnique.mockResolvedValueOnce(null);
     mockCreate.mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError("connection lost", {

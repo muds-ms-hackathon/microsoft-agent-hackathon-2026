@@ -96,15 +96,7 @@ const mockOrgs: Organization[] = [
   },
 ];
 
-// hono/client の ClientResponse 型はメソッドが多く構築不可能なため、ヘルパー
-// 内部 1 箇所だけ `as never` を残し、呼び出し側にキャストを散らさない方針。
-function mockJson<T>(data: T, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-  } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 function renderSidebar() {
   const client = new QueryClient({

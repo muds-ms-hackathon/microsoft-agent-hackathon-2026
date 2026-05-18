@@ -64,10 +64,7 @@ vi.mock("../src/middleware/auth.js", () => ({
 import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
-import type {
-  TaskWithDetail,
-  TaskWithList,
-} from "../src/lib/task-serialization.js";
+import type { TaskWithDetail } from "../src/lib/task-serialization.js";
 
 // ハンドラ側で利用している include / select 形に合わせた Prisma 型エイリアス。
 // validateOriginMeetingInOrg ヘルパーが使う meeting.findUnique 形に対応。
@@ -181,7 +178,10 @@ describe("POST /tasks", () => {
       { ...membership(), userId: "user-2" },
     ]);
     // attached 定例が同一組織に属することの検証 (ハンドラの select は { id: true } のみ)
-    mockRecurringFindMany.mockResolvedValue([{ id: "rmtg-1" }, { id: "rmtg-2" }]);
+    mockRecurringFindMany.mockResolvedValue([
+      { id: "rmtg-1" },
+      { id: "rmtg-2" },
+    ]);
     // originMeeting の組織判定（紐付く recurringMeeting 経由）
     mockMeetingFindUnique.mockResolvedValue({
       id: "mtg-1",

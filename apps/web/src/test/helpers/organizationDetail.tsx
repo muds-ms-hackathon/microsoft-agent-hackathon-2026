@@ -57,15 +57,10 @@ export const sampleMembers: Member[] = [
   },
 ];
 
-// hono/client のレスポンス形を最小限で再現するヘルパー。
-// $get / $post / $patch / $delete の戻り値として渡せる。
-export function mockJson<T>(data: T, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-  } as never;
-}
+// hono/client のレスポンス形を最小限で再現するヘルパーは helpers/mockJson から
+// 再エクスポートする (組織詳細系テストが従来どおり helpers/organizationDetail
+// から import できるよう互換のために残す)。
+export { mockJson } from "./mockJson";
 
 export function renderDetail(opts?: {
   id?: string;

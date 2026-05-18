@@ -50,16 +50,7 @@ vi.mock("@tanstack/react-router", async () => {
 
 import { api } from "@/lib/api";
 
-// hono/client の ClientResponse 型はメソッドが多く構築不可能なため、ヘルパー
-// 内部 1 箇所だけ `as never` を残し、呼び出し側にキャストを散らさない方針。
-// queryFn 側で res.ok チェックを行うため ok / status を埋め、json は data を返す。
-function mockJson<T>(data: T, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-  } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 type Organization = {
   id: string;
