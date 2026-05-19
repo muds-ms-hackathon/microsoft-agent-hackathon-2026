@@ -1,3 +1,5 @@
+import "./helpers/link-mock";
+
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,39 +16,6 @@ vi.mock("@/lib/api", () => ({
   },
   authHeaders: () => ({ headers: {} }),
 }));
-
-// TanStack Router の <Link> は RouterProvider が無いと内部で落ちるため、
-// テスト中は href を持つ通常の <a> として描画するモックに差し替える。
-// 子要素・className・role 属性は保持し、属性ベースの assertion を可能にする。
-vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
-    "@tanstack/react-router",
-  );
-  return {
-    ...actual,
-    Link: ({
-      to,
-      params,
-      children,
-      className,
-    }: {
-      to: string;
-      params?: Record<string, string>;
-      children?: React.ReactNode;
-      className?: string;
-    }) => {
-      const href =
-        typeof to === "string"
-          ? to.replace(/\$(\w+)/g, (_, k: string) => params?.[k] ?? "")
-          : String(to);
-      return (
-        <a href={href} className={className}>
-          {children}
-        </a>
-      );
-    },
-  };
-});
 
 import { api } from "@/lib/api";
 
