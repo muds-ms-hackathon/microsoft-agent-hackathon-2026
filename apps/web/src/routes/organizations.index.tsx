@@ -6,16 +6,17 @@ import {
 } from "@/components/ui/card";
 import { CreateOrganizationDialog } from "@/features/organizations/components/CreateOrganizationDialog";
 import { RoleBadge } from "@/features/organizations/components/RoleBadge";
-import type { Organization } from "@/features/organizations/types";
-import { api, authHeaders } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import {
+  type OrganizationListItem,
+  useOrganizationsQuery,
+} from "@/features/organizations/hooks/useOrganizationsQuery";
 import { Link, createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/organizations/")({
   component: OrganizationsPage,
 });
 
-function OrganizationCard({ org }: { org: Organization }) {
+function OrganizationCard({ org }: { org: OrganizationListItem }) {
   return (
     <Link
       to="/organizations/$id"
@@ -38,25 +39,11 @@ function OrganizationCard({ org }: { org: Organization }) {
 }
 
 export function OrganizationsPage() {
-  const {
-    data: orgs = [],
-    isLoading,
-    isError,
-  } = useQuery<Organization[]>({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      // Hono RPC client は第 2 引数で headers を受け取る。第 1 引数の input に
-      // headers を入れても無視されるため、authHeaders() は必ず第 2 引数へ渡す。
-      const res = await api.organizations.$get(undefined, authHeaders());
-      // 認証失敗などで API が { error } を返した場合、配列でないものを
-      // そのまま data に格納すると orgs.map() で落ちるため、ここで弾く。
-      if (!res.ok) {
-        throw new Error(`Failed to fetch organizations: ${res.status}`);
-      }
-      // Hono RPC のレスポンス型は date が string なので as でキャストする
-      return (await res.json()) as Organization[];
-    },
-  });
+  // クエリキー・fetcher は Sidebar と共通フックで共有しており、
+  // 一方の invalidate がもう一方にも反映される。
+  // 認証失敗などで API が { error } を返した場合、queryFn 内で throw され
+  // isError 経路に流れるため、orgs.map() で落ちる事故は起きない。
+  const { data: orgs = [], isLoading, isError } = useOrganizationsQuery();
 
   return (
     <section

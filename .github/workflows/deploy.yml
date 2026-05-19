@@ -32,6 +32,9 @@ jobs:
       - name: 依存関係インストール
         run: pnpm install --frozen-lockfile
 
+      - name: Prisma クライアント生成        # issue 230 追加
+        run: pnpm --filter api exec prisma generate
+
       - name: ビルド
         run: pnpm turbo run build
 

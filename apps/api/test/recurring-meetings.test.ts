@@ -55,8 +55,28 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
+import { Prisma, type RecurringMeeting } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import type { TaskWithList } from "../src/lib/task-serialization.js";
+
+// ハンドラ側で利用している include / select 形に合わせた Prisma 型エイリアス。
+// findMany / findUnique のモック戻り値を `as never` で渡すのを避けるため。
+type RecurringMeetingListRow = Prisma.RecurringMeetingGetPayload<{
+  include: { _count: { select: { members: true } } };
+}>;
+type RecurringMeetingWithMembers = Prisma.RecurringMeetingGetPayload<{
+  include: { members: { include: { user: true } } };
+}>;
+type MeetingListRow = Prisma.MeetingGetPayload<{
+  select: {
+    id: true;
+    title: true;
+    heldAt: true;
+    estimatedDurationMinutes: true;
+    recurringMeetingId: true;
+  };
+}>;
 
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
@@ -80,7 +100,7 @@ function membership(role: "owner" | "admin" | "member") {
   };
 }
 
-const sampleRecurring = {
+const sampleRecurring: RecurringMeeting = {
   id: "rmtg-1",
   organizationId: "org-1",
   name: "週次定例",
@@ -282,7 +302,7 @@ describe("POST /organizations/:id/meetings", () => {
 describe("GET /organizations/:id/meetings", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const listSample = [
+  const listSample: RecurringMeetingListRow[] = [
     {
       ...sampleRecurring,
       id: "rmtg-2",
@@ -299,7 +319,7 @@ describe("GET /organizations/:id/meetings", () => {
 
   it("組織メンバーは定例一覧を取得でき、_count.members を含む", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
-    mockRecurringFindMany.mockResolvedValue(listSample as never);
+    mockRecurringFindMany.mockResolvedValue(listSample);
 
     const res = await app.request("/organizations/org-1/meetings");
     expect(res.status).toBe(200);
@@ -321,7 +341,7 @@ describe("GET /organizations/:id/meetings", () => {
 
   it("定例が無い組織は空配列を返す", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
-    mockRecurringFindMany.mockResolvedValue([] as never);
+    mockRecurringFindMany.mockResolvedValue([]);
     const res = await app.request("/organizations/org-1/meetings");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([]);
@@ -368,10 +388,11 @@ describe("GET /recurring-meetings/:id", () => {
   ];
 
   it("組織メンバーは定例詳細を取得でき、メンバー一覧を owner→member 順で返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue({
+    const withMembers: RecurringMeetingWithMembers = {
       ...sampleRecurring,
       members: sampleMembers,
-    } as never);
+    };
+    mockRecurringFindUnique.mockResolvedValue(withMembers);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
 
     const res = await app.request("/recurring-meetings/rmtg-1");
@@ -400,10 +421,11 @@ describe("GET /recurring-meetings/:id", () => {
 
   it("定例所属組織のメンバーでない場合は 404 を返す", async () => {
     // 組織の存在自体を露出させないため、所属していない場合は 404 で統一する。
-    mockRecurringFindUnique.mockResolvedValue({
+    const withoutMembers: RecurringMeetingWithMembers = {
       ...sampleRecurring,
       members: [],
-    } as never);
+    };
+    mockRecurringFindUnique.mockResolvedValue(withoutMembers);
     mockMembershipFindUnique.mockResolvedValue(null);
 
     const res = await app.request("/recurring-meetings/rmtg-1");
@@ -415,12 +437,12 @@ describe("PATCH /recurring-meetings/:id", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("組織メンバーは定例を編集できる（name のみ）", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
     mockRecurringUpdate.mockResolvedValue({
       ...sampleRecurring,
       name: "新しい定例名",
-    } as never);
+    });
 
     const res = await app.request("/recurring-meetings/rmtg-1", {
       method: "PATCH",
@@ -435,12 +457,12 @@ describe("PATCH /recurring-meetings/:id", () => {
   });
 
   it("scheduleCron も編集できる", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
     mockRecurringUpdate.mockResolvedValue({
       ...sampleRecurring,
       scheduleCron: "0 14 * * 5",
-    } as never);
+    });
 
     const res = await app.request("/recurring-meetings/rmtg-1", {
       method: "PATCH",
@@ -455,12 +477,12 @@ describe("PATCH /recurring-meetings/:id", () => {
   });
 
   it("defaultDurationMinutes も編集できる", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
     mockRecurringUpdate.mockResolvedValue({
       ...sampleRecurring,
       defaultDurationMinutes: 90,
-    } as never);
+    });
 
     const res = await app.request("/recurring-meetings/rmtg-1", {
       method: "PATCH",
@@ -534,7 +556,7 @@ describe("PATCH /recurring-meetings/:id", () => {
   });
 
   it("組織メンバーでなければ 404 を返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(null);
 
     const res = await app.request("/recurring-meetings/rmtg-1", {
@@ -551,7 +573,7 @@ describe("DELETE /recurring-meetings/:id", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("MeetingMember.owner は削除でき、204 を返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
     mockMeetingMemberFindUnique.mockResolvedValue({
       recurringMeetingId: "rmtg-1",
@@ -559,7 +581,7 @@ describe("DELETE /recurring-meetings/:id", () => {
       role: "owner",
       joinedAt: new Date("2026-05-06T00:00:00Z"),
     });
-    mockRecurringDelete.mockResolvedValue(sampleRecurring as never);
+    mockRecurringDelete.mockResolvedValue(sampleRecurring);
 
     const res = await app.request("/recurring-meetings/rmtg-1", {
       method: "DELETE",
@@ -573,7 +595,7 @@ describe("DELETE /recurring-meetings/:id", () => {
   });
 
   it("MeetingMember.member は 403 を返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
     mockMeetingMemberFindUnique.mockResolvedValue({
       recurringMeetingId: "rmtg-1",
@@ -590,7 +612,7 @@ describe("DELETE /recurring-meetings/:id", () => {
   });
 
   it("組織メンバーだが MeetingMember 未参加なら 403 を返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
     mockMeetingMemberFindUnique.mockResolvedValue(null);
 
@@ -602,7 +624,7 @@ describe("DELETE /recurring-meetings/:id", () => {
   });
 
   it("組織メンバーでなければ 404 を返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(null);
 
     const res = await app.request("/recurring-meetings/rmtg-1", {
@@ -641,12 +663,12 @@ describe("GET /recurring-meetings/:id/meetings", () => {
       estimatedDurationMinutes: 60,
       recurringMeetingId: "rmtg-1",
     },
-  ];
+  ] satisfies MeetingListRow[];
 
   it("組織メンバーは配下の Meeting を heldAt 降順で取得できる", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
-    mockMeetingFindMany.mockResolvedValue(sampleMeetings as never);
+    mockMeetingFindMany.mockResolvedValue(sampleMeetings);
 
     const res = await app.request("/recurring-meetings/rmtg-1/meetings");
     expect(res.status).toBe(200);
@@ -677,9 +699,9 @@ describe("GET /recurring-meetings/:id/meetings", () => {
   });
 
   it("配下に Meeting が無ければ空配列を返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("owner"));
-    mockMeetingFindMany.mockResolvedValue([] as never);
+    mockMeetingFindMany.mockResolvedValue([]);
 
     const res = await app.request("/recurring-meetings/rmtg-1/meetings");
     expect(res.status).toBe(200);
@@ -698,7 +720,7 @@ describe("GET /recurring-meetings/:id/meetings", () => {
 
   it("定例所属組織のメンバーでない場合は 404 を返す", async () => {
     // 組織存在を露出させないため、所属していない場合も 404 で統一する。
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(null);
 
     const res = await app.request("/recurring-meetings/rmtg-1/meetings");
@@ -710,7 +732,7 @@ describe("GET /recurring-meetings/:id/meetings", () => {
 describe("POST /recurring-meetings/:id/meetings", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const createdMeeting = {
+  const createdMeeting: MeetingListRow = {
     id: "mtg-new",
     title: "週次定例 2026-05-20",
     heldAt: new Date("2026-05-20T01:00:00Z"),
@@ -719,12 +741,12 @@ describe("POST /recurring-meetings/:id/meetings", () => {
   };
 
   it("組織メンバーは Meeting を作成でき、estimatedDurationMinutes 指定値を採用する", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
     mockMeetingCreate.mockResolvedValue({
       ...createdMeeting,
       estimatedDurationMinutes: 90,
-    } as never);
+    } satisfies MeetingListRow);
 
     const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
       method: "POST",
@@ -765,9 +787,9 @@ describe("POST /recurring-meetings/:id/meetings", () => {
 
   it("estimatedDurationMinutes 未指定なら定例の defaultDurationMinutes を採用する", async () => {
     // sampleRecurring.defaultDurationMinutes は 60。
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
-    mockMeetingCreate.mockResolvedValue(createdMeeting as never);
+    mockMeetingCreate.mockResolvedValue(createdMeeting);
 
     const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
       method: "POST",
@@ -793,9 +815,9 @@ describe("POST /recurring-meetings/:id/meetings", () => {
     // JSON では undefined を表現できないため、クライアントが「未指定」を null で
     // 送るのは一般的な慣習。スキーマがそれを拒否せず、ハンドラ側の ?? フォールバックに
     // 載せて defaultDurationMinutes (60) を採用することを検証する。
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(membership("member"));
-    mockMeetingCreate.mockResolvedValue(createdMeeting as never);
+    mockMeetingCreate.mockResolvedValue(createdMeeting);
 
     const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
       method: "POST",
@@ -888,7 +910,7 @@ describe("POST /recurring-meetings/:id/meetings", () => {
   });
 
   it("組織メンバーでなければ 404 を返す", async () => {
-    mockRecurringFindUnique.mockResolvedValue(sampleRecurring as never);
+    mockRecurringFindUnique.mockResolvedValue(sampleRecurring);
     mockMembershipFindUnique.mockResolvedValue(null);
 
     const res = await app.request("/recurring-meetings/rmtg-1/meetings", {
@@ -907,7 +929,7 @@ describe("POST /recurring-meetings/:id/meetings", () => {
 describe("GET /recurring-meetings/:id/tasks", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const sampleListTask = {
+  const sampleListTask: TaskWithList = {
     id: "task-1",
     organizationId: "org-1",
     originMeetingId: null,
@@ -947,7 +969,7 @@ describe("GET /recurring-meetings/:id/tasks", () => {
       role: "member",
       joinedAt: new Date(),
     });
-    mockTaskFindMany.mockResolvedValue([sampleListTask] as never);
+    mockTaskFindMany.mockResolvedValue([sampleListTask]);
 
     const res = await app.request("/recurring-meetings/rmtg-1/tasks");
     expect(res.status).toBe(200);

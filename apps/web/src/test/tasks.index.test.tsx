@@ -39,13 +39,7 @@ vi.mock("@tanstack/react-router", async () => {
 import { api } from "@/lib/api";
 import { MyTasksView } from "../routes/tasks.index";
 
-function mockJson<T>(data: T, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-  } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 const baseTask: TaskListItem = {
   id: "task-1",
@@ -224,8 +218,8 @@ describe("MyTasksView", () => {
 
   it("読み込み中はインジケータを表示する", () => {
     // 解決しない Promise を返してローディング状態を維持
-    vi.mocked(api.tasks.me.$get).mockReturnValue(
-      new Promise(() => {}) as never,
+    vi.mocked(api.tasks.me.$get).mockImplementation(
+      () => new Promise(() => {}),
     );
 
     renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);

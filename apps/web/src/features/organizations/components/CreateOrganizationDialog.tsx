@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { api, authHeaders } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -130,9 +131,10 @@ export function CreateOrganizationDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor={descriptionId}>説明</Label>
-            <Input
+            <Textarea
               id={descriptionId}
               placeholder="組織の説明（任意）"
+              rows={3}
               {...register("description")}
             />
           </div>

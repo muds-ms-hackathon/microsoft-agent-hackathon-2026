@@ -8,12 +8,33 @@ import { makeFakeIdToken } from "./helpers/auth";
 
 const navigateMock = vi.fn();
 
+// TanStack Router の Link は RouterProvider 配下でないと落ちるため、
+// テスト中は href を持つ <a> として描画するモックに差し替える。
+// 同テスト内でユーザーメニュー → ログアウトの useNavigate も検証するため
+// useNavigate もモックに含める。
 vi.mock("@tanstack/react-router", async () => {
   const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
     "@tanstack/react-router",
   );
+  type MockLinkProps = {
+    to: string;
+    children?: React.ReactNode;
+    className?: string;
+    "aria-label"?: string;
+    activeProps?: unknown;
+  };
   return {
     ...actual,
+    Link: ({
+      to,
+      children,
+      className,
+      "aria-label": ariaLabel,
+    }: MockLinkProps) => (
+      <a href={to} className={className} aria-label={ariaLabel}>
+        {children}
+      </a>
+    ),
     useNavigate: () => navigateMock,
   };
 });
@@ -37,6 +58,12 @@ describe("Topbar", () => {
     expect(
       screen.getByRole("button", { name: "ユーザーメニュー" }),
     ).toHaveTextContent("田");
+  });
+
+  it("招待一覧へのリンクが /invitations を指して表示される", () => {
+    renderTopbar();
+    const link = screen.getByRole("link", { name: "招待一覧" });
+    expect(link).toHaveAttribute("href", "/invitations");
   });
 
   it("ログアウトをクリックすると /login へ遷移する", async () => {

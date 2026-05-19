@@ -9,16 +9,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreateOrganizationDialog } from "@/features/organizations/components/CreateOrganizationDialog";
-import type { Organization } from "@/features/organizations/types";
+import {
+  type OrganizationListItem,
+  useOrganizationsQuery,
+} from "@/features/organizations/hooks/useOrganizationsQuery";
 import { CreateRecurringMeetingDialog } from "@/features/recurring-meetings/components/CreateRecurringMeetingDialog";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
-import { api, authHeaders } from "@/lib/api";
 import {
   clearCurrentOrganizationIdAtom,
   currentOrganizationIdAtom,
   setCurrentOrganizationIdAtom,
 } from "@/lib/currentOrganization";
-import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
@@ -31,23 +32,6 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-
-// 組織一覧フェッチ。クエリキー / fetcher は organizations.index.tsx と
-// 完全に同一にしておくことで、TanStack Query のキャッシュを共有する。
-// 結果として、一覧ページや作成ダイアログで invalidate された変更が
-// サイドバーにも即座に反映される。
-function useOrganizations() {
-  return useQuery<Organization[]>({
-    queryKey: ["organizations"],
-    queryFn: async () => {
-      const res = await api.organizations.$get(undefined, authHeaders());
-      if (!res.ok) {
-        throw new Error(`Failed to fetch organizations: ${res.status}`);
-      }
-      return (await res.json()) as Organization[];
-    },
-  });
-}
 
 // 組織アバター用の頭文字を取り出す。null/空文字を安全に扱う。
 function initial(name: string | null | undefined): string {
@@ -63,7 +47,9 @@ function initial(name: string | null | undefined): string {
 const ORGANIZATION_DETAIL_PATH = /^\/organizations\/[^/]+/;
 
 export function Sidebar() {
-  const { data: orgs, isLoading } = useOrganizations();
+  // useOrganizationsQuery は organizations.index.tsx と同じクエリキー
+  // (["organizations"]) を使うため、一方の invalidate が両方に反映される。
+  const { data: orgs, isLoading } = useOrganizationsQuery();
   const currentId = useAtomValue(currentOrganizationIdAtom);
   const setCurrentId = useSetAtom(setCurrentOrganizationIdAtom);
   const clearCurrentId = useSetAtom(clearCurrentOrganizationIdAtom);
@@ -253,8 +239,8 @@ function OrganizationSelector({
   onOpenCreateDialog,
 }: {
   isLoading: boolean;
-  orgs: Organization[] | null;
-  currentOrg: Organization | null;
+  orgs: OrganizationListItem[] | null;
+  currentOrg: OrganizationListItem | null;
   currentId: string | null;
   onSelect: (id: string) => void;
   onOpenCreateDialog: () => void;
