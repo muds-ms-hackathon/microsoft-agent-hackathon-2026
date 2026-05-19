@@ -22,36 +22,11 @@ vi.mock("@/lib/api", () => ({
   authHeaders: () => ({ headers: {} }),
 }));
 
+// useNavigate は呼ばれても落ちない `vi.fn()` を返すだけで、本テストでは検証しない。
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
-    "@tanstack/react-router",
-  );
-  const navigateMock = vi.fn();
-  return {
-    ...actual,
-    Link: ({
-      to,
-      params,
-      children,
-      className,
-    }: {
-      to: string;
-      params?: Record<string, string>;
-      children?: React.ReactNode;
-      className?: string;
-    }) => {
-      const href =
-        typeof to === "string"
-          ? to.replace(/\$(\w+)/g, (_, k: string) => params?.[k] ?? "")
-          : String(to);
-      return (
-        <a href={href} className={className}>
-          {children}
-        </a>
-      );
-    },
-    useNavigate: () => navigateMock,
-  };
+  const { buildRouterMock } = await import("./helpers/router-mock");
+  return buildRouterMock({ useNavigate: navigateMock });
 });
 
 import { api } from "@/lib/api";
