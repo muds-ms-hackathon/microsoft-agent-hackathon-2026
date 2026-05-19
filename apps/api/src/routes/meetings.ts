@@ -102,7 +102,8 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       });
       return c.json(tasks.map(serializeTask));
     },
-  ).post(
+  )
+  .post(
     "/:id/process",
     auth,
     zValidator("json", z.object({ transcript: z.string().min(1) })),
