@@ -20,6 +20,7 @@ model Meeting {
   meetingType              String  @default("one_time")
   transcriptionQuality     String?
   supplementaryMemo        String?
+  transcriptText           String?   // Issue #228 add
   sequenceNumber           Int?
   previousMeetingId        String?
   estimatedDurationMinutes Int?
