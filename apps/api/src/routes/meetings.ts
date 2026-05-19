@@ -151,7 +151,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         });
       } catch (err) {
         console.error(
-          "[meetings] Service Bus 送信失敗 analysis run を failed に更新します):",
+          "[meetings] Service Bus 送信失敗 analysis run を failed に更新します:",
           err,
         );
 

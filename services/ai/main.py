@@ -33,12 +33,12 @@ def _create_openai_client() -> AsyncAzureOpenAI:
 
 # Azure OpenAI API を呼び出して、文字起こしから決定事項・タスク・曖昧箇所を抽出する
 async def _analyze_transcript(transcript: str) -> dict:
-    """文字起こしを Azure OpenAI 絵解析し、決定事項・タスク・曖昧箇所を抽出する"""
+    """文字起こしを Azure OpenAI で解析し、決定事項・タスク・曖昧箇所を抽出する"""
     if _openai_client is None:
         raise RuntimeError("OpenAI クライアントが初期化されていません")
 
     system_prompt = """あなたは会議の文字起こしを分析するアシスタントです
-以下のさん種類の情報をJSONで抽出してください。
+以下の3種類の情報をJSONで抽出してください。
 
 1. decisionItems: 決定事項・議論中の事項
 2. tasks: 担当者・期限・内容が明確なタスク
