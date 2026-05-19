@@ -5,10 +5,23 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingUpdateSchema } from "../lib/schemas/recurring-meeting.js";
+import {
+  buildTaskListWhere,
+  taskListQuerySchema,
+} from "../lib/schemas/task.js";
+import {
+  serializeTask,
+  taskListInclude,
+  taskListOrderBy,
+} from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+import { findOrgMembership } from "../middleware/authz.js";
 
 // 定例配下に紐付ける Meeting 作成リクエストの schema。
-// estimatedDurationMinutes 未指定なら定例の defaultDurationMinutes を採用する。
+// estimatedDurationMinutes は省略・null・数値の 3 形態を許容し、省略 / null は
+// 「未指定」として扱ってハンドラ側で defaultDurationMinutes へフォールバックする。
+// JSON では undefined を表現できないため、クライアントは「未指定」を null で送る
+// ことが多い。許容範囲を広げるだけで、不正値（範囲外・型違い）は従来どおり 400。
 // 範囲は RecurringMeeting.defaultDurationMinutes と同じ 1〜480 分。
 const createMeetingSchema = z.object({
   title: z.string().min(1, "title は必須です"),
@@ -20,12 +33,14 @@ const createMeetingSchema = z.object({
     .int()
     .min(1, "estimatedDurationMinutes は 1 分以上で指定してください")
     .max(480, "estimatedDurationMinutes は 480 分以下で指定してください")
+    .nullable()
     .optional(),
 });
 
-// 認証ユーザーが定例の所属組織のメンバーであるかを確認する共通ガード。
-// 定例不存在・所属なしいずれも 404 で統一し、組織や定例の存在自体を
-// 露出させない（organizations.ts の requireMembership と同方針）。
+// 定例 + 所属組織のメンバーシップを確認する薄いラッパー。
+// 定例不存在・組織非所属いずれも 404 で統一し、定例・組織の存在自体を露出させない。
+// 組織判定の DB 問い合わせは `middleware/authz.ts` の findOrgMembership に委ね、
+// レスポンス文言だけ「定例が見つかりません」で揃える。
 async function requireRecurringAccess<T extends RecurringMeeting>(
   c: Context<{ Variables: AuthVariables }>,
   meeting: T | null,
@@ -36,15 +51,10 @@ async function requireRecurringAccess<T extends RecurringMeeting>(
       res: c.json({ error: "定例が見つかりません" }, 404),
     };
   }
-  const user = c.var.user;
-  const membership = await prisma.organizationMembership.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: user.id,
-        organizationId: meeting.organizationId,
-      },
-    },
-  });
+  const membership = await findOrgMembership(
+    c.var.user,
+    meeting.organizationId,
+  );
   if (!membership) {
     return {
       ok: false,
@@ -97,6 +107,28 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
       },
     });
     return c.json(created, 201);
+  })
+  .get("/:id/tasks", zValidator("query", taskListQuerySchema), async (c) => {
+    const id = c.req.param("id");
+    const filters = c.req.valid("query");
+
+    // 定例存在チェック → 組織所属確認の順で 404 短絡。
+    const meeting = await prisma.recurringMeeting.findUnique({
+      where: { id },
+    });
+    const guard = await requireRecurringAccess(c, meeting);
+    if (!guard.ok) return guard.res;
+
+    // 当該定例に attach されたタスクのみ。中間テーブル経由 some 条件で絞る。
+    const tasks = await prisma.task.findMany({
+      where: {
+        ...buildTaskListWhere(filters),
+        recurringMeetings: { some: { recurringMeetingId: id } },
+      },
+      orderBy: taskListOrderBy,
+      include: taskListInclude,
+    });
+    return c.json(tasks.map(serializeTask));
   })
   .get("/:id/meetings", async (c) => {
     const id = c.req.param("id");

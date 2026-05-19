@@ -227,3 +227,10 @@ describe("Dashboard - NextMeetingsSection", () => {
     expect(link).toHaveAttribute("href", "/recurring-meetings/rm-2");
   });
 });
+
+describe("ダッシュボードページ", () => {
+  it("見出しが表示される", async () => {
+    renderWithQuery(<Index />);
+    expect(await screen.findByText("Decision Loop")).toBeInTheDocument();
+  });
+});

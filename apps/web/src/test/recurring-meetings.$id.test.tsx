@@ -13,6 +13,16 @@ vi.mock("@/lib/api", () => ({
           $get: vi.fn(),
           $post: vi.fn(),
         },
+        tasks: {
+          $get: vi.fn(),
+        },
+      },
+    },
+    // AssigneeFilter が useOrganizationMembers 経由で叩くエンドポイント。
+    // 値はテスト個別で上書きしないかぎり空配列を返すデフォルトを後段で設定する。
+    organizations: {
+      ":id": {
+        members: { $get: vi.fn() },
       },
     },
   },
@@ -51,13 +61,7 @@ vi.mock("@tanstack/react-router", async () => {
 import { api } from "@/lib/api";
 import { RecurringMeetingDetailView } from "../routes/recurring-meetings.$id";
 
-function mockJson<T>(data: T, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-  } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 const detail = {
   id: "rmtg-1",
@@ -117,6 +121,9 @@ describe("定例詳細ページ - ヘッダ表示", () => {
     vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
       mockJson([]),
     );
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
   });
 
   it("定例名・説明・cron 人間表記・デフォルト所要時間を表示する", async () => {
@@ -150,6 +157,9 @@ describe("定例詳細ページ - 会議のセクション分け", () => {
   beforeEach(() => {
     vi.mocked(api["recurring-meetings"][":id"].$get).mockResolvedValue(
       mockJson(detail),
+    );
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
     );
   });
 
@@ -296,5 +306,180 @@ describe("定例詳細ページ - 会議のセクション分け", () => {
     expect(
       screen.queryByRole("list", { name: "今後の会議一覧" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("定例詳細ページ - タスクセクション", () => {
+  const sampleTask = {
+    id: "task-1",
+    organizationId: "org-1",
+    originMeetingId: null,
+    decisionItemId: null,
+    title: "資料作成",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "todo" as const,
+    priority: null,
+    dueDateRaw: null,
+    dueDateEstimated: null,
+    assigneeRaw: null,
+    blockingItemId: null,
+    carriedOverCount: null,
+    ambiguityFlags: null,
+    progressNote: null,
+    dueDate: null,
+    startDate: null,
+    followUpDate: null,
+    version: 0,
+    createdAt: "2026-05-17T00:00:00.000Z",
+    updatedAt: "2026-05-17T00:00:00.000Z",
+    organization: { id: "org-1", name: "ACME" },
+    originMeeting: null,
+    assignees: [],
+    recurringMeetings: [{ id: "rmtg-1", name: "週次定例" }],
+  };
+
+  beforeEach(() => {
+    vi.mocked(api["recurring-meetings"][":id"].$get).mockResolvedValue(
+      mockJson(detail),
+    );
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    // AssigneeFilter のメンバー取得は本テスト群では中身を検証しないので空でよい。
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson([]),
+    );
+  });
+
+  type Search = {
+    status?: string;
+    view?: "list" | "kanban";
+    assigneeId?: string;
+  };
+  function renderWithSearch(opts?: {
+    search?: Search;
+    onSearchChange?: (next: Search) => void;
+  }) {
+    return renderWithQuery(
+      <RecurringMeetingDetailView
+        id="rmtg-1"
+        now={NOW}
+        search={opts?.search ?? {}}
+        onSearchChange={opts?.onSearchChange ?? (() => {})}
+      />,
+    );
+  }
+
+  it("タスクを 1 件取得して表示する", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([sampleTask]),
+    );
+    renderWithSearch();
+    expect(await screen.findByText("タスク")).toBeInTheDocument();
+    const list = await screen.findByLabelText("プロジェクトのタスク一覧");
+    expect(within(list).getByText("資料作成")).toBeInTheDocument();
+  });
+
+  it("0 件時は空状態メッセージと「タスクを追加」ボタンを表示する", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch();
+    expect(
+      await screen.findByText("このプロジェクトのタスクはまだありません"),
+    ).toBeInTheDocument();
+    // #169 のダイアログ完成により、ボタンは有効化された。
+    const addBtn = screen.getByRole("button", { name: "タスクを追加" });
+    expect(addBtn).not.toBeDisabled();
+  });
+
+  it("status チェックボックスを切り替えると onSearchChange が呼ばれる", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    const onSearchChange = vi.fn();
+    renderWithSearch({ onSearchChange });
+
+    await screen.findByText("タスク");
+    const checkbox = screen.getByLabelText(/未着手/);
+    await userEvent.click(checkbox);
+    expect(onSearchChange).toHaveBeenCalledWith({ status: "todo" });
+  });
+
+  it("初期 status フィルタが反映される", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch({ search: { status: "in_progress" } });
+    await screen.findByText("タスク");
+
+    // API 呼び出しの query.status に in_progress が乗ること
+    const call = vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mock
+      .calls[0];
+    expect((call[0] as { query: { status?: string } }).query.status).toBe(
+      "in_progress",
+    );
+  });
+
+  it("タスク取得失敗時はエラーメッセージを表示する（定例ヘッダは維持）", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockRejectedValue(
+      new Error("network"),
+    );
+    renderWithSearch();
+    expect(await screen.findByText("週次定例")).toBeInTheDocument();
+    expect(
+      await screen.findByText("タスクの取得に失敗しました"),
+    ).toBeInTheDocument();
+  });
+
+  it("view=kanban のとき status フィルタ UI は描画されない", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([sampleTask]),
+    );
+    renderWithSearch({ search: { view: "kanban" } });
+    await screen.findByTestId("kanban-board");
+    // Kanban のカラムヘッダにも「未着手」等のラベルがあるため、
+    // フィルタ UI 固有の group / 凡例ラベルで存在判定する。
+    expect(
+      screen.queryByRole("group", { name: "ステータス" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("ステータス")).not.toBeInTheDocument();
+  });
+
+  it("view=kanban のとき URL の status は API リクエストに乗らない（全件取得）", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch({ search: { view: "kanban", status: "todo" } });
+    await screen.findByText("タスク");
+    const call = vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mock
+      .calls[0];
+    expect(
+      (call[0] as { query: { status?: string } }).query.status,
+    ).toBeUndefined();
+  });
+
+  it("フィルタ行に AssigneeFilter（担当者セレクタ）が描画される", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch();
+    await screen.findByText("タスク");
+    expect(screen.getByLabelText("担当者フィルタ")).toBeInTheDocument();
+  });
+
+  it("初期 ?assigneeId=user-42 は API リクエストの query.assigneeId に乗る", async () => {
+    vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderWithSearch({ search: { assigneeId: "user-42" } });
+    await screen.findByText("タスク");
+    const call = vi.mocked(api["recurring-meetings"][":id"].tasks.$get).mock
+      .calls[0];
+    expect(
+      (call[0] as { query: { assigneeId?: string } }).query.assigneeId,
+    ).toBe("user-42");
   });
 });

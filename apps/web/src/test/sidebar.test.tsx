@@ -96,9 +96,7 @@ const mockOrgs: Organization[] = [
   },
 ];
 
-function mockJson<T>(data: T) {
-  return { ok: true, status: 200, json: async () => data } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 function renderSidebar() {
   const client = new QueryClient({
@@ -605,5 +603,17 @@ describe("Sidebar 定例リスト", () => {
         expect.objectContaining({ headers: expect.any(Object) }),
       );
     });
+  });
+});
+
+describe("Sidebar ナビゲーション", () => {
+  it("My タスクへの導線が /tasks で表示される", async () => {
+    (api.organizations.$get as Mock).mockResolvedValue(mockJson(mockOrgs));
+
+    renderSidebar();
+
+    // ダッシュボードと同列に常に表示されるため、組織選択状態を待たずに描画される。
+    const link = await screen.findByRole("link", { name: /My タスク/ });
+    expect(link).toHaveAttribute("href", "/tasks");
   });
 });

@@ -50,11 +50,7 @@ vi.mock("@tanstack/react-router", async () => {
 
 import { api } from "@/lib/api";
 
-// hono/client のレスポンス型が複雑なため、モックの戻り値はヘルパー経由でキャスト。
-// queryFn 側で res.ok チェックを行うため ok: true / status: 200 も埋める。
-function mockJson<T>(data: T) {
-  return { ok: true, status: 200, json: async () => data } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 type Organization = {
   id: string;
@@ -143,11 +139,9 @@ describe("組織一覧表示", () => {
     // 認証失敗などで API が配列でない { error } を返すケース。
     // queryFn 側で弾かないと orgs.map() が落ちるため、UI クラッシュではなく
     // エラー表示にフォールバックすることを保証する。
-    vi.mocked(api.organizations.$get).mockResolvedValue({
-      ok: false,
-      status: 401,
-      json: async () => ({ error: "認証が必要です" }),
-    } as never);
+    vi.mocked(api.organizations.$get).mockResolvedValue(
+      mockJson({ error: "認証が必要です" }, 401),
+    );
 
     renderWithQuery(<OrganizationsPage />);
 
@@ -171,6 +165,18 @@ describe("組織作成モーダル", () => {
     expect(
       await screen.findByRole("dialog", { name: "新しい組織を作成" }),
     ).toBeInTheDocument();
+  });
+
+  it("説明欄は複数行入力ができる textarea で描画される", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<OrganizationsPage />);
+
+    await user.click(screen.getByRole("button", { name: "組織を作成" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "新しい組織を作成",
+    });
+    const descriptionInput = within(dialog).getByLabelText("説明");
+    expect(descriptionInput.tagName).toBe("TEXTAREA");
   });
 
   it("name が空のとき送信できずバリデーションエラーが出る", async () => {
@@ -262,11 +268,9 @@ describe("組織作成モーダル", () => {
     // 非 2xx を success として扱うと「作成したつもりが実は失敗」のサイレント
     // 失敗を生む。エラー表示が出て Dialog が閉じないことを保証する。
     const user = userEvent.setup();
-    vi.mocked(api.organizations.$post).mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: "bad request" }),
-    } as never);
+    vi.mocked(api.organizations.$post).mockResolvedValue(
+      mockJson({ error: "bad request" }, 400),
+    );
 
     renderWithQuery(<OrganizationsPage />);
 

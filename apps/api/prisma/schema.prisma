@@ -17,21 +17,21 @@ model Meeting {
   createdAt DateTime @default(now())
 
   // 議事録メタ情報
-  meetingType String @default("one_time")
-  transcriptionQuality String?
-  supplementaryMemo String?
-  sequenceNumber Int?
-  previousMeetingId String?
+  meetingType              String  @default("one_time")
+  transcriptionQuality     String?
+  supplementaryMemo        String?
+  sequenceNumber           Int?
+  previousMeetingId        String?
   estimatedDurationMinutes Int?
-  estimationNote String?
+  estimationNote           String?
 
   // 紐付く定例。単発会議の場合は null。
   // 定例が削除されても本会議の議事録メタ・タスク・決定事項を残すため SetNull とする。
   recurringMeetingId String?
 
   // 自己参照リレーション
-  previousMeeting Meeting? @relation("MeetingChain", fields: [previousMeetingId], references: [id])
-  nextMeetings Meeting[] @relation("MeetingChain")
+  previousMeeting Meeting?  @relation("MeetingChain", fields: [previousMeetingId], references: [id])
+  nextMeetings    Meeting[] @relation("MeetingChain")
 
   // 定例リレーション
   recurringMeeting RecurringMeeting? @relation(fields: [recurringMeetingId], references: [id], onDelete: SetNull)
@@ -40,13 +40,14 @@ model Meeting {
   speakers             MeetingSpeaker[]
   estimationBreakdowns MeetingEstimationBreakdown[]
   ragDocument          RagDocument?
-  currentMeetingRefs   RelatedPastMeeting[] @relation("CurrentMeeting")
-  relatedMeetingRefs   RelatedPastMeeting[] @relation("RelatedMeeting")
+  currentMeetingRefs   RelatedPastMeeting[]         @relation("CurrentMeeting")
+  relatedMeetingRefs   RelatedPastMeeting[]         @relation("RelatedMeeting")
   decisionItems        DecisionItem[]
-  decisionItemsPlanned DecisionItem[]       @relation("PlannedMeeting")
+  decisionItemsPlanned DecisionItem[]               @relation("PlannedMeeting")
   // 当該会議を発生源 (originMeetingId) とするタスク。会議削除時は Task 側 SetNull。
   originTasks          Task[]
   ambiguousInfos       AmbiguousInfo[]
+  analysisRuns         MeetingAnalysisRun[]
 
   // インデックス
   @@index([previousMeetingId])
@@ -69,12 +70,12 @@ model User {
   meetingMembers  MeetingMember[]
 
   // 会議の話者情報。話者名とDBユーザーの紐付け状態を管理する。ユーザーが削除された場合も履歴保持のためレコードは残すが、userIdはnullにする。
-  meetingSpeakers      MeetingSpeaker[]
-  decisionItemsDecided DecisionItem[]
+  meetingSpeakers       MeetingSpeaker[]
+  decisionItemsDecided  DecisionItem[]
   decisionItemAssignees DecisionItemAssignee[]
-  taskAssignees        TaskAssignee[]
-  auditLogs            AuditLog[]
-  readLogs             ReadLog[]
+  taskAssignees         TaskAssignee[]
+  auditLogs             AuditLog[]
+  readLogs              ReadLog[]
 }
 
 // 決定事項のステータス
@@ -177,11 +178,14 @@ enum OrgRole {
   member
 }
 
-// 組織への招待状態。pending → accepted/expired のいずれかに遷移する。
+// 組織への招待状態。pending → accepted/expired/revoked のいずれかに遷移する。
+// revoked は owner/admin が招待を取り消したケース。@@unique(organizationId, email, status)
+// の制約により、取消後 (status=revoked) は同一 email への再招待が pending として作成可能。
 enum InvitationStatus {
   pending
   accepted
   expired
+  revoked
 }
 
 // 組織。所属メンバーと配下定例の親エンティティ。
@@ -246,10 +250,10 @@ model RecurringMeeting {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  members      MeetingMember[]
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members         MeetingMember[]
   // 配下に開催される個別 Meeting 群。定例削除時は SetNull で紐付け解除のみ。
-  meetings     Meeting[]
+  meetings        Meeting[]
   // 定例に attach されたタスク（M:N 中間テーブル）。定例削除時は中間レコードのみ削除し、
   // タスク本体は Task.organizationId で組織スコープが保たれる限り残す。
   taskAttachments TaskRecurringMeeting[]
@@ -278,35 +282,35 @@ model MeetingMember {
 
 // 会議ごとの話者情報。書き起こし上の呼称とDBユーザーの紐付け状態を管理する。
 model MeetingSpeaker {
-  id               String   @id @default(cuid())
+  id               String           @id @default(cuid())
   meetingId        String
   userId           String?
   name             String?
   resolutionStatus ResolutionStatus
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@index([meetingId])
   @@unique([meetingId, userId])
+  @@index([meetingId])
 }
 
 // 次回会議の所要時間見積もり内訳。meetings.estimatedDurationMinutesの算出根拠を保持する。
 model MeetingEstimationBreakdown {
-  id        String   @id @default(cuid())
+  id        String                  @id @default(cuid())
   meetingId String
   type      EstimationBreakdownType
   count     Int
   minutes   Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
 
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
-  @@index([meetingId])
   @@unique([meetingId, type])
+  @@index([meetingId])
 }
 
 // AI Searchに登録するRAGインデックスドキュメント。1会議=1ドキュメント。
@@ -326,13 +330,13 @@ model RagDocument {
 
 // RAG検索で見つかった関連過去会議。recurring_flagで再議論検出に使用する。
 model RelatedPastMeeting {
-  id                String   @id @default(cuid())
-  meetingId         String
-  relatedMeetingId  String
-  relevanceSummary  String
-  recurringFlag     Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(cuid())
+  meetingId        String
+  relatedMeetingId String
+  relevanceSummary String
+  recurringFlag    Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   meeting        Meeting @relation("CurrentMeeting", fields: [meetingId], references: [id], onDelete: Cascade)
   relatedMeeting Meeting @relation("RelatedMeeting", fields: [relatedMeetingId], references: [id], onDelete: Cascade)
@@ -344,7 +348,7 @@ model RelatedPastMeeting {
 
 // 会議から抽出された決定事項・未決事項。
 model DecisionItem {
-  id               String   @id @default(cuid())
+  id               String             @id @default(cuid())
   meetingId        String
   title            String
   body             String?
@@ -360,13 +364,13 @@ model DecisionItem {
   plannedMeetingId String?
   decidedAt        DateTime?
   decidedBy        String?
-  version          Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  version          Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  meeting        Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  plannedMeeting Meeting? @relation("PlannedMeeting", fields: [plannedMeetingId], references: [id], onDelete: SetNull)
-  decidedByUser  User?    @relation(fields: [decidedBy], references: [id], onDelete: SetNull)
+  meeting        Meeting                @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  plannedMeeting Meeting?               @relation("PlannedMeeting", fields: [plannedMeetingId], references: [id], onDelete: SetNull)
+  decidedByUser  User?                  @relation(fields: [decidedBy], references: [id], onDelete: SetNull)
   assignees      DecisionItemAssignee[]
   tasks          Task[]
   ambiguousInfos AmbiguousInfo[]
@@ -394,7 +398,7 @@ model DecisionItemAssignee {
 // 将来 #153 で Project 層を導入する際は TaskRecurringMeeting の参照先を
 // RecurringMeeting → Project に張り替えるだけで吸収できる構造としている。
 model Task {
-  id               String    @id @default(cuid())
+  id               String        @id @default(cuid())
   // 組織スコープ。recurringMeetings / originMeeting から派生可能だが、
   // 認可・フィルタの単純化のため非正規化で保持する。組織削除時はカスケード削除。
   organizationId   String
@@ -420,15 +424,15 @@ model Task {
   dueDate          DateTime?
   startDate        DateTime?
   followUpDate     DateTime?
-  version          Int       @default(0)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  version          Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  originMeeting    Meeting?      @relation(fields: [originMeetingId], references: [id], onDelete: SetNull)
-  decisionItem     DecisionItem? @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
-  assignees        TaskAssignee[]
-  ambiguousInfos   AmbiguousInfo[]
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  originMeeting     Meeting?               @relation(fields: [originMeetingId], references: [id], onDelete: SetNull)
+  decisionItem      DecisionItem?          @relation(fields: [decisionItemId], references: [id], onDelete: SetNull)
+  assignees         TaskAssignee[]
+  ambiguousInfos    AmbiguousInfo[]
   recurringMeetings TaskRecurringMeeting[]
 
   @@index([organizationId])
@@ -441,9 +445,9 @@ model Task {
 
 // タスクの担当者。複数担当者に対応するための中間テーブル。
 model TaskAssignee {
-  id      String @id @default(cuid())
-  taskId  String
-  userId  String
+  id     String @id @default(cuid())
+  taskId String
+  userId String
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -471,30 +475,77 @@ model TaskRecurringMeeting {
 
 // 会議中に発生した曖昧な情報。
 model AmbiguousInfo {
-  id                         String    @id @default(cuid())
-  meetingId                  String
-  body                       String
-  sourceQuote                String?
-  sourceContext              String?
-  status                     AmbiguousInfoStatus
-  ambiguityType              AmbiguityType?
-  severity                   AmbiguitySeverity?
-  inferenceBasis             String?
-  dueDateRaw                 String?
-  dueDateEstimated           Boolean?
-  affectedItemIds            Json?
-  resolutionType             ResolutionType?
-  resolvedToTaskId           String?
-  resolvedToDecisionItemId   String?
-  version                    Int       @default(0)
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
+  id                       String              @id @default(cuid())
+  meetingId                String
+  body                     String
+  sourceQuote              String?
+  sourceContext            String?
+  status                   AmbiguousInfoStatus
+  ambiguityType            AmbiguityType?
+  severity                 AmbiguitySeverity?
+  inferenceBasis           String?
+  dueDateRaw               String?
+  dueDateEstimated         Boolean?
+  affectedItemIds          Json?
+  resolutionType           ResolutionType?
+  resolvedToTaskId         String?
+  resolvedToDecisionItemId String?
+  version                  Int                 @default(0)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
 
-  meeting              Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  resolvedToTask       Task?         @relation(fields: [resolvedToTaskId], references: [id], onDelete: SetNull)
-  resolvedToDecision   DecisionItem? @relation(fields: [resolvedToDecisionItemId], references: [id], onDelete: SetNull)
+  meeting            Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  resolvedToTask     Task?         @relation(fields: [resolvedToTaskId], references: [id], onDelete: SetNull)
+  resolvedToDecision DecisionItem? @relation(fields: [resolvedToDecisionItemId], references: [id], onDelete: SetNull)
 
   @@index([meetingId])
+  @@index([status])
+}
+
+// AI解析の実行履歴。1回の解析runごとに、最終JSON・検証警告・RAG検索ログなどを保持する。
+// 業務状態の正本ではなく、監査・再現性・デバッグ・再実行比較のためのスナップショット。
+model MeetingAnalysisRun {
+  id        String @id @default(cuid())
+  meetingId String
+
+  // 実行状態
+  status      String  @default("queued")
+  currentStep String?
+  triggerType String?
+
+  // 再現性・監査
+  modelName       String?
+  apiVersion      String?
+  promptVersion   String?
+  pipelineVersion String?
+  inputHash       String?
+
+  // UIでよく使う要約フィールド
+  summary    String?
+  alertLevel String?
+
+  // JSONスナップショット
+  reportJson         Json?
+  rawOutputsJson     Json?
+  validationWarnings Json?
+  ragRetrievalJson   Json?
+  recommendedAgenda  Json?
+  resourceRefsJson   Json?
+
+  // 実行時刻・失敗情報
+  startedAt    DateTime?
+  completedAt  DateTime?
+  failedAt     DateTime?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@index([meetingId, status])
+  @@index([meetingId, createdAt])
   @@index([status])
 }
 
@@ -502,9 +553,9 @@ model AmbiguousInfo {
 model AuditLog {
   id           String   @id @default(cuid())
   actorId      String
-  resourceType String   // task / decision_item / ambiguous_info など
+  resourceType String // task / decision_item / ambiguous_info など
   resourceId   String
-  action       String   // create / update / delete
+  action       String // create / update / delete
   beforeValue  Json?
   afterValue   Json?
   createdAt    DateTime @default(now())
@@ -519,7 +570,7 @@ model AuditLog {
 model ReadLog {
   id           String   @id @default(cuid())
   userId       String
-  resourceType String   // task / decision_item / ambiguous_info など
+  resourceType String // task / decision_item / ambiguous_info など
   resourceId   String
   readAt       DateTime @default(now())
   createdAt    DateTime @default(now())

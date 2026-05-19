@@ -1,15 +1,17 @@
 import { createRemoteJWKSet } from "jose";
+import { requireEnv } from "./env.js";
 
-// 既定値は services/fake-auth と整合する。本番（Entra ID）移行時は env で上書きする。
+// 開発 / テスト時のフォールバック値は services/fake-auth と整合する。
+// 本番（Entra ID）では env 必須。NODE_ENV=production で未設定なら起動時に throw する。
 const DEFAULT_ISSUER_URL = "http://localhost:3007";
 const DEFAULT_AUDIENCE = "fake-auth-client";
 
 export function getIssuerUrl(): string {
-  return process.env.OIDC_ISSUER_URL ?? DEFAULT_ISSUER_URL;
+  return requireEnv("OIDC_ISSUER_URL", DEFAULT_ISSUER_URL);
 }
 
 export function getAudience(): string {
-  return process.env.OIDC_AUDIENCE ?? DEFAULT_AUDIENCE;
+  return requireEnv("OIDC_AUDIENCE", DEFAULT_AUDIENCE);
 }
 
 export function getJwksUrl(): URL {
