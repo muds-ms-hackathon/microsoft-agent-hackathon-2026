@@ -24,13 +24,7 @@ vi.mock("@/lib/api", () => ({
 
 import { api } from "@/lib/api";
 
-function mockJson<T>(data: T, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-  } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 const baseTask: Task = {
   id: "task-1",

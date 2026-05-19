@@ -20,6 +20,8 @@ vi.mock("../src/lib/prisma.js", () => ({
     organizationInvitation: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     task: {
@@ -66,9 +68,46 @@ function resetAuthUser() {
   authState.current = { ...authState.defaultUser };
 }
 
-import { Prisma } from "@prisma/client";
+import {
+  Prisma,
+  type OrganizationInvitation,
+  type OrganizationMembership,
+} from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import type { TaskWithList } from "../src/lib/task-serialization.js";
+
+// ハンドラ側で利用している include 形に合わせた Prisma 型エイリアス。
+// findMany / findUnique のモック戻り値を `as never` で渡すのを避けるためのもの。
+// API ハンドラ側で include 句を変更したら、ここの型もコンパイル時に追従させる。
+type OrgWithSelfRoleMembership = Prisma.OrganizationGetPayload<{
+  include: { memberships: { select: { role: true } } };
+}>;
+type OrgWithRecurringMeetings = Prisma.OrganizationGetPayload<{
+  include: { recurringMeetings: true };
+}>;
+type MembershipWithUser = Prisma.OrganizationMembershipGetPayload<{
+  include: { user: true };
+}>;
+type InvitationWithInviter = Prisma.OrganizationInvitationGetPayload<{
+  include: {
+    inviter: {
+      select: { id: true; name: true; displayName: true; email: true };
+    };
+  };
+}>;
+// GET /organizations/:id/next-meetings の findMany が select で取得する形。
+// ハンドラの select 句と一致させる必要がある（ズレるとここで型エラーになる）。
+type NextMeetingRow = Prisma.MeetingGetPayload<{
+  select: {
+    id: true;
+    title: true;
+    heldAt: true;
+    estimatedDurationMinutes: true;
+    recurringMeetingId: true;
+    recurringMeeting: { select: { name: true } };
+  };
+}>;
 
 const mockOrgFindMany = vi.mocked(prisma.organization.findMany);
 const mockOrgFindUnique = vi.mocked(prisma.organization.findUnique);
@@ -85,6 +124,13 @@ const mockMembershipFindMany = vi.mocked(
 );
 const mockMembershipDelete = vi.mocked(prisma.organizationMembership.delete);
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
+const mockInvitationFindUnique = vi.mocked(
+  prisma.organizationInvitation.findUnique,
+);
+const mockInvitationFindMany = vi.mocked(
+  prisma.organizationInvitation.findMany,
+);
+const mockInvitationUpdate = vi.mocked(prisma.organizationInvitation.update);
 const mockTaskFindMany = vi.mocked(prisma.task.findMany);
 const mockMeetingFindMany = vi.mocked(prisma.meeting.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
@@ -189,9 +235,10 @@ describe("GET /organizations", () => {
   it("200 と認証ユーザーが所属する組織一覧（自分の role を含む）を返す", async () => {
     // findMany は include: { memberships } で自分の membership を含めて取得し、
     // ハンドラ側で role を平坦化して返す。
-    mockOrgFindMany.mockResolvedValue([
+    const rows: OrgWithSelfRoleMembership[] = [
       { ...sampleOrg, memberships: [{ role: "owner" }] },
-    ] as never);
+    ];
+    mockOrgFindMany.mockResolvedValue(rows);
     const res = await app.request("/organizations");
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ id: string; role: string }>;
@@ -213,7 +260,7 @@ describe("GET /organizations", () => {
   });
 
   it("複数所属でそれぞれの role が含まれる", async () => {
-    mockOrgFindMany.mockResolvedValue([
+    const rows: OrgWithSelfRoleMembership[] = [
       { ...sampleOrg, id: "org-1", memberships: [{ role: "owner" }] },
       {
         ...sampleOrg,
@@ -221,7 +268,8 @@ describe("GET /organizations", () => {
         name: "別の組織",
         memberships: [{ role: "member" }],
       },
-    ] as never);
+    ];
+    mockOrgFindMany.mockResolvedValue(rows);
     const res = await app.request("/organizations");
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ id: string; role: string }>;
@@ -273,10 +321,11 @@ describe("GET /organizations/:id", () => {
       role: "owner",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockOrgFindUnique.mockResolvedValue({
+    const orgWithMeetings: OrgWithRecurringMeetings = {
       ...sampleOrg,
       recurringMeetings: sampleRecurringMeetings,
-    } as never);
+    };
+    mockOrgFindUnique.mockResolvedValue(orgWithMeetings);
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(200);
@@ -314,10 +363,11 @@ describe("GET /organizations/:id", () => {
       role: "member",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockOrgFindUnique.mockResolvedValue({
+    const orgEmpty: OrgWithRecurringMeetings = {
       ...sampleOrg,
       recurringMeetings: [],
-    } as never);
+    };
+    mockOrgFindUnique.mockResolvedValue(orgEmpty);
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(200);
@@ -332,10 +382,11 @@ describe("GET /organizations/:id", () => {
       role: "admin",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockOrgFindUnique.mockResolvedValue({
+    const orgEmpty: OrgWithRecurringMeetings = {
       ...sampleOrg,
       recurringMeetings: [],
-    } as never);
+    };
+    mockOrgFindUnique.mockResolvedValue(orgEmpty);
 
     const res = await app.request("/organizations/org-1");
     expect(res.status).toBe(200);
@@ -371,7 +422,7 @@ describe("GET /organizations/:id", () => {
 describe("GET /organizations/:id/members", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const sampleMemberships = [
+  const sampleMemberships: MembershipWithUser[] = [
     // 並び順検証用に、意図的に DB 順序を「想定の表示順」と逆にしておく。
     {
       userId: "user-3",
@@ -430,7 +481,7 @@ describe("GET /organizations/:id/members", () => {
       role: "owner",
       joinedAt: new Date("2026-05-01T00:00:00Z"),
     });
-    mockMembershipFindMany.mockResolvedValue(sampleMemberships as never);
+    mockMembershipFindMany.mockResolvedValue(sampleMemberships);
 
     const res = await app.request("/organizations/org-1/members");
     expect(res.status).toBe(200);
@@ -473,7 +524,7 @@ describe("GET /organizations/:id/members", () => {
       role: "member",
       joinedAt: new Date("2026-05-05T00:00:00Z"),
     });
-    mockMembershipFindMany.mockResolvedValue(sampleMemberships as never);
+    mockMembershipFindMany.mockResolvedValue(sampleMemberships);
 
     const res = await app.request("/organizations/org-1/members");
     expect(res.status).toBe(200);
@@ -493,7 +544,10 @@ describe("GET /organizations/:id/members", () => {
 describe("DELETE /organizations/:id/members/:userId", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  function membership(role: "owner" | "admin" | "member", userId = "user-1") {
+  function membership(
+    role: "owner" | "admin" | "member",
+    userId = "user-1",
+  ): OrganizationMembership {
     return {
       userId,
       organizationId: "org-1",
@@ -507,9 +561,7 @@ describe("DELETE /organizations/:id/members/:userId", () => {
     mockMembershipFindUnique
       .mockResolvedValueOnce(membership("owner", "user-1"))
       .mockResolvedValueOnce(membership("member", "user-2"));
-    mockMembershipDelete.mockResolvedValue(
-      membership("member", "user-2") as never,
-    );
+    mockMembershipDelete.mockResolvedValue(membership("member", "user-2"));
 
     const res = await app.request("/organizations/org-1/members/user-2", {
       method: "DELETE",
@@ -986,6 +1038,248 @@ describe("POST /organizations/:id/invite", () => {
   });
 });
 
+describe("GET /organizations/:id/invitations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-19T00:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function membership(role: "owner" | "admin" | "member") {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  const pendingInvitation: InvitationWithInviter = {
+    id: "inv-1",
+    organizationId: "org-1",
+    email: "bob@example.com",
+    invitedBy: "user-1",
+    role: "member",
+    expiresAt: new Date("2026-05-26T00:00:00Z"),
+    status: "pending",
+    createdAt: new Date("2026-05-19T00:00:00Z"),
+    inviter: {
+      id: "user-1",
+      name: "alice",
+      displayName: "alice",
+      email: "alice@example.com",
+    },
+  };
+
+  it("owner は pending 招待一覧を取得できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationFindMany.mockResolvedValue([pendingInvitation]);
+
+    const res = await app.request("/organizations/org-1/invitations");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      email: string;
+      role: string;
+      status: string;
+      expired: boolean;
+    }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe("inv-1");
+    expect(body[0].email).toBe("bob@example.com");
+    expect(body[0].role).toBe("member");
+    expect(body[0].expired).toBe(false);
+  });
+
+  it("admin も pending 招待一覧を取得できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("admin"));
+    mockInvitationFindMany.mockResolvedValue([]);
+
+    const res = await app.request("/organizations/org-1/invitations");
+    expect(res.status).toBe(200);
+  });
+
+  it("member は 403 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+
+    const res = await app.request("/organizations/org-1/invitations");
+    expect(res.status).toBe(403);
+    expect(mockInvitationFindMany).not.toHaveBeenCalled();
+  });
+
+  it("未所属ユーザーは 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/organizations/org-1/invitations");
+    expect(res.status).toBe(404);
+    expect(mockInvitationFindMany).not.toHaveBeenCalled();
+  });
+
+  it("status=pending で findMany が呼ばれ、期限切れ判定は expired フィールドで返る", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    const expiredInvitation: InvitationWithInviter = {
+      ...pendingInvitation,
+      id: "inv-expired",
+      expiresAt: new Date("2026-05-10T00:00:00Z"),
+    };
+    mockInvitationFindMany.mockResolvedValue([
+      pendingInvitation,
+      expiredInvitation,
+    ]);
+
+    const res = await app.request("/organizations/org-1/invitations");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      expired: boolean;
+    }>;
+    expect(mockInvitationFindMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", status: "pending" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        inviter: {
+          select: { id: true, name: true, displayName: true, email: true },
+        },
+      },
+    });
+    // 期限切れは末尾のはず（findMany のソート順は createdAt 降順だが、
+    // 「期限切れは末尾」要件があるならハンドラ側で並べ替え。仕様: createdAt desc
+    // でクライアントが expired フィールドを使って色分けする想定）
+    expect(body).toHaveLength(2);
+    const expiredEntry = body.find((b) => b.id === "inv-expired");
+    expect(expiredEntry?.expired).toBe(true);
+    const liveEntry = body.find((b) => b.id === "inv-1");
+    expect(liveEntry?.expired).toBe(false);
+  });
+});
+
+describe("DELETE /organizations/:id/invitations/:invitationId", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function membership(role: "owner" | "admin" | "member") {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  const pendingInvitation: OrganizationInvitation = {
+    id: "inv-1",
+    organizationId: "org-1",
+    email: "bob@example.com",
+    invitedBy: "user-1",
+    role: "member",
+    expiresAt: new Date("2026-05-26T00:00:00Z"),
+    status: "pending",
+    createdAt: new Date("2026-05-19T00:00:00Z"),
+  };
+
+  it("owner は pending 招待を取消できる (204)", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationFindUnique.mockResolvedValue(pendingInvitation);
+    mockInvitationUpdate.mockResolvedValue({
+      ...pendingInvitation,
+      status: "revoked",
+    });
+
+    const res = await app.request("/organizations/org-1/invitations/inv-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(204);
+    expect(mockInvitationUpdate).toHaveBeenCalledWith({
+      where: { id: "inv-1" },
+      data: { status: "revoked" },
+    });
+  });
+
+  it("admin も pending 招待を取消できる", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("admin"));
+    mockInvitationFindUnique.mockResolvedValue(pendingInvitation);
+    mockInvitationUpdate.mockResolvedValue({
+      ...pendingInvitation,
+      status: "revoked",
+    });
+
+    const res = await app.request("/organizations/org-1/invitations/inv-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(204);
+  });
+
+  it("member は 403 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("member"));
+
+    const res = await app.request("/organizations/org-1/invitations/inv-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+    expect(mockInvitationUpdate).not.toHaveBeenCalled();
+  });
+
+  it("組織に存在しない招待 ID は 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationFindUnique.mockResolvedValue(null);
+
+    const res = await app.request(
+      "/organizations/org-1/invitations/not-found",
+      { method: "DELETE" },
+    );
+    expect(res.status).toBe(404);
+    expect(mockInvitationUpdate).not.toHaveBeenCalled();
+  });
+
+  it("他組織の招待 ID は 404 を返す（path 組織と invitation.organizationId が一致しない）", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationFindUnique.mockResolvedValue({
+      ...pendingInvitation,
+      organizationId: "other-org",
+    });
+
+    const res = await app.request("/organizations/org-1/invitations/inv-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+    expect(mockInvitationUpdate).not.toHaveBeenCalled();
+  });
+
+  it("既に accepted の招待は 409 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationFindUnique.mockResolvedValue({
+      ...pendingInvitation,
+      status: "accepted",
+    });
+
+    const res = await app.request("/organizations/org-1/invitations/inv-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(409);
+    expect(mockInvitationUpdate).not.toHaveBeenCalled();
+  });
+
+  it("既に revoked の招待は冪等として 204 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValue(membership("owner"));
+    mockInvitationFindUnique.mockResolvedValue({
+      ...pendingInvitation,
+      status: "revoked",
+    });
+
+    const res = await app.request("/organizations/org-1/invitations/inv-1", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(204);
+    // 既に revoked なので update を発行しない
+    expect(mockInvitationUpdate).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /organizations/:id/join", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1186,48 +1480,9 @@ describe("POST /organizations/:id/join", () => {
     expect(res.status).toBe(500);
   });
 
-  it("認証ユーザーの email に大文字や前後空白が含まれていても招待を一致させる", async () => {
-    // IdP が "  Alice@Example.COM  " のように非正規化された email を返した場合でも、
-    // 招待保存時と同じく trim + 小文字化してから照合する必要がある（さもないと
-    // 招待を出したのに /join が永久に 404 になる）。
-    authState.current = {
-      ...authState.current,
-      email: "  Alice@Example.COM  ",
-    };
-    mockMembershipFindUnique.mockResolvedValue(null);
-
-    let observedEmail: string | undefined;
-    mockTransaction.mockImplementation(async (fn) => {
-      const tx = {
-        organizationInvitation: {
-          findFirst: vi.fn(async (args: { where: { email: string } }) => {
-            observedEmail = args.where.email;
-            return pendingInvitation;
-          }),
-          update: vi.fn().mockResolvedValue({
-            ...pendingInvitation,
-            status: "accepted",
-          }),
-        },
-        organizationMembership: {
-          create: vi.fn().mockResolvedValue({
-            userId: "user-1",
-            organizationId: "org-1",
-            role: "member",
-            joinedAt: new Date("2026-05-06T00:00:00Z"),
-          }),
-        },
-      };
-      // biome-ignore lint/suspicious/noExplicitAny: テスト用のミニマルな tx スタブ
-      return await (fn as (t: any) => Promise<unknown>)(tx);
-    });
-
-    const res = await app.request("/organizations/org-1/join", {
-      method: "POST",
-    });
-    expect(res.status).toBe(200);
-    expect(observedEmail).toBe("alice@example.com");
-  });
+  // 注: 「user.email が非正規化な場合でも /join で正規化する」テストは
+  // auth ミドルウェア側に正規化責務が移った (#103) ため削除した。
+  // 非正規化 email の正規化は test/auth.test.ts でカバー済み。
 });
 
 describe("GET /organizations/:id/tasks", () => {
@@ -1243,7 +1498,7 @@ describe("GET /organizations/:id/tasks", () => {
     };
   }
 
-  const sampleListTask = {
+  const sampleListTask: TaskWithList = {
     id: "task-1",
     organizationId: "org-1",
     originMeetingId: null,
@@ -1275,7 +1530,7 @@ describe("GET /organizations/:id/tasks", () => {
 
   it("組織メンバーは 200 でタスク一覧を取得できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockTaskFindMany.mockResolvedValue([sampleListTask] as never);
+    mockTaskFindMany.mockResolvedValue([sampleListTask]);
 
     const res = await app.request("/organizations/org-1/tasks");
     expect(res.status).toBe(200);
@@ -1328,7 +1583,7 @@ describe("GET /organizations/:id/next-meetings", () => {
   }
 
   // findMany が select 句で返す形（recurringMeeting がネスト）
-  const sampleMeetingRows = [
+  const sampleMeetingRows: NextMeetingRow[] = [
     {
       id: "mtg-near",
       title: "週次定例 2026-05-20",
@@ -1349,7 +1604,7 @@ describe("GET /organizations/:id/next-meetings", () => {
 
   it("組織メンバーは 200 で upcoming な会議を limit 件まで取得できる", async () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockMeetingFindMany.mockResolvedValue(sampleMeetingRows as never);
+    mockMeetingFindMany.mockResolvedValue(sampleMeetingRows);
 
     const res = await app.request("/organizations/org-1/next-meetings?limit=5");
     expect(res.status).toBe(200);
@@ -1464,16 +1719,15 @@ describe("GET /organizations/:id/next-meetings", () => {
     // 防御的ケース: include の関係フィルタにより通常は発生しないが、
     // recurringMeeting 側が null の場合に NPE を起こさないことを担保する。
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockMeetingFindMany.mockResolvedValue([
-      {
-        id: "mtg-x",
-        title: "edge",
-        heldAt: new Date("2026-05-20T01:00:00Z"),
-        estimatedDurationMinutes: null,
-        recurringMeetingId: null,
-        recurringMeeting: null,
-      },
-    ] as never);
+    const edgeRow: NextMeetingRow = {
+      id: "mtg-x",
+      title: "edge",
+      heldAt: new Date("2026-05-20T01:00:00Z"),
+      estimatedDurationMinutes: null,
+      recurringMeetingId: null,
+      recurringMeeting: null,
+    };
+    mockMeetingFindMany.mockResolvedValue([edgeRow]);
 
     const res = await app.request("/organizations/org-1/next-meetings?limit=1");
     expect(res.status).toBe(200);

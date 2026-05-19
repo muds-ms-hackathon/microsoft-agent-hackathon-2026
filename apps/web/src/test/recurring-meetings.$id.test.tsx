@@ -61,13 +61,7 @@ vi.mock("@tanstack/react-router", async () => {
 import { api } from "@/lib/api";
 import { RecurringMeetingDetailView } from "../routes/recurring-meetings.$id";
 
-function mockJson<T>(data: T, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-  } as never;
-}
+import { mockJson } from "./helpers/mockJson";
 
 const detail = {
   id: "rmtg-1",
