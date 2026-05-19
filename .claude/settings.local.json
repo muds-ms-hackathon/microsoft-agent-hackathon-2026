@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm test *)",
+      "Bash(uv sync *)",
+      "Bash(uv run *)",
+      "Bash(python *)",
+      "Bash(git stash *)",
+      "Bash(npm run *)",
+      "Bash(az keyvault *)",
+      "Bash(pnpm install *)",
+      "Bash(docker compose ps *)",
+      "Bash(.venv/bin/pytest tests/ -v)"
+    ]
+  }
+}

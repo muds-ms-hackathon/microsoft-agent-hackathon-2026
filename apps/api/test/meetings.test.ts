@@ -5,6 +5,7 @@ vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     meeting: {
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     organizationMembership: {
       findUnique: vi.fn(),
@@ -12,7 +13,15 @@ vi.mock("../src/lib/prisma.js", () => ({
     task: {
       findMany: vi.fn(),
     },
+    meetingAnalysisRun: {
+      create: vi.fn(),
+    },
   },
+}));
+
+// Service Bus 送信をモックする
+vi.mock("../src/lib/service-bus.js", () => ({
+  sendToServiceBus: vi.fn().mockResolvedValue(undefined),
 }));
 
 // auth ミドルウェアの差し替え。/:id と /:id/tasks は認証必須なので必要。
@@ -42,6 +51,7 @@ vi.mock("../src/middleware/auth.js", () => ({
 import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import { sendToServiceBus } from "../src/lib/service-bus.js";
 import type { TaskWithList } from "../src/lib/task-serialization.js";
 
 // ハンドラの include / select 形に対応する Prisma 型エイリアス。
@@ -49,20 +59,28 @@ import type { TaskWithList } from "../src/lib/task-serialization.js";
 type MeetingWithRecurringOrgId = Prisma.MeetingGetPayload<{
   include: { recurringMeeting: { select: { organizationId: true } } };
 }>;
-// GET /meetings/:id ハンドラ用: recurringMeeting に organization (id/name) を含む詳細形
+// GET /meetings/:id ハンドラ用: recurringMeeting に organization (id/name) と analysisRuns を含む
 type MeetingDetail = Prisma.MeetingGetPayload<{
   include: {
     recurringMeeting: {
       include: { organization: { select: { id: true; name: true } } };
     };
+    analysisRuns: { orderBy: { createdAt: "desc" }; take: 1 };
   };
+}>;
+// PATCH / POST /meetings/:id ハンドラ用: recurringMeeting.organizationId のみ
+type MeetingForUpdate = Prisma.MeetingGetPayload<{
+  include: { recurringMeeting: { select: { organizationId: true } } };
 }>;
 
 const mockFindUnique = vi.mocked(prisma.meeting.findUnique);
+const mockMeetingUpdate = vi.mocked(prisma.meeting.update);
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
 );
 const mockTaskFindMany = vi.mocked(prisma.task.findMany);
+const mockAnalysisRunCreate = vi.mocked(prisma.meetingAnalysisRun.create);
+const mockSendToServiceBus = vi.mocked(sendToServiceBus);
 
 describe("旧 GET / と POST /meetings は撤去済み", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -192,6 +210,7 @@ describe("GET /meetings/:id", () => {
     estimationNote: null,
     sequenceNumber: 3,
     previousMeetingId: null,
+    transcriptText: null,
     transcriptionQuality: null,
     supplementaryMemo: null,
     meetingType: "recurring_meeting",
@@ -203,6 +222,7 @@ describe("GET /meetings/:id", () => {
       organizationId: "org-1",
       organization: { id: "org-1", name: "ACME" },
     },
+    analysisRuns: [],
   } satisfies Partial<MeetingDetail>;
 
   it("組織メンバーは 200 で詳細を取得できる", async () => {
@@ -221,11 +241,62 @@ describe("GET /meetings/:id", () => {
       title: string;
       recurringMeeting: { id: string; name: string };
       organization: { id: string; name: string };
+      latestAnalysisRun: null;
     };
     expect(body.id).toBe("mtg-1");
     expect(body.title).toBe("第3回");
     expect(body.recurringMeeting).toEqual({ id: "rmtg-1", name: "週次定例" });
     expect(body.organization).toEqual({ id: "org-1", name: "ACME" });
+    expect(body.latestAnalysisRun).toBeNull();
+  });
+
+  it("解析ランがある場合 latestAnalysisRun を含む", async () => {
+    const run = {
+      id: "run-1",
+      meetingId: "mtg-1",
+      status: "completed",
+      currentStep: null,
+      summary: "テストサマリー",
+      alertLevel: "low",
+      completedAt: new Date("2026-05-18T12:00:00Z"),
+      failedAt: null,
+      errorMessage: null,
+      triggerType: "manual",
+      modelName: null,
+      apiVersion: null,
+      promptVersion: null,
+      pipelineVersion: null,
+      inputHash: null,
+      reportJson: null,
+      rawOutputsJson: null,
+      validationWarnings: null,
+      ragRetrievalJson: null,
+      recommendedAgenda: null,
+      resourceRefsJson: null,
+      startedAt: null,
+      createdAt: new Date("2026-05-18T11:00:00Z"),
+      updatedAt: new Date("2026-05-18T12:00:00Z"),
+    };
+    mockFindUnique.mockResolvedValue({
+      ...detailMeeting,
+      analysisRuns: [run],
+    } as MeetingDetail);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+
+    const res = await app.request("/meetings/mtg-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      latestAnalysisRun: { id: string; status: string; summary: string };
+    };
+    expect(body.latestAnalysisRun).not.toBeNull();
+    expect(body.latestAnalysisRun?.id).toBe("run-1");
+    expect(body.latestAnalysisRun?.status).toBe("completed");
+    expect(body.latestAnalysisRun?.summary).toBe("テストサマリー");
   });
 
   it("会議不存在は 404", async () => {
@@ -241,6 +312,7 @@ describe("GET /meetings/:id", () => {
       heldAt: new Date(),
       recurringMeetingId: null,
       recurringMeeting: null,
+      analysisRuns: [],
     } satisfies Partial<MeetingDetail>;
     mockFindUnique.mockResolvedValue(standalone as MeetingDetail);
     const res = await app.request("/meetings/mtg-x");
@@ -252,5 +324,203 @@ describe("GET /meetings/:id", () => {
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/meetings/mtg-1");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("PATCH /meetings/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const baseForUpdate = {
+    id: "mtg-1",
+    title: "第3回",
+    heldAt: new Date("2026-05-17T10:00:00Z"),
+    transcriptText: null,
+    recurringMeetingId: "rmtg-1",
+    recurringMeeting: { organizationId: "org-1" },
+  } satisfies Partial<MeetingForUpdate>;
+
+  it("transcriptText を更新できる", async () => {
+    mockFindUnique.mockResolvedValue(baseForUpdate as MeetingForUpdate);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+    mockMeetingUpdate.mockResolvedValue({
+      ...baseForUpdate,
+      transcriptText: "書き起こしテキスト",
+    } as Prisma.MeetingGetPayload<Record<string, never>>);
+
+    const res = await app.request("/meetings/mtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcriptText: "書き起こしテキスト" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockMeetingUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "mtg-1" },
+        data: { transcriptText: "書き起こしテキスト" },
+      }),
+    );
+  });
+
+  it("空ボディは 400", async () => {
+    const res = await app.request("/meetings/mtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMeetingUpdate).not.toHaveBeenCalled();
+  });
+
+  it("会議不存在は 404", async () => {
+    mockFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/missing", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcriptText: "テスト" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockMeetingUpdate).not.toHaveBeenCalled();
+  });
+
+  it("組織非所属は 404", async () => {
+    mockFindUnique.mockResolvedValue(baseForUpdate as MeetingForUpdate);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/mtg-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcriptText: "テスト" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockMeetingUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /meetings/:id/analyze", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const meetingWithTranscript = {
+    id: "mtg-1",
+    title: "第3回",
+    heldAt: new Date("2026-05-17T10:00:00Z"),
+    transcriptText: "書き起こしテキスト",
+    recurringMeetingId: "rmtg-1",
+    recurringMeeting: { organizationId: "org-1" },
+  } satisfies Partial<MeetingForUpdate & { transcriptText: string }>;
+
+  const meetingWithoutTranscript = {
+    ...meetingWithTranscript,
+    transcriptText: null,
+  };
+
+  it("transcriptText ありの会議は 202 で解析ランを作成する", async () => {
+    mockFindUnique.mockResolvedValue(
+      meetingWithTranscript as MeetingForUpdate,
+    );
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+    mockAnalysisRunCreate.mockResolvedValue({
+      id: "run-1",
+      meetingId: "mtg-1",
+      status: "queued",
+      triggerType: "manual",
+      currentStep: null,
+      summary: null,
+      alertLevel: null,
+      modelName: null,
+      apiVersion: null,
+      promptVersion: null,
+      pipelineVersion: null,
+      inputHash: null,
+      reportJson: null,
+      rawOutputsJson: null,
+      validationWarnings: null,
+      ragRetrievalJson: null,
+      recommendedAgenda: null,
+      resourceRefsJson: null,
+      startedAt: null,
+      completedAt: null,
+      failedAt: null,
+      errorMessage: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
+
+    const res = await app.request("/meetings/mtg-1/analyze", {
+      method: "POST",
+    });
+    expect(res.status).toBe(202);
+    const body = (await res.json()) as {
+      analysisRunId: string;
+      status: string;
+    };
+    expect(body.analysisRunId).toBe("run-1");
+    expect(body.status).toBe("queued");
+    expect(mockAnalysisRunCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          meetingId: "mtg-1",
+          status: "queued",
+          triggerType: "manual",
+        }),
+      }),
+    );
+    expect(mockSendToServiceBus).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        analysis_run_id: "run-1",
+        meeting_id: "mtg-1",
+        trigger_type: "transcript_submitted",
+      }),
+    );
+  });
+
+  it("transcriptText が null の場合は 400", async () => {
+    mockFindUnique.mockResolvedValue(
+      meetingWithoutTranscript as MeetingForUpdate,
+    );
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+
+    const res = await app.request("/meetings/mtg-1/analyze", {
+      method: "POST",
+    });
+    expect(res.status).toBe(400);
+    expect(mockAnalysisRunCreate).not.toHaveBeenCalled();
+    expect(mockSendToServiceBus).not.toHaveBeenCalled();
+  });
+
+  it("会議不存在は 404", async () => {
+    mockFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/missing/analyze", {
+      method: "POST",
+    });
+    expect(res.status).toBe(404);
+    expect(mockAnalysisRunCreate).not.toHaveBeenCalled();
+  });
+
+  it("組織非所属は 404", async () => {
+    mockFindUnique.mockResolvedValue(
+      meetingWithTranscript as MeetingForUpdate,
+    );
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/mtg-1/analyze", {
+      method: "POST",
+    });
+    expect(res.status).toBe(404);
+    expect(mockAnalysisRunCreate).not.toHaveBeenCalled();
   });
 });
