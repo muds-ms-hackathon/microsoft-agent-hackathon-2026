@@ -125,13 +125,13 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
     backend_url = os.getenv("BACKEND_API_URL", "http://localhost:3000")
 
     async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.patch(
-            f"{backend_url}/internal/analysis-runs/{analysis_run_id}",
-            json={"status": "analyzing"},
-        )
-        resp.raise_for_status()
-
         try:
+            resp = await client.patch(
+                f"{backend_url}/internal/analysis-runs/{analysis_run_id}",
+                json={"status": "analyzing"},
+            )
+            resp.raise_for_status()
+
             result = await _analyze_transcript(transcript)
 
             resp = await client.post(
