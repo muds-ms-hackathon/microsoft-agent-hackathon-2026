@@ -54,7 +54,8 @@ def validate_outputs(
             warnings.append(
                 make_warning(
                     "unresolved_assignee",
-                    f"担当者を参加者と紐付けられませんでした: '{task.get('assignee_raw', '')}'",
+                    "担当者を参加者と紐付けられませんでした: "
+                    f"'{task.get('assignee_raw', '')}'",
                     [task.get("id", "")],
                 )
             )

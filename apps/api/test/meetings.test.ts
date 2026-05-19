@@ -48,7 +48,7 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 import { sendToServiceBus } from "../src/lib/service-bus.js";
@@ -418,9 +418,7 @@ describe("POST /meetings/:id/analyze", () => {
   };
 
   it("transcriptText ありの会議は 202 で解析ランを作成する", async () => {
-    mockFindUnique.mockResolvedValue(
-      meetingWithTranscript as MeetingForUpdate,
-    );
+    mockFindUnique.mockResolvedValue(meetingWithTranscript as MeetingForUpdate);
     mockMembershipFindUnique.mockResolvedValue({
       userId: "user-1",
       organizationId: "org-1",
@@ -513,9 +511,7 @@ describe("POST /meetings/:id/analyze", () => {
   });
 
   it("組織非所属は 404", async () => {
-    mockFindUnique.mockResolvedValue(
-      meetingWithTranscript as MeetingForUpdate,
-    );
+    mockFindUnique.mockResolvedValue(meetingWithTranscript as MeetingForUpdate);
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/meetings/mtg-1/analyze", {
       method: "POST",

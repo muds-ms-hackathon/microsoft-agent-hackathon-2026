@@ -55,7 +55,7 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
-import { Prisma, type RecurringMeeting } from "@prisma/client";
+import type { Prisma, RecurringMeeting } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 import type { TaskWithList } from "../src/lib/task-serialization.js";

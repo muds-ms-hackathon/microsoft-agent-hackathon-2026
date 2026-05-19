@@ -37,7 +37,9 @@ def fmt_change_summary(
         titles = "、".join(
             t.get("title", "") for t in completed_tasks[:3]
         )
-        suffix = f"（他{len(completed_tasks) - 3}件）" if len(completed_tasks) > 3 else ""
+        suffix = (
+            f"（他{len(completed_tasks) - 3}件）" if len(completed_tasks) > 3 else ""
+        )
         parts.append(f"✅ 完了タスク {len(completed_tasks)}件: {titles}{suffix}")
     if carried_over_tasks:
         parts.append(f"⏩ 持ち越しタスク: {len(carried_over_tasks)}件")

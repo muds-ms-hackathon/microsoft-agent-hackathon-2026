@@ -27,7 +27,6 @@ from pipeline.prompt_builders import (
     build_call6_prompt,
     fmt_context_all,
     fmt_due_date_raws,
-    fmt_speakers,
     render_prompt,
 )
 from pipeline.validation import validate_outputs
@@ -39,7 +38,9 @@ logger = logging.getLogger(__name__)
 
 _PIPELINE_VERSION = "1.0.0"
 _PROMPT_VERSION = "1.0.0"
-_PROMPTS_PATH = Path(__file__).parent.parent / "prompts" / "meeting_analysis_prompts.toml"
+_PROMPTS_PATH = (
+    Path(__file__).parent.parent / "prompts" / "meeting_analysis_prompts.toml"
+)
 
 
 def _load_prompts() -> dict:
@@ -171,8 +172,12 @@ async def analyze_meeting(
         raw_outputs["call2"] = raw2
         if isinstance(parsed2, dict) and "_parse_error" in parsed2:
             return _failed("call2", parsed2, raw_outputs, input_hash)
-        decisions: list[dict] = parsed2.get("decisions", []) if isinstance(parsed2, dict) else []
-        open_issues: list[dict] = parsed2.get("open_issues", []) if isinstance(parsed2, dict) else []
+        decisions: list[dict] = (
+            parsed2.get("decisions", []) if isinstance(parsed2, dict) else []
+        )
+        open_issues: list[dict] = (
+            parsed2.get("open_issues", []) if isinstance(parsed2, dict) else []
+        )
 
         # 前回の未決事項を引き継ぐ（recurrence_count を更新）
         if prev_open_issues:
@@ -202,7 +207,9 @@ async def analyze_meeting(
         raw_outputs["call3"] = raw3
         if isinstance(parsed3, dict) and "_parse_error" in parsed3:
             return _failed("call3", parsed3, raw_outputs, input_hash)
-        tasks: list[dict] = parsed3.get("tasks", []) if isinstance(parsed3, dict) else []
+        tasks: list[dict] = (
+            parsed3.get("tasks", []) if isinstance(parsed3, dict) else []
+        )
 
         # 担当者の解決状態を推定する
         for task in tasks:
@@ -403,7 +410,10 @@ def _fmt_estimation_note(estimation: dict) -> str:
     }
     for key, val in breakdown.items():
         label = label_map.get(key, key)
-        lines.append(f"  - {label}: {val['count']}件 × {val['minutes'] // val['count']}分 = {val['minutes']}分")
+        per = val["minutes"] // val["count"]
+        lines.append(
+            f"  - {label}: {val['count']}件 × {per}分 = {val['minutes']}分"
+        )
     return "\n".join(lines)
 
 
@@ -417,7 +427,9 @@ def _inherit_recurrence_counts(
         norm_new = normalize_for_similarity(ni.get("topic", ""))
         for pi in prev_issues:
             norm_prev = normalize_for_similarity(pi.get("topic", ""))
-            if norm_new and norm_prev and (norm_new in norm_prev or norm_prev in norm_new):
+            if norm_new and norm_prev and (
+                norm_new in norm_prev or norm_prev in norm_new
+            ):
                 prev_count = pi.get("recurrence_count", 1)
                 ni["recurrence_count"] = prev_count + 1
                 break
@@ -435,7 +447,9 @@ def _inherit_carried_over_counts(
         norm_new = normalize_for_similarity(nt.get("title", ""))
         for pt in prev_tasks:
             norm_prev = normalize_for_similarity(pt.get("title", ""))
-            if norm_new and norm_prev and (norm_new in norm_prev or norm_prev in norm_new):
+            if norm_new and norm_prev and (
+                norm_new in norm_prev or norm_prev in norm_new
+            ):
                 prev_count = pt.get("carried_over_count", 0)
                 nt["carried_over_count"] = prev_count + 1
                 break

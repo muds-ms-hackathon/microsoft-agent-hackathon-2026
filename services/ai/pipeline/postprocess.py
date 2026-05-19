@@ -2,7 +2,6 @@
 import re
 import unicodedata
 
-
 _EMOJI_PATTERN = re.compile(
     "["
     "\U0001F600-\U0001F64F"   # Emoticons

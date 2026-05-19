@@ -209,10 +209,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
 
     // 文字起こしテキスト未設定は解析不可
     if (!meeting.transcriptText) {
-      return c.json(
-        { error: "文字起こしテキストが設定されていません" },
-        400,
-      );
+      return c.json({ error: "文字起こしテキストが設定されていません" }, 400);
     }
 
     // 解析ランを queued 状態で作成する

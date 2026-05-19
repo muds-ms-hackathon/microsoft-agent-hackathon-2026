@@ -20,7 +20,6 @@ from pipeline.postprocess import (
 from pipeline.validation import validate_outputs
 from schemas.analysis import AnalysisJobInput, SpeakerInfo
 
-
 # ──────────────────────── FakeLLMClient用フィクスチャ ─────────────────────────
 
 def _make_fake_responses() -> dict[str, str]:
@@ -117,7 +116,10 @@ def _make_job() -> AnalysisJobInput:
         meeting_id="mtg-test",
         meeting_type="recurring_meeting",
         transcription_quality="full",
-        transcript="田中: 予算は10%増やしましょう。設計書のレビューは誰がやる？田中さん、設計書お願いします。",
+        transcript=(
+            "田中: 予算は10%増やしましょう。"
+            "設計書のレビューは誰がやる？田中さん、設計書お願いします。"
+        ),
         meeting_date="2026-05-17",
         speakers=[
             SpeakerInfo(

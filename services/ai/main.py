@@ -44,7 +44,9 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
             analysis_run_id,
             result.model_dump(exclude_none=True),
         )
-        logger.info("解析完了 analysis_run_id=%s status=%s", analysis_run_id, result.status)
+        logger.info(
+            "解析完了 analysis_run_id=%s status=%s", analysis_run_id, result.status
+        )
 
     except Exception as e:
         logger.error("解析失敗 analysis_run_id=%s: %s", analysis_run_id, e)
