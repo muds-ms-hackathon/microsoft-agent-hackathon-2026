@@ -516,6 +516,7 @@ model MeetingAnalysisRun {
   promptVersion   String?
   pipelineVersion String?
   inputHash       String?
+  transcriptText String?
 
   // UIでよく使う要約フィールド
   summary    String?
