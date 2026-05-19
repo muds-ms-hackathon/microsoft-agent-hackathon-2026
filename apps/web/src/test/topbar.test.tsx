@@ -6,37 +6,11 @@ import { Provider, createStore } from "jotai";
 import { describe, expect, it, vi } from "vitest";
 import { makeFakeIdToken } from "./helpers/auth";
 
-const navigateMock = vi.fn();
-
-// TanStack Router の Link は RouterProvider 配下でないと落ちるため、
-// テスト中は href を持つ <a> として描画するモックに差し替える。
-// 同テスト内でユーザーメニュー → ログアウトの useNavigate も検証するため
-// useNavigate もモックに含める。
+// ログアウト時の useNavigate を検証するため、navigateMock を hoisted で共有する。
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
-    "@tanstack/react-router",
-  );
-  type MockLinkProps = {
-    to: string;
-    children?: React.ReactNode;
-    className?: string;
-    "aria-label"?: string;
-    activeProps?: unknown;
-  };
-  return {
-    ...actual,
-    Link: ({
-      to,
-      children,
-      className,
-      "aria-label": ariaLabel,
-    }: MockLinkProps) => (
-      <a href={to} className={className} aria-label={ariaLabel}>
-        {children}
-      </a>
-    ),
-    useNavigate: () => navigateMock,
-  };
+  const { buildRouterMock } = await import("./helpers/router-mock");
+  return buildRouterMock({ useNavigate: navigateMock });
 });
 
 function renderTopbar(name = "田中太郎", email = "tanaka@example.com") {
