@@ -5,6 +5,7 @@ import { meetingsRoute } from "./routes/meetings.js";
 import { organizationsRoute } from "./routes/organizations.js";
 import { recurringMeetingsRoute } from "./routes/recurring-meetings.js";
 import { tasksRoute } from "./routes/tasks.js";
+import { internalRoute } from "./routes/internal.js";
 
 const app = new Hono();
 
@@ -45,7 +46,8 @@ const routes = app
   .route("/meetings", meetingsRoute)
   .route("/organizations", organizationsRoute)
   .route("/recurring-meetings", recurringMeetingsRoute)
-  .route("/tasks", tasksRoute);
+  .route("/tasks", tasksRoute)
+  .route("/internal", internalRoute);
 
 export { app };
 export type AppType = typeof routes;

@@ -11,6 +11,8 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+import { z } from "zod";
+import { sendMeetingProcessEvent } from "../lib/service-bus.js";
 
 // 旧 GET / と POST / は認証なしで叩ける状態だったため撤去した。
 // Meeting 作成は POST /recurring-meetings/:id/meetings に一本化されている。
@@ -99,5 +101,55 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         include: taskListInclude,
       });
       return c.json(tasks.map(serializeTask));
+    },
+  ).post(
+    "/:id/process",
+    auth,
+    zValidator("json", z.object({ transcript: z.string().min(1) })),
+    async (c) => {
+      const id = c.req.param("id");
+      const { transcript } = c.req.valid("json");
+
+      const meeting = await prisma.meeting.findUnique({
+        where: { id },
+        include: { recurringMeeting: { select: { organizationId: true } } },
+      });
+      if (!meeting?.recurringMeeting) {
+        return c.json({ error: "会議が見つかりません" }, 404);
+      }
+
+      const user = c.var.user;
+      const membership = await prisma.organizationMembership.findUnique({
+        where: {
+          userId_organizationId: {
+            userId: user.id,
+            organizationId: meeting.recurringMeeting.organizationId,
+          },
+        },
+      });
+      if (!membership) {
+        return c.json({ error: "会議が見つかりません" }, 404);
+      }
+
+      const analysisRun = await prisma.meetingAnalysisRun.create({
+        data: { meetingId: id, status: "queued", triggerType: "manual" },
+      });
+
+      // SB通信はベストエフォート
+      // 失敗しても analysis ruu は保存済みなので 201 を返す
+      try {
+        await sendMeetingProcessEvent({
+          meetingId: id,
+          analysisRunId: analysisRun.id,
+          transcript,
+        });
+      } catch (err) {
+        console.error(
+          "[meetings] Service Bus 送信失敗 (analysisi run は保存済み):",
+          err,
+        );
+      }
+
+      return c.json(analysisRun, 201);
     },
   );
