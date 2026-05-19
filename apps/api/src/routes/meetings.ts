@@ -132,7 +132,12 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       }
 
       const analysisRun = await prisma.meetingAnalysisRun.create({
-        data: { meetingId: id, status: "queued", triggerType: "manual" },
+        data: {
+          meetingId: id,
+          status: "queued",
+          triggerType: "manual",
+          transcriptText: transcript,
+        },
       });
 
       // SB通信はベストエフォート
@@ -145,9 +150,20 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         });
       } catch (err) {
         console.error(
-          "[meetings] Service Bus 送信失敗 (analysisi run は保存済み):",
+          "[meetings] Service Bus 送信失敗 analysis run を failed に更新します):",
           err,
         );
+
+        await prisma.meetingAnalysisRun.update({
+          where: { id: analysisRun.id },
+          data: {
+            status: "failed",
+            failedAt: new Date(),
+            errorMessage: "Service Bus への送信に失敗しました",
+          },
+        });
+
+        return c.json({ error: "解析ジョブの投入に失敗しました" }, 500);
       }
 
       return c.json(analysisRun, 201);
