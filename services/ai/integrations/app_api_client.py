@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Any, cast
 
 import httpx
 
@@ -20,7 +21,7 @@ class AppApiClient:
                 timeout=30.0,
             )
             response.raise_for_status()
-            return response.json()
+            return cast(dict[str, Any], response.json())
 
     async def update_analysis_run_result(
         self, analysis_run_id: str, result: dict

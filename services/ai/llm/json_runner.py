@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from typing import Any, cast
 
 from .client import LLMClient
 
@@ -13,7 +14,7 @@ def parse_json_output(raw: str) -> dict | list:
     コードブロック（```json...```）が含まれていても除去してからパースする。
     """
     cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
-    return json.loads(cleaned)
+    return cast(dict[Any, Any] | list[Any], json.loads(cleaned))
 
 
 def run_llm_call(
