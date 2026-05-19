@@ -10,6 +10,7 @@ Table Meeting {
   meetingType String [not null, default: 'one_time']
   transcriptionQuality String
   supplementaryMemo String
+  transcriptText String
   sequenceNumber Int
   previousMeetingId String
   estimatedDurationMinutes Int
