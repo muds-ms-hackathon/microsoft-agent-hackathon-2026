@@ -85,7 +85,7 @@ export const internalRoute = new Hono()
                 return c.json({ error: "ステータスが競合しました。再試行してください。" }, 409);
             }
             const updated = await prisma.meetingAnalysisRun.findUnique({ where: { id } });
-        return c.json(updated);
+            return c.json(updated);
         },
     )
     .post(
