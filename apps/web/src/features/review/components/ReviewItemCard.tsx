@@ -13,7 +13,7 @@ import { TYPE_BADGE_CLASS, TYPE_LABELS } from "../types";
 // "YYYY-MM-DD" → ISO8601 UTC 00:00
 function toIsoDate(date: string): string | undefined {
   if (!date) return undefined;
-  return new Date(`${date}T00:00:00.000Z`).toISOString();
+  return `${date}T00:00:00.000Z`;
 }
 
 export function ReviewItemCard({
@@ -242,7 +242,7 @@ export function ReviewItemCard({
                 variant="outline"
                 className="text-xs"
                 disabled={isCreating || !orgId}
-                onClick={() => createTaskAndConfirm()}
+                onClick={createTaskAndConfirm}
               >
                 {isCreating ? "登録中..." : "タスクにする"}
               </Button>
@@ -296,7 +296,7 @@ export function ReviewItemCard({
                 item.type === "open_issue"
                   ? handleDecide
                   : item.type === "task_candidate"
-                    ? () => createTaskAndConfirm()
+                    ? createTaskAndConfirm
                     : () =>
                         onUpdate(item.id, {
                           status: "confirmed",

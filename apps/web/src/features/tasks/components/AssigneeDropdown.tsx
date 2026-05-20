@@ -24,10 +24,11 @@ export function AssigneeDropdown({
     .map((m) => m.displayName);
 
   const toggle = (userId: string) => {
-    const set = new Set(value);
-    if (set.has(userId)) set.delete(userId);
-    else set.add(userId);
-    onChange(Array.from(set));
+    onChange(
+      value.includes(userId)
+        ? value.filter((id) => id !== userId)
+        : [...value, userId],
+    );
   };
 
   useEffect(() => {
