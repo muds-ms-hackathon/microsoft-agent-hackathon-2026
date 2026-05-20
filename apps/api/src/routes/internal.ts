@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { analysisRunsRoute } from "./analysis-runs.js";
 
 const decisionItemSchema = z.object({
   title: z.string(),
@@ -41,6 +42,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 };
 
 export const internalRoute = new Hono()
+  .route("/analysis-runs", analysisRunsRoute)
   .patch(
     "/analysis-runs/:id",
     zValidator("json", z.object({ status: z.enum(["analyzing", "failed"]) })),

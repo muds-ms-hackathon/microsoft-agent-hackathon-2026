@@ -1,4 +1,5 @@
 """開発・検証用解析エンドポイント。Service Busを経由せずに解析を実行できる。"""
+
 import logging
 
 from fastapi import APIRouter
@@ -21,7 +22,7 @@ async def analyze(job: AnalysisJobInput) -> AnalysisRunResult:
     - 結果JSONだけをレスポンスで返す
 
     analysis_run_idがある場合:
-    - 解析完了後にapps/apiのPATCH /analysis-runs/:id/resultを呼ぶ
+    - 解析完了後にapps/apiのPATCH /internal/analysis-runs/:id/resultを呼ぶ
     """
     llm_client = AzureOpenAIClient()
     result = await analyze_meeting(job, llm_client)
@@ -34,8 +35,6 @@ async def analyze(job: AnalysisJobInput) -> AnalysisRunResult:
                 result.model_dump(exclude_none=True),
             )
         except Exception:
-            logger.exception(
-                "結果保存失敗 analysis_run_id=%s", job.analysis_run_id
-            )
+            logger.exception("結果保存失敗 analysis_run_id=%s", job.analysis_run_id)
 
     return result
