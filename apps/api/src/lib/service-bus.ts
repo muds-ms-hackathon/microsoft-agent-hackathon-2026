@@ -1,20 +1,37 @@
-import { ServiceBusClient } from "@azure/service-bus";
+import { ServiceBusClient, type ServiceBusSender } from "@azure/service-bus";
 
-// Service Busキューへメッセージを送信する。呼び出しごとにクライアントを生成・破棄する。
+let client: ServiceBusClient | undefined;
+let sender: ServiceBusSender | undefined;
+
+function getOrCreateSender(
+  connectionString: string,
+  queueName: string,
+): ServiceBusSender {
+  if (!sender) {
+    client = new ServiceBusClient(connectionString);
+    sender = client.createSender(queueName);
+  }
+  return sender;
+}
+
 export async function sendToServiceBus(
   connectionString: string,
   queueName: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  const client = new ServiceBusClient(connectionString);
-  const sender = client.createSender(queueName);
+  const s = getOrCreateSender(connectionString, queueName);
+  await s.sendMessages({
+    body: JSON.stringify(payload),
+    contentType: "application/json",
+  });
+}
+
+export async function closeServiceBus(): Promise<void> {
   try {
-    await sender.sendMessages({
-      body: JSON.stringify(payload),
-      contentType: "application/json",
-    });
+    await sender?.close();
+    await client?.close();
   } finally {
-    await sender.close();
-    await client.close();
+    sender = undefined;
+    client = undefined;
   }
 }
