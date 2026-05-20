@@ -212,6 +212,17 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "文字起こしテキストが設定されていません" }, 400);
     }
 
+    // 処理中（queued / analyzing）の解析ランが既に存在する場合は 409 を返す
+    const inFlightRun = await prisma.meetingAnalysisRun.findFirst({
+      where: {
+        meetingId: id,
+        status: { in: ["queued", "analyzing"] },
+      },
+    });
+    if (inFlightRun) {
+      return c.json({ error: "処理中の解析ジョブが既に存在します" }, 409);
+    }
+
     // 解析ランを queued 状態で作成する
     const run = await prisma.meetingAnalysisRun.create({
       data: {
@@ -226,11 +237,28 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       process.env.AZURE_SERVICE_BUS_CONNECTION_STRING ?? "";
     const queueName =
       process.env.AZURE_SERVICE_BUS_QUEUE_NAME ?? "decision-loop";
-    await sendToServiceBus(connectionString, queueName, {
-      analysis_run_id: run.id,
-      meeting_id: id,
-      trigger_type: "transcript_submitted",
-    });
+    try {
+      await sendToServiceBus(connectionString, queueName, {
+        analysis_run_id: run.id,
+        meeting_id: id,
+        trigger_type: "transcript_submitted",
+      });
+    } catch (sbErr) {
+      console.error("[meetings] Service Bus 送信失敗 run=%s:", run.id, sbErr);
+      try {
+        await prisma.meetingAnalysisRun.update({
+          where: { id: run.id },
+          data: {
+            status: "failed",
+            failedAt: new Date(),
+            errorMessage: String(sbErr),
+          },
+        });
+      } catch (dbErr) {
+        console.error("[meetings] failed 更新も失敗 run=%s:", run.id, dbErr);
+      }
+      return c.json({ error: "解析ジョブの投入に失敗しました" }, 500);
+    }
 
     return c.json({ analysisRunId: run.id, status: "queued" }, 202);
   });
