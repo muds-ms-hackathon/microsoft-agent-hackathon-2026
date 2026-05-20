@@ -81,11 +81,18 @@ export function ReviewItemCard({
         assigneeIds,
         deadline: deadline || null,
       });
+    } else if (item.type === "open_issue") {
+      onUpdate(item.id, {
+        status: "confirmed",
+        type: "decision",
+        content: editContent,
+        assigneeIds,
+        deadline: deadline || null,
+      });
     } else {
       onUpdate(item.id, {
         status: "confirmed",
         content: editContent,
-        ...(item.type === "open_issue" ? { type: "decision" as const } : {}),
         assigneeIds,
         deadline: deadline || null,
       });
