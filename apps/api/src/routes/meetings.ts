@@ -232,13 +232,10 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       },
     });
 
-    // AI Service に解析を依頼するメッセージを Service Bus に送信する
-    const connectionString =
-      process.env.AZURE_SERVICE_BUS_CONNECTION_STRING ?? "";
-    const queueName =
-      process.env.AZURE_SERVICE_BUS_QUEUE_NAME ?? "decision-loop";
+    // AI Service に解析を依頼するメッセージを Service Bus に送信する。
+    // 接続情報は service-bus モジュール内部で env から取得する。
     try {
-      await sendToServiceBus(connectionString, queueName, {
+      await sendToServiceBus({
         analysis_run_id: run.id,
         meeting_id: id,
         trigger_type: "transcript_submitted",

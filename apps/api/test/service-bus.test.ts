@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   MockServiceBusClient,
@@ -34,13 +34,19 @@ vi.mock("@azure/service-bus", () => ({
 import { closeServiceBus, sendToServiceBus } from "../src/lib/service-bus.js";
 
 describe("service-bus", () => {
+  beforeEach(() => {
+    vi.stubEnv("AZURE_SERVICE_BUS_CONNECTION_STRING", "conn-string");
+    vi.stubEnv("AZURE_SERVICE_BUS_QUEUE_NAME", "test-queue");
+  });
+
   afterEach(async () => {
     await closeServiceBus();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
-  it("(a) 初回呼び出しで ServiceBusClient と sender が新規作成される", async () => {
-    await sendToServiceBus("conn-string", "test-queue", { key: "value" });
+  it("(a) 初回呼び出しで env から接続情報を読んで ServiceBusClient と sender を生成する", async () => {
+    await sendToServiceBus({ key: "value" });
 
     expect(MockServiceBusClient).toHaveBeenCalledOnce();
     expect(MockServiceBusClient).toHaveBeenCalledWith("conn-string");
@@ -49,17 +55,17 @@ describe("service-bus", () => {
     expect(mockSendMessages).toHaveBeenCalledOnce();
   });
 
-  it("(b) 2回目以降は既存の sender が再利用され、ServiceBusClient が新規作成されない", async () => {
-    await sendToServiceBus("conn-string", "test-queue", { key: "first" });
-    await sendToServiceBus("conn-string", "test-queue", { key: "second" });
+  it("(b) 2回目以降は既存の client / sender を再利用する", async () => {
+    await sendToServiceBus({ key: "first" });
+    await sendToServiceBus({ key: "second" });
 
     expect(MockServiceBusClient).toHaveBeenCalledOnce();
     expect(mockCreateSender).toHaveBeenCalledOnce();
     expect(mockSendMessages).toHaveBeenCalledTimes(2);
   });
 
-  it("(c) closeServiceBus() 呼び出し後に sender と client の close が呼ばれる", async () => {
-    await sendToServiceBus("conn-string", "test-queue", { key: "value" });
+  it("(c) closeServiceBus() で sender と client の close が呼ばれる", async () => {
+    await sendToServiceBus({ key: "value" });
     vi.clearAllMocks();
 
     await closeServiceBus();
@@ -69,21 +75,31 @@ describe("service-bus", () => {
   });
 
   it("(d) closeServiceBus() 後に再送信すると新しい client と sender が作成される", async () => {
-    await sendToServiceBus("conn-string", "test-queue", { key: "before" });
+    await sendToServiceBus({ key: "before" });
     await closeServiceBus();
     vi.clearAllMocks();
 
-    await sendToServiceBus("conn-string", "test-queue", { key: "after" });
+    await sendToServiceBus({ key: "after" });
 
     expect(MockServiceBusClient).toHaveBeenCalledOnce();
     expect(mockCreateSender).toHaveBeenCalledOnce();
     expect(mockSendMessages).toHaveBeenCalledOnce();
   });
 
-  it("(e) afterEach で closeServiceBus() を呼ぶことで各テストは独立した状態から始まる", async () => {
-    await sendToServiceBus("conn-string", "test-queue", { key: "value" });
+  it("(e) AZURE_SERVICE_BUS_CONNECTION_STRING 未設定なら明示的に throw する", async () => {
+    vi.stubEnv("AZURE_SERVICE_BUS_CONNECTION_STRING", "");
 
-    expect(MockServiceBusClient).toHaveBeenCalledOnce();
-    expect(mockCreateSender).toHaveBeenCalledOnce();
+    await expect(sendToServiceBus({ key: "value" })).rejects.toThrowError(
+      /AZURE_SERVICE_BUS_CONNECTION_STRING/,
+    );
+    expect(MockServiceBusClient).not.toHaveBeenCalled();
+  });
+
+  it("(f) AZURE_SERVICE_BUS_QUEUE_NAME 未設定なら decision-loop にフォールバックする", async () => {
+    vi.stubEnv("AZURE_SERVICE_BUS_QUEUE_NAME", "");
+
+    await sendToServiceBus({ key: "value" });
+
+    expect(mockCreateSender).toHaveBeenCalledWith("decision-loop");
   });
 });
