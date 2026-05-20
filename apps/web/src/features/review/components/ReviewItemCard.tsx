@@ -39,12 +39,12 @@ export function ReviewItemCard({
   const createTask = useCreateTask();
   const isCreating = createTask.isPending;
 
-  const createTaskAndConfirm = (titleOverride?: string) => {
+  const createTaskAndConfirm = () => {
     if (!orgId) return;
     createTask.mutate(
       {
         organizationId: orgId,
-        title: titleOverride ?? item.content,
+        title: item.content,
         body: item.sourceContext || undefined,
         assigneeUserIds: assigneeIds.length > 0 ? assigneeIds : undefined,
         dueDate: toIsoDate(deadline),
@@ -55,7 +55,7 @@ export function ReviewItemCard({
         onSuccess: () => {
           onUpdate(item.id, {
             status: "confirmed",
-            content: titleOverride ?? item.content,
+            content: item.content,
             assigneeIds,
             deadline: deadline || null,
           });
