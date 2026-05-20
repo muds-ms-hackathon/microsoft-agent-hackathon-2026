@@ -4,12 +4,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any
 
 from azure.servicebus import ServiceBusReceivedMessage
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from openai import AsyncAzureOpenAI
 
 from consumers.service_bus import ServiceBusConsumer
 from integrations.app_api_client import AppApiClient
@@ -22,71 +20,6 @@ from schemas.analysis import AnalysisJobInput
 logger = logging.getLogger(__name__)
 
 _DEFAULT_QUEUE_NAME = "decision-loop"
-
-# lifespan で初期化し、 _handle_message から参照する
-_openai_client: AsyncAzureOpenAI | None = None
-_deployment_name: str = ""  # lifespan で設定
-
-
-def _create_openai_client() -> AsyncAzureOpenAI:
-    """テストでモック注入できるよう factory 関数として切り出す"""
-    return AsyncAzureOpenAI(
-        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-    )
-
-
-# Azure OpenAI API を呼び出して、文字起こしから決定事項・タスク・曖昧箇所を抽出する
-async def _analyze_transcript(transcript: str) -> dict[str, Any]:
-    """文字起こしを Azure OpenAI で解析し、決定事項・タスク・曖昧箇所を抽出する"""
-    if _openai_client is None:
-        raise RuntimeError("OpenAI クライアントが初期化されていません")
-
-    system_prompt = """あなたは会議の文字起こしを分析するアシスタントです
-以下の3種類の情報をJSONで抽出してください。
-
-1. decisionItems: 決定事項・議論中の事項
-2. tasks: 担当者・期限・内容が明確なタスク
-3. ambiguousInfos: 担当者不明・期限不明・内容が曖昧な箇所
-
-出力形式(JSONのみ)
-{
-    "decisionItems": [
-        {"title": "...", "body": "...", "sourceQuote": "...", "status": "open"}
-    ],
-    "tasks": [
-        {
-            "title": "...", "body": "...", "sourceQuote": "...",
-            "status": "todo", "priority": "required"
-        }
-    ],
-    "ambiguousInfos": [
-        {
-            "body": "...", "sourceQuote": "...", "status": "draft",
-            "ambiguityType": "no_assignee", "severity": "medium"
-        }
-    ]
-}"""
-
-    response = await _openai_client.chat.completions.create(
-        model=_deployment_name,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"以下の会議の文字起こしを分析してください:\n\n{transcript}",
-            },
-        ],
-        response_format={"type": "json_object"},
-    )
-
-    result = json.loads(response.choices[0].message.content or "{}")
-    if not isinstance(result, dict):
-        raise ValueError(
-            f"OpenAI レスポンスが dict ではありません: type={type(result).__name__}"
-        )
-    return result
 
 
 # NOTE: このメッセージスキーマは apps/api/src/lib/service-bus.ts の
@@ -165,7 +98,6 @@ def _on_consumer_done(task: asyncio.Task) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _openai_client, _deployment_name
 
     # 必須環境変数を一括検証する（クライアント生成より前に全チェック）
     deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
@@ -183,11 +115,6 @@ async def lifespan(app: FastAPI):
     internal_secret = os.environ.get("INTERNAL_API_SECRET")
     if not internal_secret:
         raise RuntimeError("INTERNAL_API_SECRET が未設定です")
-
-    # クライアント生成が成功してからグローバル変数を書き換える
-    client = _create_openai_client()
-    _openai_client = client
-    _deployment_name = deployment
 
     task: asyncio.Task | None = None
 
@@ -213,9 +140,6 @@ async def lifespan(app: FastAPI):
                 await task
             except (asyncio.CancelledError, Exception):
                 pass
-        await client.close()
-        _openai_client = None
-        _deployment_name = ""
 
 
 app = FastAPI(title="AI Service", lifespan=lifespan)
