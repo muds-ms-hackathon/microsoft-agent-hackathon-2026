@@ -1,6 +1,11 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
+import {
+  type AnalysisRunStatus,
+  InvalidAnalysisRunTransitionError,
+  transitionAnalysisRunStatus,
+} from "../lib/analysis-run-state.js";
 import { prisma } from "../lib/prisma.js";
 import { analysisRunsRoute } from "./analysis-runs.js";
 
@@ -36,11 +41,6 @@ const ambiguousInfoSchema = z.object({
   severity: z.enum(["high", "medium", "low"]).optional(),
 });
 
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  queued: ["analyzing"],
-  analyzing: ["failed"],
-};
-
 export const internalRoute = new Hono()
   .route("/analysis-runs", analysisRunsRoute)
   .patch(
@@ -50,37 +50,35 @@ export const internalRoute = new Hono()
       const id = c.req.param("id");
       const { status } = c.req.valid("json");
 
-      const run = await prisma.meetingAnalysisRun.findUnique({ where: { id } });
-      if (!run) {
-        return c.json({ error: "analysis run が見つかりません" }, 404);
-      }
-
-      const allowed = VALID_TRANSITIONS[run.status] ?? [];
-      if (!allowed.includes(status)) {
-        return c.json(
-          { error: `${run.status} -> ${status} への遷移は許可されていません` },
-          422,
+      try {
+        const outcome = await transitionAnalysisRunStatus(
+          prisma,
+          id,
+          status as AnalysisRunStatus,
         );
+        if (outcome.kind === "not_found") {
+          return c.json({ error: "analysis run が見つかりません" }, 404);
+        }
+        if (outcome.kind === "conflict") {
+          return c.json(
+            { error: "ステータスが競合しました。再試行してください。" },
+            409,
+          );
+        }
+        // transitioned / noop どちらも最新レコードを返す
+        const updated = await prisma.meetingAnalysisRun.findUnique({
+          where: { id },
+        });
+        return c.json(updated);
+      } catch (e) {
+        if (e instanceof InvalidAnalysisRunTransitionError) {
+          return c.json(
+            { error: `${e.from} -> ${e.to} への遷移は許可されていません` },
+            422,
+          );
+        }
+        throw e;
       }
-
-      const data: Record<string, unknown> = { status };
-      if (status === "analyzing") data.startedAt = new Date();
-      if (status === "failed") data.failedAt = new Date();
-
-      const result = await prisma.meetingAnalysisRun.updateMany({
-        where: { id, status: run.status },
-        data,
-      });
-      if (result.count === 0) {
-        return c.json(
-          { error: "ステータスが競合しました。再試行してください。" },
-          409,
-        );
-      }
-      const updated = await prisma.meetingAnalysisRun.findUnique({
-        where: { id },
-      });
-      return c.json(updated);
     },
   )
   .post(
@@ -114,26 +112,18 @@ export const internalRoute = new Hono()
         return c.json({ error: "組織情報が取得できません" }, 422);
       }
 
-      // analyzing -> completed へのアトミックな遷移と結果保存をひとつの transaction に収める。
+      // analyzing -> completed への遷移と結果保存をひとつの transaction に収める。
       try {
-        await prisma.$transaction(async (tx) => {
-          const claimed = await tx.meetingAnalysisRun.updateMany({
-            where: { id, status: "analyzing" },
-            data: { status: "completed", completedAt: new Date() },
-          });
-
-          if (claimed.count === 0) {
-            const current = await tx.meetingAnalysisRun.findUnique({
-              where: { id },
-            });
-            if (current?.status === "completed") {
-              return; // 完了済みは冪等に 200 を返す
-            }
-            throw Object.assign(new Error("INVALID_STATUS"), {
-              currentStatus: current?.status,
-            });
+        const completeOutcome = await prisma.$transaction(async (tx) => {
+          const outcome = await transitionAnalysisRunStatus(
+            tx,
+            id,
+            "completed",
+          );
+          if (outcome.kind !== "transitioned") {
+            // noop / conflict / not_found のときは create 系をスキップ
+            return outcome;
           }
-
           if (decisionItems.length > 0) {
             await tx.decisionItem.createMany({
               data: decisionItems.map((item) => ({
@@ -145,7 +135,6 @@ export const internalRoute = new Hono()
               })),
             });
           }
-
           if (tasks.length > 0) {
             await tx.task.createMany({
               data: tasks.map((task) => ({
@@ -159,7 +148,6 @@ export const internalRoute = new Hono()
               })),
             });
           }
-
           if (ambiguousInfos.length > 0) {
             await tx.ambiguousInfo.createMany({
               data: ambiguousInfos.map((info) => ({
@@ -172,13 +160,25 @@ export const internalRoute = new Hono()
               })),
             });
           }
+          return outcome;
         });
-      } catch (e) {
-        if (e instanceof Error && e.message === "INVALID_STATUS") {
+
+        if (completeOutcome.kind === "conflict") {
           return c.json(
             {
-              error: `analyzing 状態でないため complete できません: ${(e as { currentStatus?: string }).currentStatus}`,
+              error: `analyzing 状態でないため complete できません: ${completeOutcome.current}`,
             },
+            422,
+          );
+        }
+        if (completeOutcome.kind === "not_found") {
+          return c.json({ error: "analysis run が見つかりません" }, 404);
+        }
+        // noop / transitioned はいずれも { ok: true } で冪等に応答
+      } catch (e) {
+        if (e instanceof InvalidAnalysisRunTransitionError) {
+          return c.json(
+            { error: `${e.from} -> ${e.to} への遷移は許可されていません` },
             422,
           );
         }

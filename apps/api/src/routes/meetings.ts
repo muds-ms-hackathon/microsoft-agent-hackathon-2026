@@ -243,6 +243,8 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
     } catch (sbErr) {
       console.error("[meetings] Service Bus 送信失敗 run=%s:", run.id, sbErr);
       try {
+        // queued -> failed は VALID_TRANSITIONS には含めず、内部経路として
+        // 直接更新する（外部 API では queued -> failed を許可しない）
         await prisma.meetingAnalysisRun.update({
           where: { id: run.id },
           data: {

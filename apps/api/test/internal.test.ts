@@ -81,7 +81,9 @@ function makeTx() {
   return {
     meetingAnalysisRun: {
       updateMany: vi.fn(),
-      findUnique: vi.fn(),
+      // transitionAnalysisRunStatus が現状の status を取得するためのモック。
+      // デフォルトは analyzing から completed への遷移を想定。
+      findUnique: vi.fn().mockResolvedValue({ status: "analyzing" }),
     },
     decisionItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
     task: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
