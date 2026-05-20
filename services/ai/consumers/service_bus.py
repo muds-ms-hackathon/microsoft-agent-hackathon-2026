@@ -25,7 +25,15 @@ class ServiceBusConsumer:
                         await handler(message)
                         await receiver.complete_message(message)
                     except Exception:
-                        # 1件の処理失敗でループを止めない
+                        # 1件の処理失敗でループを止めない。
+                        # ロック保持のままにすると Service Bus のロック期限切れまで
+                        # 再配送されないため、明示的に abandon してロックを解放する。
                         logger.exception(
                             "メッセージ処理中にエラーが発生しました: %s", message
                         )
+                        try:
+                            await receiver.abandon_message(message)
+                        except Exception:
+                            logger.exception(
+                                "abandon_message にも失敗しました: %s", message
+                            )
