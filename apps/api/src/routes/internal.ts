@@ -141,44 +141,44 @@ export const internalRoute = new Hono()
             });
           }
 
-          await Promise.all([
-            ...decisionItems.map((item) =>
-              tx.decisionItem.create({
-                data: {
-                  meetingId: run.meetingId,
-                  title: item.title,
-                  body: item.body,
-                  sourceQuote: item.sourceQuote,
-                  status: item.status,
-                },
-              }),
-            ),
-            ...tasks.map((task) =>
-              tx.task.create({
-                data: {
-                  organizationId,
-                  originMeetingId: run.meetingId,
-                  title: task.title,
-                  body: task.body,
-                  sourceQuote: task.sourceQuote,
-                  status: task.status,
-                  priority: task.priority ?? null,
-                },
-              }),
-            ),
-            ...ambiguousInfos.map((info) =>
-              tx.ambiguousInfo.create({
-                data: {
-                  meetingId: run.meetingId,
-                  body: info.body,
-                  sourceQuote: info.sourceQuote,
-                  status: info.status,
-                  ambiguityType: info.ambiguityType ?? null,
-                  severity: info.severity ?? null,
-                },
-              }),
-            ),
-          ]);
+          if (decisionItems.length > 0) {
+            await tx.decisionItem.createMany({
+              data: decisionItems.map((item) => ({
+                meetingId: run.meetingId,
+                title: item.title,
+                body: item.body,
+                sourceQuote: item.sourceQuote,
+                status: item.status,
+              })),
+            });
+          }
+
+          if (tasks.length > 0) {
+            await tx.task.createMany({
+              data: tasks.map((task) => ({
+                organizationId,
+                originMeetingId: run.meetingId,
+                title: task.title,
+                body: task.body,
+                sourceQuote: task.sourceQuote,
+                status: task.status,
+                priority: task.priority ?? null,
+              })),
+            });
+          }
+
+          if (ambiguousInfos.length > 0) {
+            await tx.ambiguousInfo.createMany({
+              data: ambiguousInfos.map((info) => ({
+                meetingId: run.meetingId,
+                body: info.body,
+                sourceQuote: info.sourceQuote,
+                status: info.status,
+                ambiguityType: info.ambiguityType ?? null,
+                severity: info.severity ?? null,
+              })),
+            });
+          }
         });
       } catch (e) {
         if (e instanceof Error && e.message === "INVALID_STATUS") {
