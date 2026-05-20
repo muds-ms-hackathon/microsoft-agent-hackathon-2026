@@ -177,6 +177,13 @@ async def test_analyze_meeting_completed():
     # handoverが存在すること
     assert "handover" in report
 
+    # estimation / estimation_note が report_json に含まれていること（#251）
+    assert "estimation" in report
+    assert "breakdown" in report["estimation"]
+    assert "total_minutes" in report["estimation"]
+    assert isinstance(report.get("estimation_note"), str)
+    assert "想定所要時間" in report["estimation_note"]
+
 
 @pytest.mark.asyncio
 async def test_analyze_meeting_parse_error_returns_failed():
