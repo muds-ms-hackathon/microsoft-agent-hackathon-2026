@@ -22,6 +22,9 @@ const mockFindUnique = vi.mocked(prisma.meetingAnalysisRun.findUnique);
 const mockUpdateMany = vi.mocked(prisma.meetingAnalysisRun.updateMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
+const SECRET = "test-secret";
+const AUTH_HEADER = { "x-internal-secret": SECRET };
+
 const baseRun = {
   id: "run-1",
   meetingId: "mtg-1",
@@ -87,7 +90,10 @@ function makeTx() {
 }
 
 describe("PATCH /internal/analysis-runs/:id", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.INTERNAL_API_SECRET = SECRET;
+  });
 
   it("(a) queued -> analyzing への正常遷移が成功する", async () => {
     const analyzingRun = {
@@ -109,7 +115,7 @@ describe("PATCH /internal/analysis-runs/:id", () => {
 
     const res = await app.request("/internal/analysis-runs/run-1", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({ status: "analyzing" }),
     });
 
@@ -132,7 +138,7 @@ describe("PATCH /internal/analysis-runs/:id", () => {
 
     const res = await app.request("/internal/analysis-runs/run-1", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({ status: "failed" }),
     });
 
@@ -149,7 +155,7 @@ describe("PATCH /internal/analysis-runs/:id", () => {
 
     const res = await app.request("/internal/analysis-runs/run-1", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({ status: "analyzing" }),
     });
 
@@ -161,7 +167,7 @@ describe("PATCH /internal/analysis-runs/:id", () => {
 
     const res = await app.request("/internal/analysis-runs/run-1", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({ status: "analyzing" }),
     });
 
@@ -171,7 +177,10 @@ describe("PATCH /internal/analysis-runs/:id", () => {
 });
 
 describe("POST /internal/analysis-runs/:id/complete", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.INTERNAL_API_SECRET = SECRET;
+  });
 
   it("(a) analyzing 状態のランが正常に completed になり結果が保存される", async () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
@@ -183,7 +192,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
         decisionItems: [{ title: "決定事項1" }],
         tasks: [{ title: "タスク1" }],
@@ -222,7 +231,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
         decisionItems: [],
         tasks: [],
@@ -251,7 +260,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
         decisionItems: [],
         tasks: [],

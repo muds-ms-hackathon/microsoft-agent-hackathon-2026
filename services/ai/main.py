@@ -156,6 +156,10 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("AZURE_OPENAI_DEPLOYMENT_NAME が未設定です")
     _deployment_name = deployment
 
+    internal_secret = os.environ.get("INTERNAL_API_SECRET")
+    if not internal_secret:
+        raise RuntimeError("INTERNAL_API_SECRET が未設定です")
+
     client = _create_openai_client()  # ローカル変数に受ける
     _openai_client = client  # グローバル変数にセット
     task = None

@@ -8,6 +8,7 @@ import { organizationsRoute } from "./routes/organizations.js";
 import { recurringMeetingsRoute } from "./routes/recurring-meetings.js";
 import { tasksRoute } from "./routes/tasks.js";
 import { internalRoute } from "./routes/internal.js";
+import { internalAuth } from "./middleware/internal-auth.js";
 
 const app = new Hono();
 
@@ -42,6 +43,9 @@ app.onError((err, c) => {
 
 // 未定義パスを JSON 404 に統一する。
 app.notFound((c) => c.json({ error: "Not Found" }, 404));
+
+// /internal/* にのみ認証ミドルウェアを適用する
+app.use("/internal/*", internalAuth);
 
 const routes = app
   .route("/health", healthRoute)
