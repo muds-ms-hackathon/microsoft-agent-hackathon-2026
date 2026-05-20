@@ -346,6 +346,37 @@ export function MeetingDetailView({
   );
 }
 
+function ResolutionBadge({
+  type,
+  status,
+}: {
+  type: (typeof REVIEW_ITEM_TYPES)[number];
+  status: ReviewItem["status"];
+}) {
+  if (status === "pending") return null;
+  if (status === "rejected") {
+    return (
+      <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+        却下
+      </span>
+    );
+  }
+  // confirmed
+  const label =
+    type === "ambiguity"
+      ? "→タスク登録済み"
+      : type === "task_candidate"
+        ? "タスク登録済み"
+        : type === "open_issue"
+          ? "決定済み"
+          : "確定済み";
+  return (
+    <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+      {label}
+    </span>
+  );
+}
+
 // AI抽出結果アコーディオン（読み取り専用）
 function ReviewAccordionItem({
   type,
@@ -394,7 +425,10 @@ function ReviewAccordionItem({
         <ul className="border-t divide-y">
           {items.map((item) => (
             <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
-              <p className="text-sm">{item.content}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm">{item.content}</p>
+                <ResolutionBadge type={type} status={item.status} />
+              </div>
               {item.sourceContext && (
                 <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
                   {item.sourceContext}
