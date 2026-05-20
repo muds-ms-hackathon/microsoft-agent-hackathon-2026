@@ -118,6 +118,11 @@ def _assemble(
         },
         "summary": summary,
         "alert_level": alert_level,
+        # estimation / estimation_note は AnalysisRunResult のトップレベルでは
+        # 保持しないため、apps/api 側で UI 表示や MeetingEstimationBreakdown 反映に
+        # 使えるよう report_json にも含める（issue #251）。
+        "estimation": estimation,
+        "estimation_note": estimation_note,
         "validation_warnings": validation_warnings,
         "rag_retrieval": rag_retrieval,
         "decisions": decisions,
