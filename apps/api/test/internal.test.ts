@@ -182,7 +182,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     process.env.INTERNAL_API_SECRET = SECRET;
   });
 
-  it("(a) analyzing 状態のランが正常に completed になり複数件の結果が保存される", async () => {
+  it("(a) AI が decisionItem の任意の status を送っても draft で保存される", async () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     const executionOrder: string[] = [];
@@ -194,11 +194,11 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     });
     tx.task.createMany.mockImplementation(async () => {
       executionOrder.push("tasks");
-      return { count: 2 };
+      return { count: 1 };
     });
     tx.ambiguousInfo.createMany.mockImplementation(async () => {
       executionOrder.push("ambiguousInfos");
-      return { count: 2 };
+      return { count: 1 };
     });
     mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
       fn(tx),
@@ -209,17 +209,11 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
         decisionItems: [
-          { title: "決定事項1", body: "本文1" },
-          { title: "決定事項2", status: "decided" },
+          { title: "決定事項1", body: "本文1", status: "decided" },
+          { title: "決定事項2", status: "cancelled" },
         ],
-        tasks: [
-          { title: "タスク1", priority: "required" },
-          { title: "タスク2", status: "in_progress" },
-        ],
-        ambiguousInfos: [
-          { body: "曖昧な箇所1", severity: "high" },
-          { body: "曖昧な箇所2", ambiguityType: "unclear_scope" },
-        ],
+        tasks: [{ title: "タスク1" }],
+        ambiguousInfos: [{ body: "曖昧な箇所1" }],
       }),
     });
 
@@ -239,17 +233,48 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           title: "決定事項1",
           body: "本文1",
           sourceQuote: undefined,
-          status: "open",
+          status: "draft",
         },
         {
           meetingId: "mtg-1",
           title: "決定事項2",
           body: undefined,
           sourceQuote: undefined,
-          status: "decided",
+          status: "draft",
         },
       ],
     });
+    expect(executionOrder).toEqual([
+      "decisionItems",
+      "tasks",
+      "ambiguousInfos",
+    ]);
+  });
+
+  it("(b) AI が task の任意の status を送っても draft で保存される", async () => {
+    mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
+    const tx = makeTx();
+    tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
+
+    const res = await app.request("/internal/analysis-runs/run-1/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
+      body: JSON.stringify({
+        decisionItems: [{ title: "決定事項1" }],
+        tasks: [
+          { title: "タスク1", priority: "required", status: "done" },
+          { title: "タスク2", status: "in_progress" },
+        ],
+        ambiguousInfos: [{ body: "曖昧な箇所1" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
     expect(tx.task.createMany).toHaveBeenCalledWith({
       data: [
         {
@@ -258,7 +283,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           title: "タスク1",
           body: undefined,
           sourceQuote: undefined,
-          status: "todo",
+          status: "draft",
           priority: "required",
         },
         {
@@ -267,11 +292,37 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           title: "タスク2",
           body: undefined,
           sourceQuote: undefined,
-          status: "in_progress",
+          status: "draft",
           priority: null,
         },
       ],
     });
+  });
+
+  it("(c) AI が ambiguousInfo の任意の status を送っても draft で保存される", async () => {
+    mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
+    const tx = makeTx();
+    tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
+
+    const res = await app.request("/internal/analysis-runs/run-1/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
+      body: JSON.stringify({
+        decisionItems: [{ title: "決定事項1" }],
+        tasks: [{ title: "タスク1" }],
+        ambiguousInfos: [
+          { body: "曖昧な箇所1", severity: "high", status: "resolved" },
+          { body: "曖昧な箇所2", ambiguityType: "unclear_scope", status: "rejected" },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
     expect(tx.ambiguousInfo.createMany).toHaveBeenCalledWith({
       data: [
         {
@@ -292,14 +343,68 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
         },
       ],
     });
-    expect(executionOrder).toEqual([
-      "decisionItems",
-      "tasks",
-      "ambiguousInfos",
-    ]);
   });
 
-  it("(b) 各リストが空の場合でも正常に completed になり 200 を返す", async () => {
+  it("(d) status フィールドありのリクエストでもバリデーションエラーにならず draft で保存される", async () => {
+    mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
+    const tx = makeTx();
+    tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
+
+    const res = await app.request("/internal/analysis-runs/run-1/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
+      body: JSON.stringify({
+        decisionItems: [{ title: "決定事項1", status: "decided" }],
+        tasks: [{ title: "タスク1", status: "done" }],
+        ambiguousInfos: [{ body: "曖昧な箇所1", status: "resolved" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+    expect(tx.decisionItem.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          meetingId: "mtg-1",
+          title: "決定事項1",
+          body: undefined,
+          sourceQuote: undefined,
+          status: "draft",
+        },
+      ],
+    });
+    expect(tx.task.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          organizationId: "org-1",
+          originMeetingId: "mtg-1",
+          title: "タスク1",
+          body: undefined,
+          sourceQuote: undefined,
+          status: "draft",
+          priority: null,
+        },
+      ],
+    });
+    expect(tx.ambiguousInfo.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          meetingId: "mtg-1",
+          body: "曖昧な箇所1",
+          sourceQuote: undefined,
+          status: "draft",
+          ambiguityType: null,
+          severity: null,
+        },
+      ],
+    });
+  });
+
+  it("各リストが空の場合でも正常に completed になり 200 を返す", async () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
@@ -331,7 +436,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     expect(tx.ambiguousInfo.createMany).not.toHaveBeenCalled();
   });
 
-  it("(c) INSERT 途中でエラーが発生した場合は transaction が失敗し一部 INSERT 済みとして扱わない", async () => {
+  it("INSERT 途中でエラーが発生した場合は transaction が失敗し一部 INSERT 済みとして扱わない", async () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     const pendingInserts: string[] = [];

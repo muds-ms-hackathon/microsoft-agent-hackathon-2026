@@ -7,27 +7,18 @@ const decisionItemSchema = z.object({
   title: z.string(),
   body: z.string().optional(),
   sourceQuote: z.string().optional(),
-  status: z
-    .enum(["draft", "reviewing", "open", "decided", "cancelled"])
-    .default("open"),
 });
 
 const taskSchema = z.object({
   title: z.string(),
   body: z.string().optional(),
   sourceQuote: z.string().optional(),
-  status: z
-    .enum(["draft", "reviewing", "todo", "in_progress", "done", "rejected"])
-    .default("todo"),
   priority: z.enum(["required", "optional"]).optional(),
 });
 
 const ambiguousInfoSchema = z.object({
   body: z.string(),
   sourceQuote: z.string().optional(),
-  status: z
-    .enum(["draft", "reviewing", "resolved", "rejected"])
-    .default("draft"),
   ambiguityType: z
     .enum([
       "missing_speaker",
@@ -148,7 +139,7 @@ export const internalRoute = new Hono()
                 title: item.title,
                 body: item.body,
                 sourceQuote: item.sourceQuote,
-                status: item.status,
+                status: "draft",
               })),
             });
           }
@@ -161,7 +152,7 @@ export const internalRoute = new Hono()
                 title: task.title,
                 body: task.body,
                 sourceQuote: task.sourceQuote,
-                status: task.status,
+                status: "draft",
                 priority: task.priority ?? null,
               })),
             });
@@ -173,7 +164,7 @@ export const internalRoute = new Hono()
                 meetingId: run.meetingId,
                 body: info.body,
                 sourceQuote: info.sourceQuote,
-                status: info.status,
+                status: "draft",
                 ambiguityType: info.ambiguityType ?? null,
                 severity: info.severity ?? null,
               })),
