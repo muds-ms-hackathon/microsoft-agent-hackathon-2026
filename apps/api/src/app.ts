@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { analysisRunsRoute } from "./routes/analysis-runs.js";
 import { healthRoute } from "./routes/health.js";
 import { meRoute } from "./routes/me.js";
 import { meetingsRoute } from "./routes/meetings.js";
@@ -54,8 +53,7 @@ const routes = app
   .route("/organizations", organizationsRoute)
   .route("/recurring-meetings", recurringMeetingsRoute)
   .route("/tasks", tasksRoute)
-  .route("/internal", internalRoute)
-  .route("/analysis-runs", analysisRunsRoute);
+  .route("/internal", internalRoute);
 
 export { app };
 export type AppType = typeof routes;
