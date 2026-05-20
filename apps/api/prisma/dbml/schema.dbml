@@ -310,6 +310,7 @@ Table MeetingAnalysisRun {
   promptVersion String
   pipelineVersion String
   inputHash String
+  transcriptText String
   summary String
   alertLevel String
   reportJson Json

@@ -37,7 +37,7 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 

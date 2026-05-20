@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 import httpx
 from azure.servicebus import ServiceBusReceivedMessage
@@ -32,7 +33,7 @@ def _create_openai_client() -> AsyncAzureOpenAI:
 
 
 # Azure OpenAI API を呼び出して、文字起こしから決定事項・タスク・曖昧箇所を抽出する
-async def _analyze_transcript(transcript: str) -> dict:
+async def _analyze_transcript(transcript: str) -> dict[str, Any]:
     """文字起こしを Azure OpenAI で解析し、決定事項・タスク・曖昧箇所を抽出する"""
     if _openai_client is None:
         raise RuntimeError("OpenAI クライアントが初期化されていません")
@@ -75,7 +76,7 @@ async def _analyze_transcript(transcript: str) -> dict:
         response_format={"type": "json_object"},
     )
 
-    return json.loads(response.choices[0].message.content or "{}")
+    return cast(dict[str, Any], json.loads(response.choices[0].message.content or "{}"))
 
 
 def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
