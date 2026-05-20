@@ -1,6 +1,8 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { sendToServiceBus } from "../lib/service-bus.js";
 import {
   buildTaskListWhere,
   taskListQuerySchema,
@@ -11,16 +13,33 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
-import { z } from "zod";
-import { sendMeetingProcessEvent } from "../lib/service-bus.js";
 
-// 旧 GET / と POST / は認証なしで叩ける状態だったため撤去した。
+// 会議メタ情報の更新スキーマ。transcriptText を中心に議事録関連フィールドを受け付ける。
+// 全フィールド optional だが、いずれか 1 つ以上の指定を必須とする。
+const meetingUpdateSchema = z
+  .object({
+    transcriptText: z.string().nullable().optional(),
+    supplementaryMemo: z.string().nullable().optional(),
+    meetingType: z.string().optional(),
+    transcriptionQuality: z.string().nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (d) =>
+      d.transcriptText !== undefined ||
+      d.supplementaryMemo !== undefined ||
+      d.meetingType !== undefined ||
+      d.transcriptionQuality !== undefined,
+    { message: "更新する項目を 1 つ以上指定してください" },
+  );
+
+// 旧 GET / と POST /meetings は認証なしで叩ける状態だったため撤去した。
 // Meeting 作成は POST /recurring-meetings/:id/meetings に一本化されている。
 export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
   .get("/:id", auth, async (c) => {
     const id = c.req.param("id");
-    // 会議 + 紐付く定例 + 組織を一度に取得する。単発会議（recurringMeetingId=null）は
-    // 組織判定不能のため 404 で拒否する（/:id/tasks と同方針）。
+    // 会議 + 紐付く定例 + 組織 + 最新解析ランを一度に取得する。
+    // 単発会議（recurringMeetingId=null）は組織判定不能のため 404 で拒否する。
     const meeting = await prisma.meeting.findUnique({
       where: { id },
       include: {
@@ -28,6 +47,11 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           include: {
             organization: { select: { id: true, name: true } },
           },
+        },
+        // 解析ラン最新 1 件をポーリング用に含める
+        analysisRuns: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
         },
       },
     });
@@ -48,9 +72,9 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "会議が見つかりません" }, 404);
     }
 
-    // 詳細レスポンス: meeting メタ + 紐付く recurringMeeting (id/name) + organization (id/name) の最小情報。
-    // 議事録メタや解析結果は別 Issue で追加する想定なので、ここでは構造を保ったまま薄く返す。
-    const { recurringMeeting, ...rest } = meeting;
+    const { recurringMeeting, analysisRuns, ...rest } = meeting;
+    const latestRun = analysisRuns[0] ?? null;
+
     return c.json({
       ...rest,
       recurringMeeting: {
@@ -58,6 +82,18 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         name: recurringMeeting.name,
       },
       organization: recurringMeeting.organization,
+      latestAnalysisRun: latestRun
+        ? {
+            id: latestRun.id,
+            status: latestRun.status,
+            currentStep: latestRun.currentStep,
+            summary: latestRun.summary,
+            alertLevel: latestRun.alertLevel,
+            completedAt: latestRun.completedAt,
+            failedAt: latestRun.failedAt,
+            errorMessage: latestRun.errorMessage,
+          }
+        : null,
     });
   })
   .get(
@@ -103,70 +139,98 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(tasks.map(serializeTask));
     },
   )
-  .post(
-    "/:id/process",
-    auth,
-    zValidator("json", z.object({ transcript: z.string().min(1) })),
-    async (c) => {
-      const id = c.req.param("id");
-      const { transcript } = c.req.valid("json");
+  .patch("/:id", auth, zValidator("json", meetingUpdateSchema), async (c) => {
+    const id = c.req.param("id");
+    const data = c.req.valid("json");
 
-      const meeting = await prisma.meeting.findUnique({
-        where: { id },
-        include: { recurringMeeting: { select: { organizationId: true } } },
-      });
-      if (!meeting?.recurringMeeting) {
-        return c.json({ error: "会議が見つかりません" }, 404);
-      }
+    // 会議 + 紐付く定例経由で組織判定する
+    const meeting = await prisma.meeting.findUnique({
+      where: { id },
+      include: { recurringMeeting: { select: { organizationId: true } } },
+    });
+    if (!meeting?.recurringMeeting) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
 
-      const user = c.var.user;
-      const membership = await prisma.organizationMembership.findUnique({
-        where: {
-          userId_organizationId: {
-            userId: user.id,
-            organizationId: meeting.recurringMeeting.organizationId,
-          },
+    const user = c.var.user;
+    const membership = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: user.id,
+          organizationId: meeting.recurringMeeting.organizationId,
         },
-      });
-      if (!membership) {
-        return c.json({ error: "会議が見つかりません" }, 404);
-      }
+      },
+    });
+    if (!membership) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
 
-      const analysisRun = await prisma.meetingAnalysisRun.create({
-        data: {
-          meetingId: id,
-          status: "queued",
-          triggerType: "manual",
-          transcriptText: transcript,
+    // undefined フィールドを除外して更新データを構築する
+    const updateData: Record<string, unknown> = {};
+    if (data.transcriptText !== undefined)
+      updateData.transcriptText = data.transcriptText;
+    if (data.supplementaryMemo !== undefined)
+      updateData.supplementaryMemo = data.supplementaryMemo;
+    if (data.meetingType !== undefined)
+      updateData.meetingType = data.meetingType;
+    if (data.transcriptionQuality !== undefined)
+      updateData.transcriptionQuality = data.transcriptionQuality;
+
+    const updated = await prisma.meeting.update({
+      where: { id },
+      data: updateData,
+    });
+    return c.json(updated);
+  })
+  .post("/:id/analyze", auth, async (c) => {
+    const id = c.req.param("id");
+
+    // 会議存在確認 + 組織判定
+    const meeting = await prisma.meeting.findUnique({
+      where: { id },
+      include: { recurringMeeting: { select: { organizationId: true } } },
+    });
+    if (!meeting?.recurringMeeting) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
+
+    const user = c.var.user;
+    const membership = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: user.id,
+          organizationId: meeting.recurringMeeting.organizationId,
         },
-      });
+      },
+    });
+    if (!membership) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
 
-      // SB通信はベストエフォート
-      // 失敗しても analysis ruu は保存済みなので 201 を返す
-      try {
-        await sendMeetingProcessEvent({
-          meetingId: id,
-          analysisRunId: analysisRun.id,
-          transcript,
-        });
-      } catch (err) {
-        console.error(
-          "[meetings] Service Bus 送信失敗 analysis run を failed に更新します:",
-          err,
-        );
+    // 文字起こしテキスト未設定は解析不可
+    if (!meeting.transcriptText) {
+      return c.json({ error: "文字起こしテキストが設定されていません" }, 400);
+    }
 
-        await prisma.meetingAnalysisRun.update({
-          where: { id: analysisRun.id },
-          data: {
-            status: "failed",
-            failedAt: new Date(),
-            errorMessage: "Service Bus への送信に失敗しました",
-          },
-        });
+    // 解析ランを queued 状態で作成する
+    const run = await prisma.meetingAnalysisRun.create({
+      data: {
+        meetingId: id,
+        status: "queued",
+        triggerType: "manual",
+      },
+    });
 
-        return c.json({ error: "解析ジョブの投入に失敗しました" }, 500);
-      }
+    // AI Service に解析を依頼するメッセージを Service Bus に送信する
+    const connectionString =
+      process.env.AZURE_SERVICE_BUS_CONNECTION_STRING ?? "";
+    const queueName =
+      process.env.AZURE_SERVICE_BUS_QUEUE_NAME ?? "decision-loop";
+    await sendToServiceBus(connectionString, queueName, {
+      analysis_run_id: run.id,
+      meeting_id: id,
+      trigger_type: "transcript_submitted",
+    });
 
-      return c.json(analysisRun, 201);
-    },
-  );
+    return c.json({ analysisRunId: run.id, status: "queued" }, 202);
+  });

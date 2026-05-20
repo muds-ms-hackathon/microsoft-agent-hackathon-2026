@@ -25,32 +25,10 @@ vi.mock("@/lib/api", () => ({
   authHeaders: () => ({ headers: {} }),
 }));
 
-// Link / createFileRoute は RouterProvider 配下でないと落ちる。
+// Link / createFileRoute は RouterProvider 配下でないと落ちるためまとめて差し替える。
 vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
-    "@tanstack/react-router",
-  );
-  type MockLinkProps = {
-    to: string;
-    params?: Record<string, string>;
-    children?: React.ReactNode;
-    className?: string;
-  };
-  return {
-    ...actual,
-    Link: ({ to, params, children, className }: MockLinkProps) => {
-      const href =
-        typeof to === "string"
-          ? to.replace(/\$(\w+)/g, (_, k: string) => params?.[k] ?? "")
-          : String(to);
-      return (
-        <a href={href} className={className}>
-          {children}
-        </a>
-      );
-    },
-    createFileRoute: () => () => ({}),
-  };
+  const { buildRouterMock } = await import("./helpers/router-mock");
+  return buildRouterMock({ mockFileRoute: true });
 });
 
 import { api } from "@/lib/api";

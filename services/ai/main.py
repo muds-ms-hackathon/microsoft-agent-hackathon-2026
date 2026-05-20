@@ -3,16 +3,21 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, cast
 
-import httpx
 from azure.servicebus import ServiceBusReceivedMessage
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncAzureOpenAI
 
 from consumers.service_bus import ServiceBusConsumer
+from integrations.app_api_client import AppApiClient
+from llm.client import AzureOpenAIClient
+from pipeline.analyze_meeting import analyze_meeting
+from routers.analysis import router as analysis_router
 from routers.health import router as health_router
+from schemas.analysis import AnalysisJobInput
 
 logger = logging.getLogger(__name__)
 
@@ -97,70 +102,43 @@ def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
 
 
 async def _handle_message(message: ServiceBusReceivedMessage) -> None:
-    parsed = json.loads(_parse_message_body(message).decode("utf-8"))
-    if not isinstance(parsed, dict):
-        logger.error("メッセージボディが dict ではありません: %s", type(parsed))
-        return
-    body = parsed
+    """Service Busからのメッセージを受信し、解析パイプラインを実行する。"""
+    body = json.loads(str(message))
+    analysis_run_id = body["analysis_run_id"]
 
-    if body.get("type") != "meeting.process":
-        logger.info("未対応のメッセージタイプをスキップ: %s", body.get("type"))
-        return
+    api_client = AppApiClient()
+    llm_client = AzureOpenAIClient()
 
-    # 必須フィールドの検証
-    meeting_id = body.get("meetingId")
-    analysis_run_id = body.get("analysisRunId")
-    transcript = body.get("transcript")
-    if (
-        not isinstance(meeting_id, str)
-        or not isinstance(analysis_run_id, str)
-        or not isinstance(transcript, str)
-    ):
-        # 欠損メッセージは再配送せず破棄する
-        # (DLQ が必要であれば ValueError を raise に変更する)
-        logger.error(
-            "メッセージに必須フィールドが不足しています (破棄) : %s", body.get("type")
+    try:
+        # 解析に必要な入力情報を取得する
+        input_data = await api_client.get_analysis_run_input(analysis_run_id)
+        job = AnalysisJobInput(**input_data)
+
+        # パイプライン実行
+        result = await analyze_meeting(job, llm_client)
+
+        # 結果を保存する
+        await api_client.update_analysis_run_result(
+            analysis_run_id,
+            result.model_dump(exclude_none=True),
         )
-        return
+        logger.info(
+            "解析完了 analysis_run_id=%s status=%s", analysis_run_id, result.status
+        )
 
-    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:3000")
-
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    except Exception as e:
+        logger.error("解析失敗 analysis_run_id=%s: %s", analysis_run_id, e)
         try:
-            resp = await client.patch(
-                f"{backend_url}/internal/analysis-runs/{analysis_run_id}",
-                json={"status": "analyzing"},
-            )
-            resp.raise_for_status()
-
-            result = await _analyze_transcript(transcript)
-
-            resp = await client.post(
-                f"{backend_url}/internal/analysis-runs/{analysis_run_id}/complete",
-                json={
-                    "decisionItems": result.get("decisionItems", []),
-                    "tasks": result.get("tasks", []),
-                    "ambiguousInfos": result.get("ambiguousInfos", []),
+            await api_client.update_analysis_run_result(
+                analysis_run_id,
+                {
+                    "status": "failed",
+                    "error_message": str(e),
+                    "failed_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
-            resp.raise_for_status()
-            logger.info("会議 %s の解析が完了しました", meeting_id)
-
         except Exception:
-            logger.exception("会議 %s の解析中にエラーが発生しました", meeting_id)
-            # failed 更新自体の失敗で元のエラーをマスクしないよう別 try に分ける
-            try:
-                resp = await client.patch(
-                    f"{backend_url}/internal/analysis-runs/{analysis_run_id}",
-                    json={"status": "failed"},
-                )
-                resp.raise_for_status()
-            except Exception:
-                logger.exception(
-                    "failed ステータス更新に失敗しました (analysis_run_id=%s) ",
-                    analysis_run_id,
-                )
-            raise  # Consumer に失敗を伝えて再配送させる
+            logger.exception("エラー保存にも失敗 analysis_run_id=%s", analysis_run_id)
 
 
 def _on_consumer_done(task: asyncio.Task) -> None:
@@ -219,3 +197,4 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(analysis_router)
