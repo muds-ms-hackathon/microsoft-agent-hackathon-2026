@@ -105,9 +105,17 @@ services:
       - ./services/ai/main.py:/app/main.py
       - ./services/ai/consumers:/app/consumers
       - ./services/ai/routers:/app/routers
+      - ./services/ai/schemas:/app/schemas
+      - ./services/ai/llm:/app/llm
+      - ./services/ai/integrations:/app/integrations
+      - ./services/ai/pipeline:/app/pipeline
+      - ./services/ai/rag:/app/rag
+      - ./services/ai/prompts:/app/prompts
     environment:
       # Docker 内では servicebus コンテナ名で解決する（.env.local の localhost 指定を上書き）
       AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+      # Docker network 内の api コンテナへの内部通信 URL
+      INTERNAL_API_BASE_URL: "http://api:3001"
     env_file:
       - path: .env.local
         required: false

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // テスト用に毎回 app を組み直すため、import.meta.resolve のキャッシュを避けて動的 import する。
 // CORS と onError は app.ts 側のグローバル設定なので、env を差し替えてから import し直す。
