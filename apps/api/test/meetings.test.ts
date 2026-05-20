@@ -14,6 +14,7 @@ vi.mock("../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
     },
     meetingAnalysisRun: {
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -83,6 +84,7 @@ const mockTaskFindMany = vi.mocked(prisma.task.findMany);
 const mockAnalysisRunCreate = vi.mocked(prisma.meetingAnalysisRun.create);
 const mockSendToServiceBus = vi.mocked(sendToServiceBus);
 const mockAnalysisRunUpdate = vi.mocked(prisma.meetingAnalysisRun.update);
+const mockAnalysisRunFindFirst = vi.mocked(prisma.meetingAnalysisRun.findFirst);
 
 describe("旧 GET / と POST /meetings は撤去済み", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -522,7 +524,7 @@ describe("POST /meetings/:id/analyze", () => {
     expect(mockAnalysisRunCreate).not.toHaveBeenCalled();
   });
 
-    it("(a) SB 失敗 + DB 更新成功: 500 が返り SB エラーがログに出る", async () => {
+  it("(a) SB 失敗 + DB 更新成功: 500 が返り SB エラーがログに出る", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const sbError = new Error("Service Bus 接続エラー");
 
@@ -621,6 +623,7 @@ describe("POST /meetings/:id/analyze", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
+    mockAnalysisRunFindFirst.mockResolvedValueOnce(null);
     mockSendToServiceBus.mockRejectedValueOnce(sbError);
     mockAnalysisRunUpdate.mockRejectedValueOnce(dbError);
 
@@ -642,4 +645,117 @@ describe("POST /meetings/:id/analyze", () => {
     consoleSpy.mockRestore();
   });
 
+  describe("二重投入防止", () => {
+    const runPayload = {
+      id: "run-1",
+      meetingId: "mtg-1",
+      status: "queued",
+      triggerType: "manual",
+      currentStep: null,
+      summary: null,
+      alertLevel: null,
+      modelName: null,
+      apiVersion: null,
+      promptVersion: null,
+      pipelineVersion: null,
+      inputHash: null,
+      reportJson: null,
+      rawOutputsJson: null,
+      validationWarnings: null,
+      ragRetrievalJson: null,
+      recommendedAgenda: null,
+      resourceRefsJson: null,
+      startedAt: null,
+      completedAt: null,
+      failedAt: null,
+      errorMessage: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>;
+
+    beforeEach(() => {
+      mockFindUnique.mockResolvedValue(
+        meetingWithTranscript as MeetingForUpdate,
+      );
+      mockMembershipFindUnique.mockResolvedValue({
+        userId: "user-1",
+        organizationId: "org-1",
+        role: "member",
+        joinedAt: new Date(),
+      });
+    });
+
+    it("(a) queued 状態のランが存在する場合は 409 を返し create を呼ばない", async () => {
+      mockAnalysisRunFindFirst.mockResolvedValueOnce({
+        ...runPayload,
+        id: "run-old",
+        status: "queued",
+      });
+
+      const res = await app.request("/meetings/mtg-1/analyze", {
+        method: "POST",
+      });
+
+      expect(res.status).toBe(409);
+      expect(mockAnalysisRunCreate).not.toHaveBeenCalled();
+    });
+
+    it("(b) analyzing 状態のランが存在する場合は 409 を返し create を呼ばない", async () => {
+      mockAnalysisRunFindFirst.mockResolvedValueOnce({
+        ...runPayload,
+        id: "run-old",
+        status: "analyzing",
+      });
+
+      const res = await app.request("/meetings/mtg-1/analyze", {
+        method: "POST",
+      });
+
+      expect(res.status).toBe(409);
+      expect(mockAnalysisRunCreate).not.toHaveBeenCalled();
+    });
+
+    it("(c) in-flight ランが存在しない場合は create を呼んで 202 を返す", async () => {
+      mockAnalysisRunFindFirst.mockResolvedValueOnce(null);
+      mockAnalysisRunCreate.mockResolvedValue(runPayload);
+
+      const res = await app.request("/meetings/mtg-1/analyze", {
+        method: "POST",
+      });
+
+      expect(res.status).toBe(202);
+      expect(mockAnalysisRunCreate).toHaveBeenCalled();
+    });
+
+    it("(d) 409 のレスポンスボディに正しいエラーメッセージが含まれる", async () => {
+      mockAnalysisRunFindFirst.mockResolvedValueOnce({
+        ...runPayload,
+        id: "run-old",
+        status: "queued",
+      });
+
+      const res = await app.request("/meetings/mtg-1/analyze", {
+        method: "POST",
+      });
+      const body = (await res.json()) as { error: string };
+
+      expect(body.error).toBe("処理中の解析ジョブが既に存在します");
+    });
+
+    it("(e) findFirst に meetingId と status の where 条件が渡される", async () => {
+      mockAnalysisRunFindFirst.mockResolvedValueOnce(null);
+      mockAnalysisRunCreate.mockResolvedValue(runPayload);
+
+      await app.request("/meetings/mtg-1/analyze", { method: "POST" });
+
+      expect(mockAnalysisRunFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            meetingId: "mtg-1",
+            status: { in: ["queued", "analyzing"] },
+          },
+        }),
+      );
+    });
+  });
 });

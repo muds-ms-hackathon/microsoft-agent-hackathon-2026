@@ -212,6 +212,17 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "文字起こしテキストが設定されていません" }, 400);
     }
 
+    // 処理中（queued / analyzing）の解析ランが既に存在する場合は 409 を返す
+    const inFlightRun = await prisma.meetingAnalysisRun.findFirst({
+      where: {
+        meetingId: id,
+        status: { in: ["queued", "analyzing"] },
+      },
+    });
+    if (inFlightRun) {
+      return c.json({ error: "処理中の解析ジョブが既に存在します" }, 409);
+    }
+
     // 解析ランを queued 状態で作成する
     const run = await prisma.meetingAnalysisRun.create({
       data: {
@@ -244,15 +255,10 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           },
         });
       } catch (dbErr) {
-        console.error(
-          "[meetings] failed 更新も失敗 run=%s:",
-          run.id,
-          dbErr,
-        );
+        console.error("[meetings] failed 更新も失敗 run=%s:", run.id, dbErr);
       }
       return c.json({ error: "解析ジョブの投入に失敗しました" }, 500);
     }
 
     return c.json({ analysisRunId: run.id, status: "queued" }, 202);
-
   });
