@@ -4,7 +4,7 @@ import json
 import pytest
 
 from llm.client import FakeLLMClient
-from pipeline.analyze_meeting import analyze_meeting
+from pipeline.analyze_meeting import _extract_keywords, analyze_meeting
 from pipeline.continuity import (
     prepare_change_summary_for_call6,
     prepare_prev_open_issues_for_call2,
@@ -317,3 +317,34 @@ def test_prepare_change_summary_for_call6():
     summary = prepare_change_summary_for_call6(prev_json)
     assert "完了タスク" in summary
     assert "継続中" in summary  # high_recurrence_issues に含まれる
+
+
+# ──────────────────────── _extract_keywords ──────────────────────────
+
+
+def test_extract_keywords_from_list():
+    assert _extract_keywords(["a", "b", "c"]) == ["a", "b", "c"]
+
+
+def test_extract_keywords_from_keywords_key():
+    assert _extract_keywords({"keywords": ["x", "y"]}) == ["x", "y"]
+
+
+def test_extract_keywords_from_items_key():
+    assert _extract_keywords({"items": ["foo"]}) == ["foo"]
+
+
+def test_extract_keywords_falls_back_to_first_list_value():
+    assert _extract_keywords({"other": ["alpha"]}) == ["alpha"]
+
+
+def test_extract_keywords_returns_empty_when_no_list_found():
+    assert _extract_keywords({"summary": "string only"}) == []
+
+
+def test_extract_keywords_returns_empty_for_unsupported_type():
+    assert _extract_keywords("not a dict or list") == []  # type: ignore[arg-type]
+
+
+def test_extract_keywords_coerces_to_str():
+    assert _extract_keywords([1, 2, 3]) == ["1", "2", "3"]

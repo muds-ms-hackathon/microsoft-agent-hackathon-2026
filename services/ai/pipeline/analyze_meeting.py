@@ -49,6 +49,26 @@ def _load_prompts() -> dict:
         return tomllib.load(f)
 
 
+def _extract_keywords(parsed: dict | list) -> list[str]:
+    """call1 の戻り値からキーワードリストを抽出する。
+
+    プロンプトは list を期待しているが、LLM が `{"keywords": [...]}` のような
+    dict を返すケースに備えて代表的なキー名と「最初の list 値」をフォールバック
+    として拾う。どちらにも該当しなければ空 list を返す。
+    """
+    if isinstance(parsed, list):
+        return [str(k) for k in parsed]
+    if isinstance(parsed, dict):
+        for key in ("keywords", "items", "data"):
+            value = parsed.get(key)
+            if isinstance(value, list):
+                return [str(k) for k in value]
+        for value in parsed.values():
+            if isinstance(value, list):
+                return [str(k) for k in value]
+    return []
+
+
 def _calc_input_hash(job: AnalysisJobInput) -> str:
     """入力の再現性確認用ハッシュを計算する。"""
     payload = {
@@ -145,7 +165,11 @@ async def analyze_meeting(
         raw_outputs["call1"] = raw1
         if isinstance(parsed1, dict) and "_parse_error" in parsed1:
             return _failed("call1", parsed1, raw_outputs, input_hash)
-        keywords: list[str] = parsed1 if isinstance(parsed1, list) else []
+        keywords: list[str] = _extract_keywords(parsed1)
+        if not keywords and not isinstance(parsed1, list):
+            logger.warning(
+                "[call1] キーワード抽出失敗: 受け取った形式=%s", type(parsed1).__name__
+            )
         logger.info("[call1] キーワード抽出完了: %d件", len(keywords))
 
         # ── RAG検索① ──────────────────────────────────────────
