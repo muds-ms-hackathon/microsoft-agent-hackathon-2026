@@ -102,7 +102,9 @@ export function ReviewView({
     return true;
   });
 
-  const isCompleted = scopedItems.length > 0 && filtered.length === 0;
+  const isCompleted =
+    scopedItems.length > 0 &&
+    scopedItems.filter((i) => i.status === "pending").length === 0;
 
   return (
     <section
