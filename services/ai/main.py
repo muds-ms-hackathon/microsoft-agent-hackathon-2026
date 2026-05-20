@@ -4,7 +4,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any
 
 from azure.servicebus import ServiceBusReceivedMessage
 from fastapi import FastAPI
@@ -81,7 +81,12 @@ async def _analyze_transcript(transcript: str) -> dict[str, Any]:
         response_format={"type": "json_object"},
     )
 
-    return cast(dict[str, Any], json.loads(response.choices[0].message.content or "{}"))
+    result = json.loads(response.choices[0].message.content or "{}")
+    if not isinstance(result, dict):
+        raise ValueError(
+            f"OpenAI レスポンスが dict ではありません: type={type(result).__name__}"
+        )
+    return result
 
 
 def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
