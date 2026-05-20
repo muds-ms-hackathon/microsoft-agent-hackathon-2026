@@ -14,6 +14,11 @@ function getOrCreateSender(
   return sender;
 }
 
+/**
+ * NOTE: このペイロードのスキーマは services/ai/main.py の
+ * Service Bus メッセージ受信処理と対になっています。
+ * フィールドを変更する場合は必ず両方を同時に更新してください。
+ */
 export async function sendToServiceBus(
   connectionString: string,
   queueName: string,

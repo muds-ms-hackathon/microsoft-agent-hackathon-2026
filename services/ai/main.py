@@ -89,6 +89,9 @@ async def _analyze_transcript(transcript: str) -> dict[str, Any]:
     return result
 
 
+# NOTE: このメッセージスキーマは apps/api/src/lib/service-bus.ts の
+# sendToServiceBus のペイロードと対になっています。
+# フィールドを変更する場合は必ず両方を同時に更新してください。
 def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
     """message.body が bytes / Iterable[bytes] のどちらでも扱えるようにする"""
     body = message.body
