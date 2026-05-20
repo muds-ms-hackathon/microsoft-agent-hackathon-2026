@@ -503,6 +503,14 @@ model AmbiguousInfo {
   @@index([status])
 }
 
+// 解析ランの実行状態。queued → analyzing → completed | failed の遷移を取る。
+enum AnalysisRunStatus {
+  queued
+  analyzing
+  completed
+  failed
+}
+
 // AI解析の実行履歴。1回の解析runごとに、最終JSON・検証警告・RAG検索ログなどを保持する。
 // 業務状態の正本ではなく、監査・再現性・デバッグ・再実行比較のためのスナップショット。
 model MeetingAnalysisRun {
@@ -510,7 +518,7 @@ model MeetingAnalysisRun {
   meetingId String
 
   // 実行状態
-  status      String  @default("queued")
+  status      AnalysisRunStatus @default(queued)
   currentStep String?
   triggerType String?
 

@@ -1,6 +1,10 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
+
+# apps/api 側の Prisma enum AnalysisRunStatus と一致させる。
+# 変更時は両方を同時に更新すること。
+AnalysisRunStatus = Literal["queued", "analyzing", "completed", "failed"]
 
 
 class SpeakerInfo(BaseModel):
@@ -26,7 +30,7 @@ class AnalysisJobInput(BaseModel):
 
 
 class AnalysisRunResult(BaseModel):
-    status: str  # "completed" | "failed"
+    status: AnalysisRunStatus
     current_step: Optional[str] = None
     report_json: Optional[dict] = None
     raw_outputs_json: Optional[dict] = None
