@@ -64,15 +64,6 @@ export function ReviewItemCard({
     );
   };
 
-  const handleDecide = () => {
-    onUpdate(item.id, {
-      status: "confirmed",
-      type: "decision",
-      assigneeIds,
-      deadline: deadline || null,
-    });
-  };
-
   const handleSaveEdit = () => {
     if (item.type === "task_candidate") {
       // タスク候補は内容・担当者・期限だけ保存し、登録は通常モードのボタンで行う
@@ -106,11 +97,7 @@ export function ReviewItemCard({
   };
 
   const primaryLabel =
-    item.type === "open_issue"
-      ? "決定"
-      : item.type === "task_candidate"
-        ? "タスクとして登録"
-        : "承認";
+    item.type === "task_candidate" ? "タスクとして登録" : "承認";
 
   const saveEditLabel = "保存";
 
@@ -288,16 +275,14 @@ export function ReviewItemCard({
               className="text-xs"
               disabled={primaryDisabled}
               onClick={
-                item.type === "open_issue"
-                  ? handleDecide
-                  : item.type === "task_candidate"
-                    ? createTaskAndConfirm
-                    : () =>
-                        onUpdate(item.id, {
-                          status: "confirmed",
-                          assigneeIds,
-                          deadline: deadline || null,
-                        })
+                item.type === "task_candidate"
+                  ? createTaskAndConfirm
+                  : () =>
+                      onUpdate(item.id, {
+                        status: "confirmed",
+                        assigneeIds,
+                        deadline: deadline || null,
+                      })
               }
             >
               {isCreating ? "登録中..." : primaryLabel}

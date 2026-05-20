@@ -23,9 +23,7 @@ export function useReviewItems() {
 
   const addItem = useCallback(
     (draft: Omit<ReviewItem, "id" | "status">) => {
-      // 決定事項はレビュー不要のため追加時点で確定済みにする
-      const status = draft.type === "decision" ? "confirmed" : "pending";
-      save([{ ...draft, id: crypto.randomUUID(), status }, ...items]);
+      save([{ ...draft, id: crypto.randomUUID(), status: "pending" }, ...items]);
     },
     [items, save],
   );

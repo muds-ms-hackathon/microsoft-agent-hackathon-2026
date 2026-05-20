@@ -101,10 +101,7 @@ export function RecurringMeetingDetailView({
 
   const { items: allReviewItems } = useReviewItems();
   const pendingReviewCount = allReviewItems.filter(
-    (item) =>
-      item.recurringMeetingId === id &&
-      item.status === "pending" &&
-      item.type !== "decision",
+    (item) => item.recurringMeetingId === id && item.status === "pending",
   ).length;
 
   const statusArr = parseStatusParam(search.status);

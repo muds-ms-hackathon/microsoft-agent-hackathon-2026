@@ -102,7 +102,7 @@ describe("ReviewItemCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("open_issue は「決定」ボタンを表示する", () => {
+  it("open_issue は「承認」ボタンを表示する", () => {
     renderWithQuery(
       <ReviewItemCard
         item={makeItem({ type: "open_issue" })}
@@ -110,7 +110,7 @@ describe("ReviewItemCard", () => {
         orgId="org-1"
       />,
     );
-    expect(screen.getByRole("button", { name: "決定" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "承認" })).toBeInTheDocument();
   });
 
   it("ambiguity は「タスクにする」「未決事項にする」「破棄」の3択を表示する", () => {

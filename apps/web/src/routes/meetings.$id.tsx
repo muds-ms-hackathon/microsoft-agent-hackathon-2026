@@ -105,7 +105,7 @@ export function MeetingDetailView({
   const meetingReviewItems = allReviewItems.filter((i) => i.meetingId === id);
   // 決定事項は自動確定のためレビュー対象外
   const pendingCount = meetingReviewItems.filter(
-    (i) => i.status === "pending" && i.type !== "decision",
+    (i) => i.status === "pending",
   ).length;
 
   const statusArr = parseStatusParam(search.status);

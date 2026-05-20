@@ -84,19 +84,15 @@ export function ReviewView({
     });
   };
 
-  // URLパラメータで絞り込んだ対象アイテム（pending・非決定事項）
   const filtered = items.filter((item) => {
     if (item.status !== "pending") return false;
-    if (item.type === "decision") return false;
     if (selectedRmId && item.recurringMeetingId !== selectedRmId) return false;
     if (search.meetingId && item.meetingId !== search.meetingId) return false;
     if (typeArr && !typeArr.includes(item.type)) return false;
     return true;
   });
 
-  // 対象スコープ内の全アイテム（確定済み含む、決定事項除く）
   const scopedItems = items.filter((item) => {
-    if (item.type === "decision") return false;
     if (selectedRmId && item.recurringMeetingId !== selectedRmId) return false;
     if (search.meetingId && item.meetingId !== search.meetingId) return false;
     return true;

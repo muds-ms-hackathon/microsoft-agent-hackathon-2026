@@ -50,8 +50,8 @@ export const REVIEW_ITEM_TYPES: ReviewItemType[] = [
   "ambiguity",
 ];
 
-// 決定事項は確定済みのため、レビュー操作の対象は残り3種別
 export const REVIEWABLE_TYPES: ReviewItemType[] = [
+  "decision",
   "open_issue",
   "task_candidate",
   "ambiguity",
