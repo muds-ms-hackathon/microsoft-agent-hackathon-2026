@@ -151,18 +151,29 @@ def _on_consumer_done(task: asyncio.Task) -> None:
 async def lifespan(app: FastAPI):
     global _openai_client, _deployment_name
 
+    # 必須環境変数を一括検証する（クライアント生成より前に全チェック）
     deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
     if not deployment:
         raise RuntimeError("AZURE_OPENAI_DEPLOYMENT_NAME が未設定です")
-    _deployment_name = deployment
+
+    api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("AZURE_OPENAI_API_KEY が未設定です")
+
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+    if not endpoint:
+        raise RuntimeError("AZURE_OPENAI_ENDPOINT が未設定です")
 
     internal_secret = os.environ.get("INTERNAL_API_SECRET")
     if not internal_secret:
         raise RuntimeError("INTERNAL_API_SECRET が未設定です")
 
-    client = _create_openai_client()  # ローカル変数に受ける
-    _openai_client = client  # グローバル変数にセット
-    task = None
+    # クライアント生成が成功してからグローバル変数を書き換える
+    client = _create_openai_client()
+    _openai_client = client
+    _deployment_name = deployment
+
+    task: asyncio.Task | None = None
 
     try:
         connection_string = os.getenv("AZURE_SERVICE_BUS_CONNECTION_STRING")
@@ -188,6 +199,7 @@ async def lifespan(app: FastAPI):
                 pass
         await client.close()
         _openai_client = None
+        _deployment_name = ""
 
 
 app = FastAPI(title="AI Service", lifespan=lifespan)
