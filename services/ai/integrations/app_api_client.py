@@ -17,7 +17,7 @@ class AppApiClient:
         return {"x-internal-secret": self._secret}
 
     async def get_analysis_run_input(self, analysis_run_id: str) -> dict:
-        """GET /analysis-runs/:id/input"""
+        """GET /internal/analysis-runs/:id/input"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.base_url}/internal/analysis-runs/{analysis_run_id}/input",
@@ -30,7 +30,7 @@ class AppApiClient:
     async def update_analysis_run_result(
         self, analysis_run_id: str, result: dict
     ) -> None:
-        """PATCH /analysis-runs/:id/result"""
+        """PATCH /internal/analysis-runs/:id/result"""
         async with httpx.AsyncClient() as client:
             response = await client.patch(
                 f"{self.base_url}/internal/analysis-runs/{analysis_run_id}/result",

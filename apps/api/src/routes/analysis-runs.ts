@@ -3,7 +3,6 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 
-// AI Service 専用の内部エンドポイント。Docker network 内の内部通信として信頼するため認証不要。
 export const analysisRunsRoute = new Hono()
   // GET /:id/input — AI Service が解析に必要な情報を全て取得する
   .get("/:id/input", async (c) => {
