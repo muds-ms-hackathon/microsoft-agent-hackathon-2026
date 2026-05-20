@@ -2,6 +2,8 @@ import json
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from main import _handle_message
 from schemas.analysis import AnalysisRunResult
 
@@ -21,9 +23,7 @@ _FAKE_RESULT = AnalysisRunResult(
 
 def _make_message(analysis_run_id: str = "run-1") -> MagicMock:
     msg = MagicMock()
-    msg.__str__ = MagicMock(  # type: ignore[method-assign]
-        return_value=json.dumps({"analysis_run_id": analysis_run_id})
-    )
+    msg.body = json.dumps({"analysis_run_id": analysis_run_id}).encode("utf-8")
     return msg
 
 
@@ -61,7 +61,8 @@ async def test_handle_message_analyze_failure_updates_failed_status():
                 "main.analyze_meeting",
                 new=AsyncMock(side_effect=RuntimeError("解析失敗")),
             ):
-                await _handle_message(msg)
+                with pytest.raises(RuntimeError, match="解析失敗"):
+                    await _handle_message(msg)
 
     mock_api.update_analysis_run_result.assert_awaited_once()
     call_args = mock_api.update_analysis_run_result.call_args
@@ -86,6 +87,7 @@ async def test_handle_message_update_failure_logs_error(caplog):
                 new=AsyncMock(side_effect=RuntimeError("解析失敗")),
             ):
                 with caplog.at_level(logging.ERROR, logger="main"):
-                    await _handle_message(msg)
+                    with pytest.raises(RuntimeError):
+                        await _handle_message(msg)
 
     assert any("エラー保存にも失敗" in r.message for r in caplog.records)

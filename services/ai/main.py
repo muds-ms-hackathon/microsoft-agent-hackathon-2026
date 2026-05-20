@@ -111,29 +111,36 @@ def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
 
 async def _handle_message(message: ServiceBusReceivedMessage) -> None:
     """Service Busからのメッセージを受信し、解析パイプラインを実行する。"""
-    body = json.loads(str(message))
-    analysis_run_id = body["analysis_run_id"]
-
+    # 取り出し失敗で Consumer が落ちないよう、パース段階で完結させる
+    try:
+        body = json.loads(_parse_message_body(message).decode("utf-8"))
+    except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as e:
+        logger.error("メッセージのデコードに失敗 (破棄): %s", e)
+        return
+    if not isinstance(body, dict):
+        logger.error("メッセージボディが dict ではありません: %s", type(body).__name__)
+        return
+    analysis_run_id = body.get("analysis_run_id")
+    if not isinstance(analysis_run_id, str) or not analysis_run_id.strip():
+        logger.error(
+            "analysis_run_id が欠落/不正です (破棄): keys=%s", list(body.keys())
+        )
+        return
     api_client = AppApiClient()
     llm_client = AzureOpenAIClient()
-
     try:
-        # 解析に必要な入力情報を取得する
         input_data = await api_client.get_analysis_run_input(analysis_run_id)
         job = AnalysisJobInput(**input_data)
-
-        # パイプライン実行
         result = await analyze_meeting(job, llm_client)
-
-        # 結果を保存する
         await api_client.update_analysis_run_result(
             analysis_run_id,
             result.model_dump(exclude_none=True),
         )
         logger.info(
-            "解析完了 analysis_run_id=%s status=%s", analysis_run_id, result.status
+            "解析完了 analysis_run_id=%s status=%s",
+            analysis_run_id,
+            result.status,
         )
-
     except Exception as e:
         logger.error("解析失敗 analysis_run_id=%s: %s", analysis_run_id, e)
         try:
@@ -147,6 +154,7 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
             )
         except Exception:
             logger.exception("エラー保存にも失敗 analysis_run_id=%s", analysis_run_id)
+        raise  # Consumer に失敗を伝えて再配送させる
 
 
 def _on_consumer_done(task: asyncio.Task) -> None:
