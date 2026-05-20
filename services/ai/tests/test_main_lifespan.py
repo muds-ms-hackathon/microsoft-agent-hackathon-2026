@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 _SB_CONN_KEY = "AZURE_SERVICE_BUS_CONNECTION_STRING"
 _DEPLOY_KEY = "AZURE_OPENAI_DEPLOYMENT_NAME"
 _DEPLOY_VAL = "test-deployment"
+_SECRET_KEY = "INTERNAL_API_SECRET"
+_SECRET_VAL = "test-secret"
 
 
 def _mock_openai_client():
@@ -20,6 +22,7 @@ async def test_lifespan_warns_when_env_not_set(caplog):
 
     env = {k: v for k, v in os.environ.items() if k != _SB_CONN_KEY}
     env[_DEPLOY_KEY] = _DEPLOY_VAL
+    env[_SECRET_KEY] = _SECRET_VAL
     with patch("main._create_openai_client", return_value=_mock_openai_client()):
         with patch.dict(os.environ, env):
             with caplog.at_level(logging.WARNING, logger="main"):
@@ -46,6 +49,7 @@ async def test_lifespan_starts_consumer_when_env_set():
         _SB_CONN_KEY: "fake://conn",
         "AZURE_SERVICE_BUS_QUEUE_NAME": "test-queue",
         _DEPLOY_KEY: _DEPLOY_VAL,
+        _SECRET_KEY: _SECRET_VAL,
     }
     with patch("main._create_openai_client", return_value=_mock_openai_client()):
         with patch.dict(os.environ, env):
@@ -74,7 +78,7 @@ async def test_lifespan_cancels_task_on_shutdown():
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn", _DEPLOY_KEY: _DEPLOY_VAL}
+    env = {_SB_CONN_KEY: "fake://conn", _DEPLOY_KEY: _DEPLOY_VAL, _SECRET_KEY: _SECRET_VAL}
     with patch("main._create_openai_client", return_value=_mock_openai_client()):
         with patch.dict(os.environ, env):
             with patch("main.ServiceBusConsumer", return_value=mock_consumer):
@@ -95,7 +99,7 @@ async def test_lifespan_logs_error_on_consumer_failure(caplog):
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn", _DEPLOY_KEY: _DEPLOY_VAL}
+    env = {_SB_CONN_KEY: "fake://conn", _DEPLOY_KEY: _DEPLOY_VAL, _SECRET_KEY: _SECRET_VAL}
     with patch("main._create_openai_client", return_value=_mock_openai_client()):
         with patch.dict(os.environ, env):
             with patch("main.ServiceBusConsumer", return_value=mock_consumer):
