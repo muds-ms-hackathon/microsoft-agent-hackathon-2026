@@ -51,9 +51,7 @@ export function AssigneeDropdown({
       >
         <UserIcon size={12} className="text-muted-foreground shrink-0" />
         <span className="flex-1 truncate text-foreground">
-          {selectedNames.length > 0
-            ? selectedNames.join(", ")
-            : "担当者を選択"}
+          {selectedNames.length > 0 ? selectedNames.join(", ") : "担当者を選択"}
         </span>
         <ChevronDown size={12} className="text-muted-foreground shrink-0" />
       </button>
@@ -86,9 +84,7 @@ export function AssigneeDropdown({
                         : "border-border",
                     )}
                   >
-                    {checked && (
-                      <Check size={10} className="text-background" />
-                    )}
+                    {checked && <Check size={10} className="text-background" />}
                   </span>
                   <span className={cn(checked && "font-medium")}>
                     {m.displayName}

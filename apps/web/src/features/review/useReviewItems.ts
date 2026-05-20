@@ -23,7 +23,10 @@ export function useReviewItems() {
 
   const addItem = useCallback(
     (draft: Omit<ReviewItem, "id" | "status">) => {
-      save([{ ...draft, id: crypto.randomUUID(), status: "pending" }, ...items]);
+      save([
+        { ...draft, id: crypto.randomUUID(), status: "pending" },
+        ...items,
+      ]);
     },
     [items, save],
   );

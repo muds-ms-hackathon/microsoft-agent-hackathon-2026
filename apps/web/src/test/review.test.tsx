@@ -81,7 +81,9 @@ beforeEach(() => {
   vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
     mockJson([]),
   );
-  vi.mocked(api.tasks.$post).mockResolvedValue(mockJson({ id: "task-new" }, 201));
+  vi.mocked(api.tasks.$post).mockResolvedValue(
+    mockJson({ id: "task-new" }, 201),
+  );
 });
 
 afterEach(() => {
@@ -196,15 +198,32 @@ describe("ReviewItemCard", () => {
   it("「却下」で status:rejected を onUpdate に渡す", async () => {
     const onUpdate = vi.fn();
     renderWithQuery(
-      <ReviewItemCard
-        item={makeItem()}
-        onUpdate={onUpdate}
-        orgId="org-1"
-      />,
+      <ReviewItemCard item={makeItem()} onUpdate={onUpdate} orgId="org-1" />,
     );
 
     await userEvent.click(screen.getByRole("button", { name: "却下" }));
     expect(onUpdate).toHaveBeenCalledWith("item-1", { status: "rejected" });
+  });
+
+  it("open_issue の「承認」で status:confirmed のみ onUpdate に渡す（type 変換なし）", async () => {
+    const onUpdate = vi.fn();
+    renderWithQuery(
+      <ReviewItemCard
+        item={makeItem({ type: "open_issue" })}
+        onUpdate={onUpdate}
+        orgId="org-1"
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "承認" }));
+    expect(onUpdate).toHaveBeenCalledWith("item-1", {
+      status: "confirmed",
+      assigneeIds: [],
+      deadline: null,
+    });
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      "item-1",
+      expect.objectContaining({ type: "decision" }),
+    );
   });
 });
 
@@ -253,7 +272,11 @@ describe("ReviewView", () => {
 
   it("種別フィルタで指定した種別のみ表示する", () => {
     const items = [
-      makeItem({ id: "i1", type: "task_candidate", content: "このタスクを確認" }),
+      makeItem({
+        id: "i1",
+        type: "task_candidate",
+        content: "このタスクを確認",
+      }),
       makeItem({ id: "i2", type: "open_issue", content: "この課題を確認" }),
     ];
 

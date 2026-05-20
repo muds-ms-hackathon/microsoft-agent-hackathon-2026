@@ -202,7 +202,10 @@ export function RecurringMeetingDetailView({
             </p>
           </div>
           <Link to="/review" search={{ recurringMeetingId: id }}>
-            <Button size="sm" className="gap-1 bg-orange-600 hover:bg-orange-700 text-white border-0">
+            <Button
+              size="sm"
+              className="gap-1 bg-orange-600 hover:bg-orange-700 text-white border-0"
+            >
               レビューする
               <ChevronRight size={14} />
             </Button>
