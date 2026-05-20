@@ -17,15 +17,15 @@ def parse_json_output(raw: str) -> dict | list:
     return cast(dict[Any, Any] | list[Any], json.loads(cleaned))
 
 
-def run_llm_call(
+async def run_llm_call(
     client: LLMClient, call_name: str, prompt: str
 ) -> tuple[str, dict | list]:
     """
-    LLMを呼び出し、raw textとパース済みdictを返す。
+    LLMを非同期で呼び出し、raw textとパース済みdictを返す。
     パース失敗時はraw textとエラー情報をdictで返す（例外は送出しない）。
     """
     logger.info("[%s] 実行中...", call_name)
-    raw = client.call(prompt)
+    raw = await client.call(prompt)
     logger.debug("[%s] OUTPUT: %.200s", call_name, raw)
 
     try:

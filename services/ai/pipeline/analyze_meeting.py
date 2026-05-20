@@ -161,7 +161,7 @@ async def analyze_meeting(
             prompts["call1_keywords"]["template"],
             transcript=job.transcript,
         )
-        raw1, parsed1 = run_llm_call(llm_client, "call1", prompt1)
+        raw1, parsed1 = await run_llm_call(llm_client, "call1", prompt1)
         raw_outputs["call1"] = raw1
         if isinstance(parsed1, dict) and "_parse_error" in parsed1:
             return _failed("call1", parsed1, raw_outputs, input_hash)
@@ -192,7 +192,7 @@ async def analyze_meeting(
             rag_context=rag_context,
             prev_open_issues=prev_open_issues,
         )
-        raw2, parsed2 = run_llm_call(llm_client, "call2", prompt2)
+        raw2, parsed2 = await run_llm_call(llm_client, "call2", prompt2)
         raw_outputs["call2"] = raw2
         if isinstance(parsed2, dict) and "_parse_error" in parsed2:
             return _failed("call2", parsed2, raw_outputs, input_hash)
@@ -227,7 +227,7 @@ async def analyze_meeting(
             rag_context=rag_context,
             prev_tasks=prev_tasks,
         )
-        raw3, parsed3 = run_llm_call(llm_client, "call3", prompt3)
+        raw3, parsed3 = await run_llm_call(llm_client, "call3", prompt3)
         raw_outputs["call3"] = raw3
         if isinstance(parsed3, dict) and "_parse_error" in parsed3:
             return _failed("call3", parsed3, raw_outputs, input_hash)
@@ -255,7 +255,7 @@ async def analyze_meeting(
             transcription_quality=job.transcription_quality,
             context_summary=context_summary,
         )
-        raw4a, parsed4a = run_llm_call(llm_client, "call4a", prompt4a)
+        raw4a, parsed4a = await run_llm_call(llm_client, "call4a", prompt4a)
         raw_outputs["call4a"] = raw4a
         ambiguities_quality: list[dict] = (
             parsed4a.get("ambiguities_quality", [])
@@ -268,7 +268,7 @@ async def analyze_meeting(
             prompts["call4b_content_ambiguities"]["template"],
             context_summary=context_summary,
         )
-        raw4b, parsed4b = run_llm_call(llm_client, "call4b", prompt4b)
+        raw4b, parsed4b = await run_llm_call(llm_client, "call4b", prompt4b)
         raw_outputs["call4b"] = raw4b
         ambiguities_content: list[dict] = (
             parsed4b.get("ambiguities_content", [])
@@ -289,7 +289,7 @@ async def analyze_meeting(
                 meeting_date=job.meeting_date,
                 due_date_raws=due_date_raws,
             )
-            raw5, parsed5 = run_llm_call(llm_client, "call5", prompt5)
+            raw5, parsed5 = await run_llm_call(llm_client, "call5", prompt5)
             raw_outputs["call5"] = raw5
             if isinstance(parsed5, dict) and "_parse_error" not in parsed5:
                 conversions = parsed5.get("conversions", [])
@@ -332,7 +332,7 @@ async def analyze_meeting(
             suggested_participants=suggested_participants,
             change_summary=change_summary,
         )
-        raw6, parsed6 = run_llm_call(llm_client, "call6", prompt6)
+        raw6, parsed6 = await run_llm_call(llm_client, "call6", prompt6)
         raw_outputs["call6"] = raw6
         summary = ""
         recommended_agenda: list[dict] = []
