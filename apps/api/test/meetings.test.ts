@@ -476,8 +476,6 @@ describe("POST /meetings/:id/analyze", () => {
       }),
     );
     expect(mockSendToServiceBus).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
       expect.objectContaining({
         analysis_run_id: "run-1",
         meeting_id: "mtg-1",
