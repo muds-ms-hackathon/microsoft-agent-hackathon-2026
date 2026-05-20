@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// DB をモックする（analysis-runs は認証不要なので auth モックは不要）
+// DB をモックする
 vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     meetingAnalysisRun: {
@@ -19,7 +19,10 @@ const mockRunFindUnique = vi.mocked(prisma.meetingAnalysisRun.findUnique);
 const mockRunFindFirst = vi.mocked(prisma.meetingAnalysisRun.findFirst);
 const mockRunUpdate = vi.mocked(prisma.meetingAnalysisRun.update);
 
-// GET /analysis-runs/:id/input で返る include の型
+const SECRET = "test-secret";
+const AUTH_HEADER = { "x-internal-secret": SECRET };
+
+// GET /internal/analysis-runs/:id/input で返る include の型
 type RunWithMeeting = Prisma.MeetingAnalysisRunGetPayload<{
   include: { meeting: { include: { speakers: true } } };
 }>;
@@ -80,13 +83,18 @@ const baseRun = {
   meeting: baseMeeting,
 };
 
-describe("GET /analysis-runs/:id/input", () => {
-  beforeEach(() => vi.clearAllMocks());
+describe("GET /internal/analysis-runs/:id/input", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.INTERNAL_API_SECRET = SECRET;
+  });
 
   it("存在する解析ランの入力情報を 200 で返す", async () => {
     mockRunFindUnique.mockResolvedValue(baseRun as RunWithMeeting);
 
-    const res = await app.request("/analysis-runs/run-1/input");
+    const res = await app.request("/internal/analysis-runs/run-1/input", {
+      headers: AUTH_HEADER,
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       analysis_run_id: string;
@@ -125,7 +133,9 @@ describe("GET /analysis-runs/:id/input", () => {
       reportJson: { summary: "前回サマリー" },
     } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
 
-    const res = await app.request("/analysis-runs/run-1/input");
+    const res = await app.request("/internal/analysis-runs/run-1/input", {
+      headers: AUTH_HEADER,
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       previous_meeting_id: string;
@@ -154,7 +164,9 @@ describe("GET /analysis-runs/:id/input", () => {
     } as RunWithMeeting);
     mockRunFindFirst.mockResolvedValue(null);
 
-    const res = await app.request("/analysis-runs/run-1/input");
+    const res = await app.request("/internal/analysis-runs/run-1/input", {
+      headers: AUTH_HEADER,
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { previous_report_json: null };
     expect(body.previous_report_json).toBeNull();
@@ -162,13 +174,23 @@ describe("GET /analysis-runs/:id/input", () => {
 
   it("存在しない解析ランは 404", async () => {
     mockRunFindUnique.mockResolvedValue(null);
-    const res = await app.request("/analysis-runs/missing/input");
+    const res = await app.request("/internal/analysis-runs/missing/input", {
+      headers: AUTH_HEADER,
+    });
     expect(res.status).toBe(404);
+  });
+
+  it("認証ヘッダなしは 401", async () => {
+    const res = await app.request("/internal/analysis-runs/run-1/input");
+    expect(res.status).toBe(401);
   });
 });
 
-describe("PATCH /analysis-runs/:id/result", () => {
-  beforeEach(() => vi.clearAllMocks());
+describe("PATCH /internal/analysis-runs/:id/result", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.INTERNAL_API_SECRET = SECRET;
+  });
 
   const existingRun = {
     ...baseRun,
@@ -183,9 +205,9 @@ describe("PATCH /analysis-runs/:id/result", () => {
       alertLevel: "low",
     } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
 
-    const res = await app.request("/analysis-runs/run-1/result", {
+    const res = await app.request("/internal/analysis-runs/run-1/result", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
         status: "completed",
         summary: "解析サマリー",
@@ -217,9 +239,9 @@ describe("PATCH /analysis-runs/:id/result", () => {
       errorMessage: "解析エラー",
     } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
 
-    const res = await app.request("/analysis-runs/run-1/result", {
+    const res = await app.request("/internal/analysis-runs/run-1/result", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
         status: "failed",
         error_message: "解析エラー",
@@ -241,9 +263,9 @@ describe("PATCH /analysis-runs/:id/result", () => {
   });
 
   it("不正な status は 400", async () => {
-    const res = await app.request("/analysis-runs/run-1/result", {
+    const res = await app.request("/internal/analysis-runs/run-1/result", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({ status: "queued" }),
     });
     expect(res.status).toBe(400);
@@ -252,12 +274,22 @@ describe("PATCH /analysis-runs/:id/result", () => {
 
   it("存在しない解析ランは 404", async () => {
     mockRunFindUnique.mockResolvedValue(null);
-    const res = await app.request("/analysis-runs/missing/result", {
+    const res = await app.request("/internal/analysis-runs/missing/result", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
+      body: JSON.stringify({ status: "completed" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockRunUpdate).not.toHaveBeenCalled();
+  });
+
+  it("認証ヘッダなしは 401", async () => {
+    const res = await app.request("/internal/analysis-runs/run-1/result", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "completed" }),
     });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
     expect(mockRunUpdate).not.toHaveBeenCalled();
   });
 });
