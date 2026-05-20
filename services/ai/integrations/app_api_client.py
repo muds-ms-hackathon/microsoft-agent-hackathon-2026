@@ -20,7 +20,7 @@ class AppApiClient:
         """GET /analysis-runs/:id/input"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.base_url}/analysis-runs/{analysis_run_id}/input",
+                f"{self.base_url}/internal/analysis-runs/{analysis_run_id}/input",
                 headers=self._headers,
                 timeout=30.0,
             )
@@ -33,7 +33,7 @@ class AppApiClient:
         """PATCH /analysis-runs/:id/result"""
         async with httpx.AsyncClient() as client:
             response = await client.patch(
-                f"{self.base_url}/analysis-runs/{analysis_run_id}/result",
+                f"{self.base_url}/internal/analysis-runs/{analysis_run_id}/result",
                 json=result,
                 headers=self._headers,
                 timeout=30.0,
