@@ -315,7 +315,11 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
         tasks: [{ title: "タスク1" }],
         ambiguousInfos: [
           { body: "曖昧な箇所1", severity: "high", status: "resolved" },
-          { body: "曖昧な箇所2", ambiguityType: "unclear_scope", status: "rejected" },
+          {
+            body: "曖昧な箇所2",
+            ambiguityType: "unclear_scope",
+            status: "rejected",
+          },
         ],
       }),
     });
