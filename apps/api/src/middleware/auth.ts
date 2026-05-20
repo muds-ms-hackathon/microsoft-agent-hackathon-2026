@@ -1,6 +1,7 @@
 import { Prisma, type User } from "@prisma/client";
 import type { MiddlewareHandler } from "hono";
 import { jwtVerify } from "jose";
+import { normalizeEmail } from "../lib/email.js";
 import { getAudience, getIssuerUrl, getJwks } from "../lib/oidc.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -47,9 +48,9 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
   }
 
   // IdP が返す email は大文字や前後空白を含み得るため、保存前に正規化する。
-  // 招待 (`OrganizationInvitation.email`) も小文字化済みで保存しているため、
+  // 招待 (`OrganizationInvitation.email`) も同じ normalizeEmail で保存しているため、
   // 比較経路全体で正規化を一貫させる必要がある。
-  const email = rawEmail.trim().toLowerCase();
+  const email = normalizeEmail(rawEmail);
 
   // まず findUnique で取得し、差分があるときのみ update / 不在なら create を発行する。
   // upsert を毎リクエスト走らせると、同一ユーザーに対する並列リクエストで
