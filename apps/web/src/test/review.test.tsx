@@ -170,23 +170,27 @@ describe("ReviewItemCard", () => {
     });
   });
 
-  it("open_issue の「保存して決定」で status:confirmed を onUpdate に渡す", async () => {
+  it("open_issue の「保存」で content・assigneeIds・deadline を onUpdate に渡す", async () => {
     const onUpdate = vi.fn();
     renderWithQuery(
       <ReviewItemCard
-        item={makeItem({ type: "open_issue" })}
+        item={makeItem({ type: "open_issue", content: "元の課題" })}
         onUpdate={onUpdate}
         orgId="org-1"
       />,
     );
 
     await userEvent.click(screen.getByRole("button", { name: "修正" }));
-    await userEvent.click(screen.getByRole("button", { name: "保存して決定" }));
+    const textarea = screen.getByRole("textbox");
+    await userEvent.clear(textarea);
+    await userEvent.type(textarea, "修正後の課題");
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
-    expect(onUpdate).toHaveBeenCalledWith(
-      "item-1",
-      expect.objectContaining({ status: "confirmed" }),
-    );
+    expect(onUpdate).toHaveBeenCalledWith("item-1", {
+      content: "修正後の課題",
+      assigneeIds: [],
+      deadline: null,
+    });
   });
 
   it("「却下」で status:rejected を onUpdate に渡す", async () => {

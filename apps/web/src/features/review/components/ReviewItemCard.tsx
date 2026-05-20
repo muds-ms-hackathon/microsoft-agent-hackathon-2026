@@ -83,8 +83,6 @@ export function ReviewItemCard({
       });
     } else if (item.type === "open_issue") {
       onUpdate(item.id, {
-        status: "confirmed",
-        type: "decision",
         content: editContent,
         assigneeIds,
         deadline: deadline || null,
@@ -114,10 +112,7 @@ export function ReviewItemCard({
         ? "タスクとして登録"
         : "承認";
 
-  const saveEditLabel =
-    item.type === "open_issue"
-      ? "保存して決定"
-      : "保存";
+  const saveEditLabel = "保存";
 
   const primaryDisabled =
     item.type === "task_candidate" ? isCreating || !orgId : false;
