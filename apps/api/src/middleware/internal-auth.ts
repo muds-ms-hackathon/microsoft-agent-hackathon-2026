@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { MiddlewareHandler } from "hono";
 
 export const internalAuth: MiddlewareHandler = async (c, next) => {
@@ -7,7 +8,16 @@ export const internalAuth: MiddlewareHandler = async (c, next) => {
   }
 
   const header = c.req.header("x-internal-secret");
-  if (header !== secret) {
+  if (!header) {
+    return c.json({ error: "認証に失敗しました" }, 401);
+  }
+
+  const headerBuffer = Buffer.from(header);
+  const secretBuffer = Buffer.from(secret);
+  if (
+    headerBuffer.length !== secretBuffer.length ||
+    !crypto.timingSafeEqual(headerBuffer, secretBuffer)
+  ) {
     return c.json({ error: "認証に失敗しました" }, 401);
   }
 
