@@ -5,6 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import httpx
 from azure.servicebus import ServiceBusReceivedMessage
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +43,21 @@ def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
     raise TypeError(f"未対応の message.body 型: {type(body)}")
 
 
+_VALID_PRIORITY = {"required", "optional"}
+_VALID_SEVERITY = {"high", "medium", "low"}
+_VALID_AMBIGUITY_TYPE = {
+    "missing_speaker",
+    "transcription_error_low",
+    "transcription_error_high",
+    "no_assignee",
+    "no_deadline_mentioned",
+    "no_deadline_absolute",
+    "unclear_decision",
+    "insufficient_basis",
+    "unclear_scope",
+}
+
+
 async def _handle_message(message: ServiceBusReceivedMessage) -> None:
     """Service Busからのメッセージを受信し、解析パイプラインを実行する。"""
     # 取り出し失敗で Consumer が落ちないよう、パース段階で完結させる
@@ -61,10 +77,56 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
         return
     api_client = AppApiClient()
     llm_client = AzureOpenAIClient()
+    complete_attempted = False
+    complete_done = False
     try:
         input_data = await api_client.get_analysis_run_input(analysis_run_id)
         job = AnalysisJobInput(**input_data)
         result = await analyze_meeting(job, llm_client)
+        if result.status == "completed" and result.report_json:
+            report = result.report_json
+            decision_items = []
+            for d in report.get("decisions", []):
+                if not isinstance(d.get("topic"), str) or not d["topic"]:
+                    continue
+                di: dict = {"title": d["topic"]}
+                if isinstance(d.get("content"), str):
+                    di["body"] = d["content"]
+                if isinstance(d.get("source_quote"), str):
+                    di["sourceQuote"] = d["source_quote"]
+                decision_items.append(di)
+            task_items = []
+            for t in report.get("tasks", []):
+                if not isinstance(t.get("title"), str) or not t["title"]:
+                    continue
+                ti: dict = {"title": t["title"]}
+                if isinstance(t.get("body"), str):
+                    ti["body"] = t["body"]
+                if isinstance(t.get("source_quote"), str):
+                    ti["sourceQuote"] = t["source_quote"]
+                if t.get("priority") in _VALID_PRIORITY:
+                    ti["priority"] = t["priority"]
+                task_items.append(ti)
+            ambiguous_infos = []
+            for a in report.get("ambiguities", []):
+                if not isinstance(a.get("body"), str) or not a["body"]:
+                    continue
+                ai: dict = {"body": a["body"]}
+                if isinstance(a.get("source_quote"), str):
+                    ai["sourceQuote"] = a["source_quote"]
+                if a.get("ambiguity_type") in _VALID_AMBIGUITY_TYPE:
+                    ai["ambiguityType"] = a["ambiguity_type"]
+                if a.get("severity") in _VALID_SEVERITY:
+                    ai["severity"] = a["severity"]
+                ambiguous_infos.append(ai)
+            complete_attempted = True
+            await api_client.complete_analysis_run(
+                analysis_run_id,
+                decision_items=decision_items,
+                tasks=task_items,
+                ambiguous_infos=ambiguous_infos,
+            )
+            complete_done = True
         await api_client.update_analysis_run_result(
             analysis_run_id,
             result.model_dump(exclude_none=True),
@@ -76,18 +138,59 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
         )
     except Exception as e:
         logger.error("解析失敗 analysis_run_id=%s: %s", analysis_run_id, e)
-        try:
-            await api_client.update_analysis_run_result(
+        if not complete_attempted:
+            # complete 未呼び出しなので失敗確定、failed に落として再配送させる
+            try:
+                await api_client.update_analysis_run_result(
+                    analysis_run_id,
+                    {
+                        "status": "failed",
+                        "error_message": str(e),
+                        "failed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "エラー保存にも失敗 analysis_run_id=%s", analysis_run_id
+                )
+            raise
+        elif complete_done:
+            # complete 成功後に update_analysis_run_result が失敗、再配送で update を再試行させる
+            logger.error(
+                "complete済みだが詳細結果の保存に失敗 analysis_run_id=%s",
                 analysis_run_id,
-                {
-                    "status": "failed",
-                    "error_message": str(e),
-                    "failed_at": datetime.now(timezone.utc).isoformat(),
-                },
             )
-        except Exception:
-            logger.exception("エラー保存にも失敗 analysis_run_id=%s", analysis_run_id)
-        raise  # Consumer に失敗を伝えて再配送させる
+            raise
+        elif isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+            # 4xx は恒久失敗：failed 保存後、raise せずメッセージを完了させる（再配送ループを防ぐ）
+            logger.error(
+                "complete が 4xx で拒否 analysis_run_id=%s: %s",
+                analysis_run_id,
+                e,
+            )
+            try:
+                await api_client.update_analysis_run_result(
+                    analysis_run_id,
+                    {
+                        "status": "failed",
+                        "error_message": str(e),
+                        "failed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "エラー保存にも失敗 analysis_run_id=%s", analysis_run_id
+                )
+                raise  # failed 保存に失敗した場合は再配送させる
+            # raise しない → failed 保存成功時のみ Consumer がメッセージを complete
+        else:
+            # 5xx / 通信断 / timeout → DB 状態不明のため再配送に委ねる
+            logger.error(
+                "complete呼び出し失敗（DB状態不明）再配送に委ねる analysis_run_id=%s: %s",
+                analysis_run_id,
+                e,
+            )
+            raise
 
 
 def _on_consumer_done(task: asyncio.Task) -> None:
