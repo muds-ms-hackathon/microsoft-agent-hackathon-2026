@@ -85,10 +85,6 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(result.item);
     }
 
-    if (!input.resolutionType) {
-      return c.json({ error: "resolutionType を指定してください" }, 400);
-    }
-
     if (input.resolutionType === "discarded") {
       const result = await prisma.$transaction(async (tx) => {
         const { count } = await tx.ambiguousInfo.updateMany({
