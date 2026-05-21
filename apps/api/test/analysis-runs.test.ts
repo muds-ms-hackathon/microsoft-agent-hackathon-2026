@@ -8,6 +8,9 @@ vi.mock("../src/lib/prisma.js", () => ({
       findFirst: vi.fn(),
       update: vi.fn(),
     },
+    topicRequest: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -18,6 +21,7 @@ import { prisma } from "../src/lib/prisma.js";
 const mockRunFindUnique = vi.mocked(prisma.meetingAnalysisRun.findUnique);
 const mockRunFindFirst = vi.mocked(prisma.meetingAnalysisRun.findFirst);
 const mockRunUpdate = vi.mocked(prisma.meetingAnalysisRun.update);
+const mockTopicRequestFindMany = vi.mocked(prisma.topicRequest.findMany);
 
 const SECRET = "test-secret";
 const AUTH_HEADER = { "x-internal-secret": SECRET };
@@ -87,6 +91,9 @@ describe("GET /internal/analysis-runs/:id/input", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.INTERNAL_API_SECRET = SECRET;
+    // topic-requests のデフォルトは空配列。AI Service 側が必ず key を取得できるよう、
+    // 0 件の Meeting でも user_topic_requests を含めて返す挙動を維持する。
+    mockTopicRequestFindMany.mockResolvedValue([]);
   });
 
   it("存在する解析ランの入力情報を 200 で返す", async () => {
@@ -104,6 +111,7 @@ describe("GET /internal/analysis-runs/:id/input", () => {
       transcription_quality: string;
       speakers: Array<{ speaker_key: string; name: string }>;
       previous_report_json: null;
+      user_topic_requests: unknown[];
     };
     expect(body.analysis_run_id).toBe("run-1");
     expect(body.meeting_id).toBe("mtg-1");
@@ -114,6 +122,72 @@ describe("GET /internal/analysis-runs/:id/input", () => {
     expect(body.speakers[0]?.speaker_key).toBe("spk-1");
     expect(body.speakers[0]?.name).toBe("田中");
     expect(body.previous_report_json).toBeNull();
+    // topic-requests 未登録時でも user_topic_requests は空配列で必ず含まれる
+    expect(body.user_topic_requests).toEqual([]);
+  });
+
+  it("ユーザー入力議題があれば user_topic_requests に createdAt 昇順で含まれる", async () => {
+    mockRunFindUnique.mockResolvedValue(baseRun as RunWithMeeting);
+    mockTopicRequestFindMany.mockResolvedValue([
+      {
+        id: "tr-1",
+        meetingId: "mtg-1",
+        requestedBy: "user-1",
+        title: "古い議題",
+        body: null,
+        priority: null,
+        createdAt: new Date("2026-05-17T09:00:00Z"),
+        updatedAt: new Date("2026-05-17T09:00:00Z"),
+        requester: { displayName: "alice" },
+        // satisfies で型を明示せず、include を含む payload としてキャストする
+      },
+      {
+        id: "tr-2",
+        meetingId: "mtg-1",
+        requestedBy: "user-2",
+        title: "新しい議題",
+        body: "詳細",
+        priority: "required",
+        createdAt: new Date("2026-05-17T10:00:00Z"),
+        updatedAt: new Date("2026-05-17T10:00:00Z"),
+        requester: { displayName: "bob" },
+      },
+    ] as unknown as Prisma.TopicRequestGetPayload<{
+      include: { requester: { select: { displayName: true } } };
+    }>[]);
+
+    const res = await app.request("/internal/analysis-runs/run-1/input", {
+      headers: AUTH_HEADER,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      user_topic_requests: Array<{
+        title: string;
+        body: string | null;
+        priority: string | null;
+        requested_by_name: string;
+      }>;
+    };
+    expect(body.user_topic_requests).toEqual([
+      {
+        title: "古い議題",
+        body: null,
+        priority: null,
+        requested_by_name: "alice",
+      },
+      {
+        title: "新しい議題",
+        body: "詳細",
+        priority: "required",
+        requested_by_name: "bob",
+      },
+    ]);
+    expect(mockTopicRequestFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { meetingId: "mtg-1" },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
   });
 
   it("前回会議の completed 解析ランがある場合 previous_report_json を含む", async () => {
