@@ -4,6 +4,17 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { sendToServiceBus } from "../lib/service-bus.js";
 import {
+  ambiguousInfoReviewInclude,
+  decisionItemReviewInclude,
+  serializeReviewItems,
+  taskReviewInclude,
+} from "../lib/review-item-serialization.js";
+import {
+  buildReviewItemTypeFilter,
+  reviewItemCreateSchema,
+  reviewItemQuerySchema,
+} from "../lib/schemas/review-item.js";
+import {
   buildTaskListWhere,
   taskListQuerySchema,
 } from "../lib/schemas/task.js";
@@ -109,6 +120,116 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         include: taskListInclude,
       });
       return c.json(tasks.map(serializeTask));
+    },
+  )
+  .get(
+    "/:id/review-items",
+    auth,
+    zValidator("query", reviewItemQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const filters = c.req.valid("query");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const { includeDecision, includeTasks, includeAmbiguousInfos, decisionItemTypeWhere } =
+        buildReviewItemTypeFilter(filters.type);
+
+      const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
+        includeDecision
+          ? prisma.decisionItem.findMany({
+              where: {
+                meetingId: id,
+                status: { in: ["draft", "reviewing"] },
+                ...decisionItemTypeWhere,
+              },
+              orderBy: { createdAt: "asc" },
+              include: decisionItemReviewInclude,
+            })
+          : [],
+        includeTasks
+          ? prisma.task.findMany({
+              where: {
+                originMeetingId: id,
+                status: { in: ["draft", "reviewing"] },
+              },
+              orderBy: { createdAt: "asc" },
+              include: taskReviewInclude,
+            })
+          : [],
+        includeAmbiguousInfos
+          ? prisma.ambiguousInfo.findMany({
+              where: {
+                meetingId: id,
+                status: { in: ["draft", "reviewing"] },
+              },
+              orderBy: { createdAt: "asc" },
+              include: ambiguousInfoReviewInclude,
+            })
+          : [],
+      ]);
+
+      return c.json(serializeReviewItems({ decisionItems, tasks, ambiguousInfos }));
+    },
+  )
+  // 動作確認用（後で削除予定）
+  .post(
+    "/:id/review-items",
+    auth,
+    zValidator("json", reviewItemCreateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const { organizationId } = access.meeting.recurringMeeting;
+
+      if (input.type === "task_candidate") {
+        const task = await prisma.task.create({
+          data: {
+            organizationId,
+            title: input.title,
+            body: input.body,
+            sourceContext: input.sourceContext,
+            status: "draft",
+            originMeetingId: id,
+          },
+          select: { id: true, title: true, status: true },
+        });
+        return c.json(task, 201);
+      }
+
+      if (input.type === "ambiguity") {
+        const item = await prisma.ambiguousInfo.create({
+          data: {
+            meetingId: id,
+            body: input.title,
+            sourceContext: input.sourceContext,
+            status: "draft",
+          },
+          select: { id: true, body: true, status: true },
+        });
+        return c.json(item, 201);
+      }
+
+      // decision / open_issue → DecisionItem
+      const decisionState =
+        input.type === "decision" ? ("confirmed" as const) : ("open" as const);
+      const item = await prisma.decisionItem.create({
+        data: {
+          meetingId: id,
+          title: input.title,
+          body: input.body,
+          sourceContext: input.sourceContext,
+          status: "draft",
+          decisionState,
+        },
+        select: { id: true, title: true, status: true, decisionState: true },
+      });
+      return c.json(item, 201);
     },
   )
   .patch("/:id", auth, zValidator("json", meetingUpdateSchema), async (c) => {
