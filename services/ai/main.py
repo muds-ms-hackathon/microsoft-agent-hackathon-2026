@@ -155,14 +155,15 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                 )
             raise
         elif complete_done:
-            # complete 成功後に update_analysis_run_result が失敗、再配送で update を再試行させる
+            # complete 成功後に update_analysis_run_result が失敗
+            # 再配送で update を再試行させる
             logger.error(
                 "complete済みだが詳細結果の保存に失敗 analysis_run_id=%s",
                 analysis_run_id,
             )
             raise
         elif isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
-            # 4xx は恒久失敗：failed 保存後、raise せずメッセージを完了させる（再配送ループを防ぐ）
+            # 4xx は恒久失敗：failed 保存後raise せず、 再配送ループを防ぐ
             logger.error(
                 "complete が 4xx で拒否 analysis_run_id=%s: %s",
                 analysis_run_id,
@@ -186,7 +187,7 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
         else:
             # 5xx / 通信断 / timeout → DB 状態不明のため再配送に委ねる
             logger.error(
-                "complete呼び出し失敗（DB状態不明）再配送に委ねる analysis_run_id=%s: %s",
+                "complete失敗（DB状態不明）再配送 analysis_run_id=%s: %s",
                 analysis_run_id,
                 e,
             )
