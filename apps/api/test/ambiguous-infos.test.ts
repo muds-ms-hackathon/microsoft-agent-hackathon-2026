@@ -51,7 +51,7 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 
@@ -173,7 +173,12 @@ describe("PATCH /ambiguous-infos/:id", () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
     mockTransaction.mockResolvedValue({
       kind: "ok",
-      item: { ...sampleItem, status: "resolved", resolutionType: "discarded", version: 1 },
+      item: {
+        ...sampleItem,
+        status: "resolved",
+        resolutionType: "discarded",
+        version: 1,
+      },
     });
 
     const res = await app.request("/ambiguous-infos/ai-1", {

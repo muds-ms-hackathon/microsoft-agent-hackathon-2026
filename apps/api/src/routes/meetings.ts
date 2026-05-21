@@ -100,28 +100,24 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         : null,
     });
   })
-  .get(
-    "/:id/tasks",
-    zValidator("query", taskListQuerySchema),
-    async (c) => {
-      const id = c.req.param("id");
-      const filters = c.req.valid("query");
+  .get("/:id/tasks", zValidator("query", taskListQuerySchema), async (c) => {
+    const id = c.req.param("id");
+    const filters = c.req.valid("query");
 
-      const access = await requireMeetingAccess(c, id);
-      if (!access.ok) return access.response;
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
 
-      // 当該会議を発生源とするタスクのみ。
-      const tasks = await prisma.task.findMany({
-        where: {
-          ...buildTaskListWhere(filters),
-          originMeetingId: id,
-        },
-        orderBy: taskListOrderBy,
-        include: taskListInclude,
-      });
-      return c.json(tasks.map(serializeTask));
-    },
-  )
+    // 当該会議を発生源とするタスクのみ。
+    const tasks = await prisma.task.findMany({
+      where: {
+        ...buildTaskListWhere(filters),
+        originMeetingId: id,
+      },
+      orderBy: taskListOrderBy,
+      include: taskListInclude,
+    });
+    return c.json(tasks.map(serializeTask));
+  })
   .get(
     "/:id/review-items",
     zValidator("query", reviewItemQuerySchema),
@@ -132,8 +128,12 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       const access = await requireMeetingAccess(c, id);
       if (!access.ok) return access.response;
 
-      const { includeDecision, includeTasks, includeAmbiguousInfos, decisionItemTypeWhere } =
-        buildReviewItemTypeFilter(filters.type);
+      const {
+        includeDecision,
+        includeTasks,
+        includeAmbiguousInfos,
+        decisionItemTypeWhere,
+      } = buildReviewItemTypeFilter(filters.type);
 
       const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
         includeDecision
@@ -169,7 +169,9 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           : [],
       ]);
 
-      return c.json(serializeReviewItems({ decisionItems, tasks, ambiguousInfos }));
+      return c.json(
+        serializeReviewItems({ decisionItems, tasks, ambiguousInfos }),
+      );
     },
   )
   // 動作確認用（後で削除予定）

@@ -19,7 +19,7 @@ async function requireDecisionItemAccess(
     },
   });
   const organizationId = item?.meeting.recurringMeeting?.organizationId;
-  if (!organizationId) {
+  if (!item || !organizationId) {
     return {
       ok: false as const,
       res: c.json({ error: "アイテムが見つかりません" }, 404),
@@ -27,7 +27,7 @@ async function requireDecisionItemAccess(
   }
   const guard = await requireOrgMembership(c, organizationId);
   if (!guard.ok) return { ok: false as const, res: guard.res };
-  return { ok: true as const, item: item!, organizationId };
+  return { ok: true as const, item, organizationId };
 }
 
 export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
@@ -97,7 +97,12 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
           assignees: {
             include: {
               user: {
-                select: { id: true, name: true, displayName: true, email: true },
+                select: {
+                  id: true,
+                  name: true,
+                  displayName: true,
+                  email: true,
+                },
               },
             },
           },

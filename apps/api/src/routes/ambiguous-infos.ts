@@ -43,7 +43,7 @@ async function requireAmbiguousInfoAccess(
     },
   });
   const organizationId = item?.meeting.recurringMeeting?.organizationId;
-  if (!organizationId) {
+  if (!item || !organizationId) {
     return {
       ok: false as const,
       res: c.json({ error: "アイテムが見つかりません" }, 404),
@@ -51,7 +51,7 @@ async function requireAmbiguousInfoAccess(
   }
   const guard = await requireOrgMembership(c, organizationId);
   if (!guard.ok) return { ok: false as const, res: guard.res };
-  return { ok: true as const, item: item!, organizationId };
+  return { ok: true as const, item, organizationId };
 }
 
 export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
@@ -122,7 +122,10 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
         );
       }
       if (
-        !(await validateRecurringMeetingsInOrg(organizationId, recurringMeetingIds))
+        !(await validateRecurringMeetingsInOrg(
+          organizationId,
+          recurringMeetingIds,
+        ))
       ) {
         return c.json({ error: "定例は組織に属している必要があります" }, 400);
       }
@@ -135,12 +138,17 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
             body: newTaskData.body,
             status: "todo",
             originMeetingId: item.meetingId,
-            dueDate: newTaskData.dueDate ? new Date(newTaskData.dueDate) : undefined,
+            dueDate: newTaskData.dueDate
+              ? new Date(newTaskData.dueDate)
+              : undefined,
           },
         });
         if (assigneeUserIds.length > 0) {
           await tx.taskAssignee.createMany({
-            data: assigneeUserIds.map((userId) => ({ taskId: task.id, userId })),
+            data: assigneeUserIds.map((userId) => ({
+              taskId: task.id,
+              userId,
+            })),
           });
         }
         if (recurringMeetingIds.length > 0) {

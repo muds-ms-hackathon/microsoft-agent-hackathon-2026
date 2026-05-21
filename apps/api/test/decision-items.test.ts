@@ -40,7 +40,7 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 
@@ -130,9 +130,12 @@ describe("PATCH /decision-items/:id", () => {
       const tx = {
         decisionItem: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findUniqueOrThrow: vi
-            .fn()
-            .mockResolvedValue({ ...sampleItem, title: "更新後", version: 1, assignees: [] }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            ...sampleItem,
+            title: "更新後",
+            version: 1,
+            assignees: [],
+          }),
         },
         decisionItemAssignee: { deleteMany: vi.fn(), createMany: vi.fn() },
       };

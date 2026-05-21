@@ -153,8 +153,12 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
       const guard = await requireRecurringAccess(c, meeting);
       if (!guard.ok) return guard.res;
 
-      const { includeDecision, includeTasks, includeAmbiguousInfos, decisionItemTypeWhere } =
-        buildReviewItemTypeFilter(filters.type);
+      const {
+        includeDecision,
+        includeTasks,
+        includeAmbiguousInfos,
+        decisionItemTypeWhere,
+      } = buildReviewItemTypeFilter(filters.type);
 
       const meetingWhere = filters.meetingId
         ? { meetingId: filters.meetingId }
@@ -197,7 +201,9 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
           : [],
       ]);
 
-      return c.json(serializeReviewItems({ decisionItems, tasks, ambiguousInfos }));
+      return c.json(
+        serializeReviewItems({ decisionItems, tasks, ambiguousInfos }),
+      );
     },
   )
   .get("/:id/meetings", async (c) => {

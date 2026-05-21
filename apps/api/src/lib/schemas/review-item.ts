@@ -26,9 +26,10 @@ export const reviewItemQuerySchema = z.object({
   type: commaSeparatedTypes.optional(),
 });
 
-export const recurringMeetingReviewItemQuerySchema = reviewItemQuerySchema.extend({
-  meetingId: z.string().min(1).optional(),
-});
+export const recurringMeetingReviewItemQuerySchema =
+  reviewItemQuerySchema.extend({
+    meetingId: z.string().min(1).optional(),
+  });
 
 export const decisionItemPatchSchema = z
   .object({
@@ -74,10 +75,9 @@ export const ambiguousInfoPatchSchema = z
       .optional(),
   })
   .strict()
-  .refine(
-    (d) => d.status !== undefined || d.resolutionType !== undefined,
-    { message: "status または resolutionType を指定してください" },
-  );
+  .refine((d) => d.status !== undefined || d.resolutionType !== undefined, {
+    message: "status または resolutionType を指定してください",
+  });
 
 // POST /meetings/:id/review-items（動作確認用・後で削除予定）
 export const reviewItemCreateSchema = z.object({
@@ -112,7 +112,9 @@ export function buildReviewItemTypeFilter(typeFilter: ReviewItemQuery["type"]) {
     const wantDecision = typeFilter.includes("decision");
     const wantOpenIssue = typeFilter.includes("open_issue");
     if (wantDecision && !wantOpenIssue) {
-      decisionItemTypeWhere = { decisionState: { in: ["confirmed", "tentative"] } };
+      decisionItemTypeWhere = {
+        decisionState: { in: ["confirmed", "tentative"] },
+      };
     } else if (!wantDecision && wantOpenIssue) {
       decisionItemTypeWhere = {
         OR: [{ decisionState: "open" }, { decisionState: null }],
@@ -120,5 +122,10 @@ export function buildReviewItemTypeFilter(typeFilter: ReviewItemQuery["type"]) {
     }
   }
 
-  return { includeDecision, includeTasks, includeAmbiguousInfos, decisionItemTypeWhere };
+  return {
+    includeDecision,
+    includeTasks,
+    includeAmbiguousInfos,
+    decisionItemTypeWhere,
+  };
 }
