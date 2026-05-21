@@ -48,7 +48,8 @@ const meetingUpdateSchema = z
 // 旧 GET / と POST /meetings は認証なしで叩ける状態だったため撤去した。
 // Meeting 作成は POST /recurring-meetings/:id/meetings に一本化されている。
 export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
-  .get("/:id", auth, async (c) => {
+  .use("*", auth)
+  .get("/:id", async (c) => {
     const id = c.req.param("id");
     // 認可検証は共通ヘルパーで実施。GET /:id は追加情報が必要なため、
     // 認可確定後に detail include 付きで再フェッチする。
@@ -101,7 +102,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
   })
   .get(
     "/:id/tasks",
-    auth,
     zValidator("query", taskListQuerySchema),
     async (c) => {
       const id = c.req.param("id");
@@ -124,7 +124,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
   )
   .get(
     "/:id/review-items",
-    auth,
     zValidator("query", reviewItemQuerySchema),
     async (c) => {
       const id = c.req.param("id");
@@ -176,7 +175,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
   // 動作確認用（後で削除予定）
   .post(
     "/:id/review-items",
-    auth,
     zValidator("json", reviewItemCreateSchema),
     async (c) => {
       const id = c.req.param("id");
@@ -232,7 +230,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(item, 201);
     },
   )
-  .patch("/:id", auth, zValidator("json", meetingUpdateSchema), async (c) => {
+  .patch("/:id", zValidator("json", meetingUpdateSchema), async (c) => {
     const id = c.req.param("id");
     const data = c.req.valid("json");
 
@@ -256,7 +254,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(updated);
   })
-  .post("/:id/analyze", auth, async (c) => {
+  .post("/:id/analyze", async (c) => {
     const id = c.req.param("id");
 
     const access = await requireMeetingAccess(c, id);
