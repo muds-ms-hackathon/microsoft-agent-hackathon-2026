@@ -4,7 +4,11 @@ import json
 import pytest
 
 from llm.client import FakeLLMClient
-from pipeline.analyze_meeting import _extract_keywords, analyze_meeting
+from pipeline.analyze_meeting import (
+    _extract_keywords,
+    _fmt_estimation_note,
+    analyze_meeting,
+)
 from pipeline.continuity import (
     prepare_change_summary_for_call6,
     prepare_prev_open_issues_for_call2,
@@ -355,3 +359,39 @@ def test_extract_keywords_returns_empty_for_unsupported_type():
 
 def test_extract_keywords_coerces_to_str():
     assert _extract_keywords([1, 2, 3]) == ["1", "2", "3"]
+
+
+# ──────────────────────── _fmt_estimation_note ────────────────────────
+
+
+def test_fmt_estimation_note_with_normal_breakdown():
+    estimation = {
+        "total_minutes": 25,
+        "breakdown": {
+            "required_task_check": {"count": 3, "minutes": 6},
+            "buffer": {"count": 1, "minutes": 10},
+        },
+    }
+    note = _fmt_estimation_note(estimation)
+    assert "想定所要時間: 約25分" in note
+    assert "必須タスク確認: 3件 × 2分 = 6分" in note
+    assert "バッファ: 1件 × 10分 = 10分" in note
+
+
+def test_fmt_estimation_note_handles_zero_count_without_zero_division():
+    """count==0 のカテゴリでも ZeroDivisionError を起こさない。"""
+    estimation = {
+        "total_minutes": 10,
+        "breakdown": {
+            "buffer": {"count": 0, "minutes": 10},
+        },
+    }
+    note = _fmt_estimation_note(estimation)
+    # 0件のカテゴリは「N分」のみ表示する
+    assert "0件" in note
+    assert "10分" in note
+
+
+def test_fmt_estimation_note_with_empty_breakdown():
+    note = _fmt_estimation_note({"total_minutes": 0, "breakdown": {}})
+    assert "想定所要時間: 約0分" in note

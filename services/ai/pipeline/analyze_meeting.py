@@ -439,10 +439,14 @@ def _fmt_estimation_note(estimation: dict) -> str:
     }
     for key, val in breakdown.items():
         label = label_map.get(key, key)
-        per = val["minutes"] // val["count"]
-        lines.append(
-            f"  - {label}: {val['count']}件 × {per}分 = {val['minutes']}分"
-        )
+        count = val.get("count", 0)
+        minutes = val.get("minutes", 0)
+        if count <= 0:
+            # 件数 0 のカテゴリは「N分」のみ表示し、ZeroDivisionError を回避する。
+            lines.append(f"  - {label}: 0件 = {minutes}分")
+            continue
+        per = minutes // count
+        lines.append(f"  - {label}: {count}件 × {per}分 = {minutes}分")
     return "\n".join(lines)
 
 
