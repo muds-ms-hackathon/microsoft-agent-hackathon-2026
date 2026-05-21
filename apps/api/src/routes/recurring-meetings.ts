@@ -156,7 +156,6 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
       const { includeDecision, includeTasks, includeAmbiguousInfos, decisionItemTypeWhere } =
         buildReviewItemTypeFilter(filters.type);
 
-      // meetingId フィルタが指定された場合は当該会議のみに絞る。
       const meetingWhere = filters.meetingId
         ? { meetingId: filters.meetingId }
         : { meeting: { recurringMeetingId: id } };

@@ -52,8 +52,6 @@ export const decisionItemPatchSchema = z
     { message: "更新する項目を 1 つ以上指定してください" },
   );
 
-// resolutionType: "task" のとき newTask、"decision_item" のとき newDecisionItem を参照する。
-// タイトル未指定の場合は AmbiguousInfo.body をそのまま引き継ぐ。
 export const ambiguousInfoPatchSchema = z
   .object({
     version: z.number().int().nonnegative(),
@@ -97,7 +95,6 @@ export type DecisionItemPatchInput = z.infer<typeof decisionItemPatchSchema>;
 export type AmbiguousInfoPatchInput = z.infer<typeof ambiguousInfoPatchSchema>;
 export type ReviewItemCreateInput = z.infer<typeof reviewItemCreateSchema>;
 
-// decisionItemTypeWhere は DecisionItem の where に直接スプレッドして使う。
 export function buildReviewItemTypeFilter(typeFilter: ReviewItemQuery["type"]) {
   const includeDecision =
     !typeFilter ||
