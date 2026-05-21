@@ -13,6 +13,7 @@ import {
   taskListOrderBy,
 } from "../lib/task-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+import { requireMeetingAccess } from "../middleware/meeting-access.js";
 
 // 会議メタ情報の更新スキーマ。transcriptText を中心に議事録関連フィールドを受け付ける。
 // 全フィールド optional だが、いずれか 1 つ以上の指定を必須とする。
@@ -38,9 +39,12 @@ const meetingUpdateSchema = z
 export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
   .get("/:id", auth, async (c) => {
     const id = c.req.param("id");
-    // 会議 + 紐付く定例 + 組織 + 最新解析ランを一度に取得する。
-    // 単発会議（recurringMeetingId=null）は組織判定不能のため 404 で拒否する。
-    const meeting = await prisma.meeting.findUnique({
+    // 認可検証は共通ヘルパーで実施。GET /:id は追加情報が必要なため、
+    // 認可確定後に detail include 付きで再フェッチする。
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    const detail = await prisma.meeting.findUnique({
       where: { id },
       include: {
         recurringMeeting: {
@@ -55,24 +59,12 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         },
       },
     });
-    if (!meeting?.recurringMeeting) {
+    // requireMeetingAccess 通過直後なので存在は保証されるが、型ナローイングのため再判定
+    if (!detail?.recurringMeeting) {
       return c.json({ error: "会議が見つかりません" }, 404);
     }
 
-    const user = c.var.user;
-    const membership = await prisma.organizationMembership.findUnique({
-      where: {
-        userId_organizationId: {
-          userId: user.id,
-          organizationId: meeting.recurringMeeting.organizationId,
-        },
-      },
-    });
-    if (!membership) {
-      return c.json({ error: "会議が見つかりません" }, 404);
-    }
-
-    const { recurringMeeting, analysisRuns, ...rest } = meeting;
+    const { recurringMeeting, analysisRuns, ...rest } = detail;
     const latestRun = analysisRuns[0] ?? null;
 
     return c.json({
@@ -104,28 +96,8 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       const id = c.req.param("id");
       const filters = c.req.valid("query");
 
-      // 会議存在 + 紐付く定例経由で組織判定。単発会議（recurringMeetingId=null）は
-      // 組織判定不能のため 404 で拒否する（MVP スコープ）。
-      const meeting = await prisma.meeting.findUnique({
-        where: { id },
-        include: { recurringMeeting: { select: { organizationId: true } } },
-      });
-      if (!meeting?.recurringMeeting) {
-        return c.json({ error: "会議が見つかりません" }, 404);
-      }
-
-      const user = c.var.user;
-      const membership = await prisma.organizationMembership.findUnique({
-        where: {
-          userId_organizationId: {
-            userId: user.id,
-            organizationId: meeting.recurringMeeting.organizationId,
-          },
-        },
-      });
-      if (!membership) {
-        return c.json({ error: "会議が見つかりません" }, 404);
-      }
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
 
       // 当該会議を発生源とするタスクのみ。
       const tasks = await prisma.task.findMany({
@@ -143,27 +115,8 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
     const id = c.req.param("id");
     const data = c.req.valid("json");
 
-    // 会議 + 紐付く定例経由で組織判定する
-    const meeting = await prisma.meeting.findUnique({
-      where: { id },
-      include: { recurringMeeting: { select: { organizationId: true } } },
-    });
-    if (!meeting?.recurringMeeting) {
-      return c.json({ error: "会議が見つかりません" }, 404);
-    }
-
-    const user = c.var.user;
-    const membership = await prisma.organizationMembership.findUnique({
-      where: {
-        userId_organizationId: {
-          userId: user.id,
-          organizationId: meeting.recurringMeeting.organizationId,
-        },
-      },
-    });
-    if (!membership) {
-      return c.json({ error: "会議が見つかりません" }, 404);
-    }
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
 
     // undefined フィールドを除外して更新データを構築する
     const updateData: Record<string, unknown> = {};
@@ -185,30 +138,11 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
   .post("/:id/analyze", auth, async (c) => {
     const id = c.req.param("id");
 
-    // 会議存在確認 + 組織判定
-    const meeting = await prisma.meeting.findUnique({
-      where: { id },
-      include: { recurringMeeting: { select: { organizationId: true } } },
-    });
-    if (!meeting?.recurringMeeting) {
-      return c.json({ error: "会議が見つかりません" }, 404);
-    }
-
-    const user = c.var.user;
-    const membership = await prisma.organizationMembership.findUnique({
-      where: {
-        userId_organizationId: {
-          userId: user.id,
-          organizationId: meeting.recurringMeeting.organizationId,
-        },
-      },
-    });
-    if (!membership) {
-      return c.json({ error: "会議が見つかりません" }, 404);
-    }
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
 
     // 文字起こしテキスト未設定は解析不可
-    if (!meeting.transcriptText) {
+    if (!access.meeting.transcriptText) {
       return c.json({ error: "文字起こしテキストが設定されていません" }, 400);
     }
 
