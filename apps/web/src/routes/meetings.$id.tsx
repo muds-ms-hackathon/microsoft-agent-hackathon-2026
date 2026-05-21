@@ -1,4 +1,5 @@
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import { TopicRequestSection } from "@/features/topic-requests/components/TopicRequestSection";
 import { AssigneeFilter } from "@/features/tasks/components/AssigneeFilter";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
@@ -273,6 +274,10 @@ export function MeetingDetailView({
             now={now}
           />
         )}
+      </section>
+
+      <section aria-label="次回会議の議題">
+        <TopicRequestSection meetingId={id} />
       </section>
     </section>
   );
