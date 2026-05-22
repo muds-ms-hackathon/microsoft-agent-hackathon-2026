@@ -183,7 +183,9 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.task.findMany({
               where: {
                 ...taskMeetingWhere,
-                originMeetingId: { not: null },
+                // meetingId 未指定時は originMeeting join でスコープするため originMeetingId: { not: null } が必要。
+                // meetingId 指定時は originMeetingId が既に specific ID で非 null 保証されるため不要。
+                ...(filters.meetingId ? {} : { originMeetingId: { not: null } }),
                 status: { in: ["draft", "reviewing"] },
               },
               orderBy: { createdAt: "asc" },
