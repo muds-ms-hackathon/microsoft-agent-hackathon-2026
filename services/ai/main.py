@@ -16,7 +16,12 @@ from llm.client import AzureOpenAIClient
 from pipeline.analyze_meeting import analyze_meeting
 from routers.analysis import router as analysis_router
 from routers.health import router as health_router
-from schemas.analysis import AnalysisJobInput
+from schemas.analysis import (
+    AnalysisJobInput,
+    VALID_AMBIGUITY_TYPE,
+    VALID_PRIORITY,
+    VALID_SEVERITY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +47,6 @@ def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
         return b"".join(chunks)
     raise TypeError(f"未対応の message.body 型: {type(body)}")
 
-
-_VALID_PRIORITY = {"required", "optional"}
-_VALID_SEVERITY = {"high", "medium", "low"}
-_VALID_AMBIGUITY_TYPE = {
-    "missing_speaker",
-    "transcription_error_low",
-    "transcription_error_high",
-    "no_assignee",
-    "no_deadline_mentioned",
-    "no_deadline_absolute",
-    "unclear_decision",
-    "insufficient_basis",
-    "unclear_scope",
-}
 
 
 async def _handle_message(message: ServiceBusReceivedMessage) -> None:
@@ -104,7 +95,7 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                     ti["body"] = t["body"]
                 if isinstance(t.get("source_quote"), str):
                     ti["sourceQuote"] = t["source_quote"]
-                if t.get("priority") in _VALID_PRIORITY:
+                if t.get("priority") in VALID_PRIORITY:
                     ti["priority"] = t["priority"]
                 task_items.append(ti)
             ambiguous_infos = []
@@ -114,9 +105,9 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                 ai: dict = {"body": a["body"]}
                 if isinstance(a.get("source_quote"), str):
                     ai["sourceQuote"] = a["source_quote"]
-                if a.get("ambiguity_type") in _VALID_AMBIGUITY_TYPE:
+                if a.get("ambiguity_type") in VALID_AMBIGUITY_TYPE:
                     ai["ambiguityType"] = a["ambiguity_type"]
-                if a.get("severity") in _VALID_SEVERITY:
+                if a.get("severity") in VALID_SEVERITY:
                     ai["severity"] = a["severity"]
                 ambiguous_infos.append(ai)
             complete_attempted = True
