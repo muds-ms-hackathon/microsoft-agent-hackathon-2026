@@ -295,7 +295,12 @@ describe("GET /meetings/:id", () => {
     const res = await app.request("/meetings/mtg-1");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      latestAnalysisRun: { id: string; status: string; summary: string; recommendedAgenda: unknown | null };
+      latestAnalysisRun: {
+        id: string;
+        status: string;
+        summary: string;
+        recommendedAgenda: unknown | null;
+      };
     };
     expect(body.latestAnalysisRun).not.toBeNull();
     expect(body.latestAnalysisRun?.id).toBe("run-1");
