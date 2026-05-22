@@ -1,11 +1,15 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { ambiguousInfosRoute } from "./routes/ambiguous-infos.js";
+import { decisionItemsRoute } from "./routes/decision-items.js";
 import { healthRoute } from "./routes/health.js";
 import { meRoute } from "./routes/me.js";
 import { meetingsRoute } from "./routes/meetings.js";
 import { organizationsRoute } from "./routes/organizations.js";
 import { recurringMeetingsRoute } from "./routes/recurring-meetings.js";
 import { tasksRoute } from "./routes/tasks.js";
+import { internalRoute } from "./routes/internal.js";
+import { internalAuth } from "./middleware/internal-auth.js";
 
 const app = new Hono();
 
@@ -41,13 +45,19 @@ app.onError((err, c) => {
 // 未定義パスを JSON 404 に統一する。
 app.notFound((c) => c.json({ error: "Not Found" }, 404));
 
+// /internal/* にのみ認証ミドルウェアを適用する
+app.use("/internal/*", internalAuth);
+
 const routes = app
   .route("/health", healthRoute)
   .route("/me", meRoute)
   .route("/meetings", meetingsRoute)
   .route("/organizations", organizationsRoute)
   .route("/recurring-meetings", recurringMeetingsRoute)
-  .route("/tasks", tasksRoute);
+  .route("/tasks", tasksRoute)
+  .route("/decision-items", decisionItemsRoute)
+  .route("/ambiguous-infos", ambiguousInfosRoute)
+  .route("/internal", internalRoute);
 
 export { app };
 export type AppType = typeof routes;

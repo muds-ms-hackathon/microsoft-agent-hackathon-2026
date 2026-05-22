@@ -11,11 +11,10 @@ export type MeetingListItem = {
   recurringMeetingId: string | null;
 };
 
-// 定例配下の会議一覧を取得する hook。
 // クエリキーは ["recurring-meetings", id, "meetings"] で、作成ダイアログから invalidate される。
-export function useRecurringMeetingMeetings(id: string) {
-  return useQuery<MeetingListItem[]>({
-    queryKey: ["recurring-meetings", id, "meetings"],
+export function meetingListQueryOptions(id: string) {
+  return {
+    queryKey: ["recurring-meetings", id, "meetings"] as const,
     queryFn: async () => {
       const res = await api["recurring-meetings"][":id"].meetings.$get(
         { param: { id } },
@@ -26,5 +25,10 @@ export function useRecurringMeetingMeetings(id: string) {
       }
       return (await res.json()) as MeetingListItem[];
     },
-  });
+  };
+}
+
+// 定例配下の会議一覧を取得する hook。
+export function useRecurringMeetingMeetings(id: string) {
+  return useQuery<MeetingListItem[]>(meetingListQueryOptions(id));
 }

@@ -4,6 +4,14 @@ import os
 from unittest.mock import MagicMock, patch
 
 _SB_CONN_KEY = "AZURE_SERVICE_BUS_CONNECTION_STRING"
+_DEPLOY_KEY = "AZURE_OPENAI_DEPLOYMENT_NAME"
+_DEPLOY_VAL = "test-deployment"
+_SECRET_KEY = "INTERNAL_API_SECRET"
+_SECRET_VAL = "test-secret"
+_API_KEY = "AZURE_OPENAI_API_KEY"
+_API_KEY_VAL = "test-key"
+_ENDPOINT_KEY = "AZURE_OPENAI_ENDPOINT"
+_ENDPOINT_VAL = "https://example.openai.azure.com"
 
 
 async def test_lifespan_warns_when_env_not_set(caplog):
@@ -11,7 +19,11 @@ async def test_lifespan_warns_when_env_not_set(caplog):
     import main
 
     env = {k: v for k, v in os.environ.items() if k != _SB_CONN_KEY}
-    with patch.dict(os.environ, env, clear=True):
+    env[_DEPLOY_KEY] = _DEPLOY_VAL
+    env[_SECRET_KEY] = _SECRET_VAL
+    env[_API_KEY] = _API_KEY_VAL
+    env[_ENDPOINT_KEY] = _ENDPOINT_VAL
+    with patch.dict(os.environ, env):
         with caplog.at_level(logging.WARNING, logger="main"):
             async with main.lifespan(main.app):
                 pass
@@ -32,9 +44,18 @@ async def test_lifespan_starts_consumer_when_env_set():
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn", "AZURE_SERVICE_BUS_QUEUE_NAME": "test-queue"}
+    env = {
+        _SB_CONN_KEY: "fake://conn",
+        "AZURE_SERVICE_BUS_QUEUE_NAME": "test-queue",
+        _DEPLOY_KEY: _DEPLOY_VAL,
+        _SECRET_KEY: _SECRET_VAL,
+        _API_KEY: _API_KEY_VAL,
+        _ENDPOINT_KEY: _ENDPOINT_VAL,
+    }
     with patch.dict(os.environ, env):
-        with patch("main.ServiceBusConsumer", return_value=mock_consumer) as mock_cls:
+        with patch(
+            "main.ServiceBusConsumer", return_value=mock_consumer
+        ) as mock_cls:
             async with main.lifespan(main.app):
                 await asyncio.wait_for(started.wait(), timeout=1.0)
 
@@ -57,7 +78,13 @@ async def test_lifespan_cancels_task_on_shutdown():
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn"}
+    env = {
+        _SB_CONN_KEY: "fake://conn",
+        _DEPLOY_KEY: _DEPLOY_VAL,
+        _SECRET_KEY: _SECRET_VAL,
+        _API_KEY: _API_KEY_VAL,
+        _ENDPOINT_KEY: _ENDPOINT_VAL,
+    }
     with patch.dict(os.environ, env):
         with patch("main.ServiceBusConsumer", return_value=mock_consumer):
             async with main.lifespan(main.app):
@@ -77,7 +104,13 @@ async def test_lifespan_logs_error_on_consumer_failure(caplog):
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
 
-    env = {_SB_CONN_KEY: "fake://conn"}
+    env = {
+        _SB_CONN_KEY: "fake://conn",
+        _DEPLOY_KEY: _DEPLOY_VAL,
+        _SECRET_KEY: _SECRET_VAL,
+        _API_KEY: _API_KEY_VAL,
+        _ENDPOINT_KEY: _ENDPOINT_VAL,
+    }
     with patch.dict(os.environ, env):
         with patch("main.ServiceBusConsumer", return_value=mock_consumer):
             with caplog.at_level(logging.ERROR, logger="main"):
@@ -90,3 +123,54 @@ async def test_lifespan_logs_error_on_consumer_failure(caplog):
         r.levelno == logging.ERROR and "予期せず終了" in r.message
         for r in caplog.records
     )
+
+
+async def test_lifespan_raises_when_deployment_name_not_set():
+    """(a) AZURE_OPENAI_DEPLOYMENT_NAME 未設定時に RuntimeError が raise される"""
+    import main
+
+    env = {k: v for k, v in os.environ.items() if k != _DEPLOY_KEY}
+    env[_SECRET_KEY] = _SECRET_VAL
+    with patch.dict(os.environ, env, clear=True):
+        try:
+            async with main.lifespan(main.app):
+                pass
+        except RuntimeError as e:
+            assert _DEPLOY_KEY in str(e)
+        else:
+            raise AssertionError("RuntimeError が raise されなかった")
+
+
+async def test_lifespan_raises_when_api_key_not_set():
+    """(b) AZURE_OPENAI_API_KEY 未設定時に RuntimeError が raise される"""
+    import main
+
+    env = {k: v for k, v in os.environ.items() if k != _API_KEY}
+    env[_DEPLOY_KEY] = _DEPLOY_VAL
+    env[_SECRET_KEY] = _SECRET_VAL
+    with patch.dict(os.environ, env, clear=True):
+        try:
+            async with main.lifespan(main.app):
+                pass
+        except RuntimeError as e:
+            assert _API_KEY in str(e)
+        else:
+            raise AssertionError("RuntimeError が raise されなかった")
+
+
+async def test_lifespan_raises_when_endpoint_not_set():
+    """(c) AZURE_OPENAI_ENDPOINT 未設定時に RuntimeError が raise される"""
+    import main
+
+    env = {k: v for k, v in os.environ.items() if k != "AZURE_OPENAI_ENDPOINT"}
+    env[_DEPLOY_KEY] = _DEPLOY_VAL
+    env["AZURE_OPENAI_API_KEY"] = "test-key"
+    env[_SECRET_KEY] = _SECRET_VAL
+    with patch.dict(os.environ, env, clear=True):
+        try:
+            async with main.lifespan(main.app):
+                pass
+        except RuntimeError as e:
+            assert "AZURE_OPENAI_ENDPOINT" in str(e)
+        else:
+            raise AssertionError("RuntimeError が raise されなかった")

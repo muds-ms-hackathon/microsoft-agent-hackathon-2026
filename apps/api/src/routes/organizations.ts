@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { type OrgRole, Prisma } from "@prisma/client";
 import { Hono } from "hono";
 import { z } from "zod";
+import { normalizeEmail } from "../lib/email.js";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingCreateSchema } from "../lib/schemas/recurring-meeting.js";
 import {
@@ -43,12 +44,13 @@ const nextMeetingsQuerySchema = z.object({
 });
 
 // owner ロールの招待は不可（owner は組織作成者のみ）。
-// expiresInDays は 1〜365 日。email はサーバ側で trim + 小文字化して保存・比較する。
+// expiresInDays は 1〜365 日。email は lib/email.ts の normalizeEmail で
+// 正規化（trim + 小文字化）した上で保存・比較する。
 // role / expiresInDays は省略・null のいずれも「未指定」として扱い、
 // ハンドラ側で role="member" / 7 日のデフォルトにフォールバックする。
 // JSON では undefined を表現できないため、クライアントが null で送る慣習に合わせる。
 const inviteSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
+  email: z.string().transform(normalizeEmail).pipe(z.string().email()),
   role: z.enum(["admin", "member"]).nullable().optional(),
   expiresInDays: z.number().int().positive().max(365).nullable().optional(),
 });

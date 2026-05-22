@@ -302,7 +302,7 @@ Table AmbiguousInfo {
 Table MeetingAnalysisRun {
   id String [pk]
   meetingId String [not null]
-  status String [not null, default: 'queued']
+  status AnalysisRunStatus [not null, default: 'queued']
   currentStep String
   triggerType String
   modelName String
@@ -310,6 +310,7 @@ Table MeetingAnalysisRun {
   promptVersion String
   pipelineVersion String
   inputHash String
+  transcriptText String
   summary String
   alertLevel String
   reportJson Json
@@ -447,6 +448,13 @@ Enum InvitationStatus {
 Enum MeetingRole {
   owner
   member
+}
+
+Enum AnalysisRunStatus {
+  queued
+  analyzing
+  completed
+  failed
 }
 
 Ref: Meeting.previousMeetingId - Meeting.id

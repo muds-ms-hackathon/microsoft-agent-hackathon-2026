@@ -72,6 +72,99 @@ async def test_consumer_start_continues_on_handler_error():
         def __init__(self):
             self._items = ["bad", "good"]
             self.complete_message = AsyncMock()
+            self.abandon_message = AsyncMock()
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if self._items:
+                return self._items.pop(0)
+            raise StopAsyncIteration
+
+    mock_receiver = _MockReceiver()
+    mock_client = MagicMock()
+
+    @asynccontextmanager
+    async def receiver_ctx(*_args, **_kwargs):
+        yield mock_receiver
+
+    mock_client.get_queue_receiver = receiver_ctx
+
+    @asynccontextmanager
+    async def client_factory(_conn_str):
+        yield mock_client
+
+    consumer._client_factory = client_factory
+    await consumer.start(handler)
+
+    assert processed == ["good"]
+
+
+async def test_consumer_calls_abandon_on_handler_error():
+    """ハンドラーが例外を投げた場合に abandon_message が呼ばれることを確認"""
+    consumer = ServiceBusConsumer(
+        connection_string="Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=test;SharedAccessKey=test",
+        queue_name="test-queue",
+    )
+
+    async def handler(_msg):
+        raise ValueError("意図的なエラー")
+
+    class _MockReceiver:
+        def __init__(self):
+            self._items = ["bad"]
+            self.complete_message = AsyncMock()
+            self.abandon_message = AsyncMock()
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if self._items:
+                return self._items.pop(0)
+            raise StopAsyncIteration
+
+    mock_receiver = _MockReceiver()
+    mock_client = MagicMock()
+
+    @asynccontextmanager
+    async def receiver_ctx(*_args, **_kwargs):
+        yield mock_receiver
+
+    mock_client.get_queue_receiver = receiver_ctx
+
+    @asynccontextmanager
+    async def client_factory(_conn_str):
+        yield mock_client
+
+    consumer._client_factory = client_factory
+    await consumer.start(handler)
+
+    # ハンドラ失敗時は complete_message は呼ばれず、abandon_message が呼ばれる
+    mock_receiver.complete_message.assert_not_called()
+    mock_receiver.abandon_message.assert_called_once_with("bad")
+
+
+async def test_consumer_loop_continues_when_abandon_fails():
+    """abandon_message 自体が失敗してもループは継続することを確認"""
+    consumer = ServiceBusConsumer(
+        connection_string="Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=test;SharedAccessKey=test",
+        queue_name="test-queue",
+    )
+
+    processed = []
+
+    async def handler(msg):
+        if msg == "bad":
+            raise ValueError("意図的なエラー")
+        processed.append(msg)
+
+    class _MockReceiver:
+        def __init__(self):
+            self._items = ["bad", "good"]
+            self.complete_message = AsyncMock()
+            self.abandon_message = AsyncMock(side_effect=RuntimeError("abandon失敗"))
 
         def __aiter__(self):
             return self

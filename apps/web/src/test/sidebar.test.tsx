@@ -31,50 +31,23 @@ vi.mock("@/lib/api", () => ({
 
 // 現在パスを切り替えるためのテスト用ホルダー。useRouterState のモックから参照する。
 // テストごとに beforeEach で "/" にリセットされる。
-const currentPathnameRef = { value: "/" };
-const navigateMock = vi.fn();
+// hoisted で生成することで、vi.mock factory が hoist された後でも参照が解決する。
+const { navigateMock, currentPathnameRef } = vi.hoisted(() => ({
+  navigateMock: vi.fn(),
+  currentPathnameRef: { value: "/" },
+}));
 
-// TanStack Router の Link は RouterProvider 配下でないと落ちるため、
-// テスト中は href を持つ <a> として描画するモックに差し替える。
-// asChild で囲んだ場合に Radix が DropdownMenuItem 上にイベントを伝搬しても
-// 単純な <a> として href が assert できる形にする。
-// 併せて useRouterState / useNavigate も Sidebar が組織切替時の遷移判定に
-// 用いているためモック差し替えする。
+// Link / useRouterState / useNavigate をまとめて差し替える。
+// useRouterState は実装側 (useRouterState({ select: (s) => s.location.pathname }))
+// と同じ呼び出し形を維持するため、helper が selector を実行する。
 vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
-    "@tanstack/react-router",
-  );
-  type MockLinkProps = {
-    to: string;
-    params?: Record<string, string>;
-    children?: React.ReactNode;
-    className?: string;
-    activeProps?: unknown;
-  };
-  return {
-    ...actual,
-    Link: ({ to, params, children, className }: MockLinkProps) => {
-      const href =
-        typeof to === "string"
-          ? to.replace(/\$(\w+)/g, (_, k: string) => params?.[k] ?? "")
-          : String(to);
-      return (
-        <a href={href} className={className}>
-          {children}
-        </a>
-      );
-    },
-    // 実装側 (useRouterState({ select: (s) => s.location.pathname })) と同じ
-    // 呼び出し形を維持するため、selector を実行して値を返す。selector の
-    // シグネチャが壊れた場合にテストでも検知できるようにするのが目的。
-    useRouterState: (opts?: {
-      select?: (state: { location: { pathname: string } }) => unknown;
-    }) => {
-      const state = { location: { pathname: currentPathnameRef.value } };
-      return opts?.select ? opts.select(state) : state;
-    },
-    useNavigate: () => navigateMock,
-  };
+  const { buildRouterMock } = await import("./helpers/router-mock");
+  return buildRouterMock({
+    useNavigate: navigateMock,
+    routerState: () => ({
+      location: { pathname: currentPathnameRef.value },
+    }),
+  });
 });
 
 const mockOrgs: Organization[] = [

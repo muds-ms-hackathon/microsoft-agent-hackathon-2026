@@ -4,6 +4,16 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import {
+  ambiguousInfoReviewInclude,
+  decisionItemReviewInclude,
+  serializeReviewItems,
+  taskReviewInclude,
+} from "../lib/review-item-serialization.js";
+import {
+  buildReviewItemTypeFilter,
+  recurringMeetingReviewItemQuerySchema,
+} from "../lib/schemas/review-item.js";
 import { recurringMeetingUpdateSchema } from "../lib/schemas/recurring-meeting.js";
 import {
   buildTaskListWhere,
@@ -130,6 +140,77 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(tasks.map(serializeTask));
   })
+  .get(
+    "/:id/review-items",
+    zValidator("query", recurringMeetingReviewItemQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const filters = c.req.valid("query");
+
+      const meeting = await prisma.recurringMeeting.findUnique({
+        where: { id },
+      });
+      const guard = await requireRecurringAccess(c, meeting);
+      if (!guard.ok) return guard.res;
+
+      const {
+        includeDecision,
+        includeTasks,
+        includeAmbiguousInfos,
+        decisionItemTypeWhere,
+      } = buildReviewItemTypeFilter(filters.type);
+
+      const meetingWhere = filters.meetingId
+        ? { meetingId: filters.meetingId }
+        : { meeting: { recurringMeetingId: id } };
+      const taskMeetingWhere = filters.meetingId
+        ? { originMeetingId: filters.meetingId }
+        : { originMeeting: { recurringMeetingId: id } };
+
+      const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
+        includeDecision
+          ? prisma.decisionItem.findMany({
+              where: {
+                ...meetingWhere,
+                status: { in: ["draft", "reviewing"] },
+                ...decisionItemTypeWhere,
+              },
+              orderBy: { createdAt: "asc" },
+              include: decisionItemReviewInclude,
+            })
+          : [],
+        includeTasks
+          ? prisma.task.findMany({
+              where: {
+                ...taskMeetingWhere,
+                // meetingId 未指定時は originMeeting join でスコープするため originMeetingId: { not: null } が必要。
+                // meetingId 指定時は originMeetingId が既に specific ID で非 null 保証されるため不要。
+                ...(filters.meetingId
+                  ? {}
+                  : { originMeetingId: { not: null } }),
+                status: { in: ["draft", "reviewing"] },
+              },
+              orderBy: { createdAt: "asc" },
+              include: taskReviewInclude,
+            })
+          : [],
+        includeAmbiguousInfos
+          ? prisma.ambiguousInfo.findMany({
+              where: {
+                ...meetingWhere,
+                status: { in: ["draft", "reviewing"] },
+              },
+              orderBy: { createdAt: "asc" },
+              include: ambiguousInfoReviewInclude,
+            })
+          : [],
+      ]);
+
+      return c.json(
+        serializeReviewItems({ decisionItems, tasks, ambiguousInfos }),
+      );
+    },
+  )
   .get("/:id/meetings", async (c) => {
     const id = c.req.param("id");
 
