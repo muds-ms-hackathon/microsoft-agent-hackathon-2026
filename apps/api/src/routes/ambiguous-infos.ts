@@ -6,6 +6,10 @@ import {
   validateAssigneesInOrg,
   validateRecurringMeetingsInOrg,
 } from "../lib/org-validation.js";
+import {
+  ambiguousInfoReviewInclude,
+  serializeAmbiguousInfo,
+} from "../lib/review-item-serialization.js";
 import { ambiguousInfoPatchSchema } from "../lib/schemas/review-item.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireOrgMembership } from "../middleware/authz.js";
@@ -53,6 +57,7 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
         if (count === 0) return { kind: "version_conflict" as const };
         const updated = await tx.ambiguousInfo.findUniqueOrThrow({
           where: { id },
+          include: ambiguousInfoReviewInclude,
         });
         return { kind: "ok" as const, item: updated };
       });
@@ -62,7 +67,7 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
           409,
         );
       }
-      return c.json(result.item);
+      return c.json(serializeAmbiguousInfo(result.item));
     }
 
     if (input.resolutionType === "discarded") {
@@ -78,6 +83,7 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
         if (count === 0) return { kind: "version_conflict" as const };
         const updated = await tx.ambiguousInfo.findUniqueOrThrow({
           where: { id },
+          include: ambiguousInfoReviewInclude,
         });
         return { kind: "ok" as const, item: updated };
       });
@@ -87,7 +93,7 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
           409,
         );
       }
-      return c.json(result.item);
+      return c.json(serializeAmbiguousInfo(result.item));
     }
 
     if (input.resolutionType === "task") {
@@ -152,7 +158,7 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
         if (count === 0) return { kind: "version_conflict" as const };
         const updated = await tx.ambiguousInfo.findUniqueOrThrow({
           where: { id },
-          include: { resolvedToTask: { select: { id: true, title: true } } },
+          include: ambiguousInfoReviewInclude,
         });
         return { kind: "ok" as const, item: updated };
       });
@@ -163,7 +169,7 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
           409,
         );
       }
-      return c.json(result.item);
+      return c.json(serializeAmbiguousInfo(result.item));
     }
 
     // 未決事項に解決（resolutionType の残る唯一のケース）
@@ -191,9 +197,7 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
       if (count === 0) return { kind: "version_conflict" as const };
       const updated = await tx.ambiguousInfo.findUniqueOrThrow({
         where: { id },
-        include: {
-          resolvedToDecision: { select: { id: true, title: true } },
-        },
+        include: ambiguousInfoReviewInclude,
       });
       return { kind: "ok" as const, item: updated };
     });
@@ -204,5 +208,5 @@ export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
         409,
       );
     }
-    return c.json(result.item);
+    return c.json(serializeAmbiguousInfo(result.item));
   });

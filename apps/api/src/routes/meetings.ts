@@ -174,7 +174,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       );
     },
   )
-  // 動作確認用（後で削除予定）
+  // TODO: 動作確認用のため削除する
   .post(
     "/:id/review-items",
     zValidator("json", reviewItemCreateSchema),

@@ -84,7 +84,7 @@ export const ambiguousInfoPatchSchema = z
     message: "status または resolutionType を指定してください",
   });
 
-// POST /meetings/:id/review-items（動作確認用・後で削除予定）
+// TODO: POST /meetings/:id/review-items は動作確認用のため削除する
 // ambiguity は AmbiguousInfo.body に title を格納するため body フィールドを持たない。
 const baseCreateFields = {
   title: z.string().min(1),

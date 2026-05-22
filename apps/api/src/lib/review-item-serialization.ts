@@ -31,7 +31,7 @@ type AmbiguousInfoWithReview = Prisma.AmbiguousInfoGetPayload<{
   include: typeof ambiguousInfoReviewInclude;
 }>;
 
-function serializeDecisionItem(item: DecisionItemWithReview) {
+export function serializeDecisionItem(item: DecisionItemWithReview) {
   const type =
     item.decisionState === "confirmed" || item.decisionState === "tentative"
       ? ("decision" as const)
@@ -76,7 +76,7 @@ function serializeTaskAsReviewItem(task: TaskWithReview) {
   };
 }
 
-function serializeAmbiguousInfo(item: AmbiguousInfoWithReview) {
+export function serializeAmbiguousInfo(item: AmbiguousInfoWithReview) {
   return {
     id: item.id,
     sourceTable: "ambiguous_info" as const,

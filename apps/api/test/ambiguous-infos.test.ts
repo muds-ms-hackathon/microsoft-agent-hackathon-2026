@@ -139,7 +139,12 @@ describe("PATCH /ambiguous-infos/:id", () => {
     mockMembershipFindUnique.mockResolvedValue(membership());
     mockTransaction.mockResolvedValue({
       kind: "ok",
-      item: { ...sampleItem, status: "rejected", version: 1 },
+      item: {
+        ...sampleItem,
+        status: "rejected",
+        version: 1,
+        meeting: { recurringMeetingId: "rmtg-1" },
+      },
     });
 
     const res = await app.request("/ambiguous-infos/ai-1", {
@@ -149,7 +154,14 @@ describe("PATCH /ambiguous-infos/:id", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { status: string; version: number };
+    const body = (await res.json()) as {
+      sourceTable: string;
+      type: string;
+      status: string;
+      version: number;
+    };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.type).toBe("ambiguity");
     expect(body.status).toBe("rejected");
     expect(body.version).toBe(1);
   });
@@ -178,6 +190,7 @@ describe("PATCH /ambiguous-infos/:id", () => {
         status: "resolved",
         resolutionType: "discarded",
         version: 1,
+        meeting: { recurringMeetingId: "rmtg-1" },
       },
     });
 
@@ -188,8 +201,9 @@ describe("PATCH /ambiguous-infos/:id", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { resolutionType: string };
-    expect(body.resolutionType).toBe("discarded");
+    const body = (await res.json()) as { sourceTable: string; status: string };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.status).toBe("resolved");
   });
 
   it("resolutionType=task でタスクを作成し 200 を返す", async () => {
@@ -215,7 +229,7 @@ describe("PATCH /ambiguous-infos/:id", () => {
             resolutionType: "task",
             resolvedToTaskId: "task-new",
             version: 1,
-            resolvedToTask: newTask,
+            meeting: { recurringMeetingId: "rmtg-1" },
           }),
         },
       };
@@ -231,8 +245,9 @@ describe("PATCH /ambiguous-infos/:id", () => {
 
     expect(res.status).toBe(200);
     expect(taskCreated).toBe(true);
-    const body = (await res.json()) as { resolutionType: string };
-    expect(body.resolutionType).toBe("task");
+    const body = (await res.json()) as { sourceTable: string; status: string };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.status).toBe("resolved");
   });
 
   it("resolutionType=task で他組織の assignee が含まれる場合は 400", async () => {
@@ -323,7 +338,7 @@ describe("PATCH /ambiguous-infos/:id", () => {
             resolutionType: "decision_item",
             resolvedToDecisionItemId: "di-new",
             version: 1,
-            resolvedToDecision: newDi,
+            meeting: { recurringMeetingId: "rmtg-1" },
           }),
         },
       };
@@ -339,8 +354,9 @@ describe("PATCH /ambiguous-infos/:id", () => {
 
     expect(res.status).toBe(200);
     expect(diCreated).toBe(true);
-    const body = (await res.json()) as { resolutionType: string };
-    expect(body.resolutionType).toBe("decision_item");
+    const body = (await res.json()) as { sourceTable: string; status: string };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.status).toBe("resolved");
   });
 
   it("resolutionType=decision_item で version 不一致は 409", async () => {
