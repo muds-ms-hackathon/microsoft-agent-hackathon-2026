@@ -21,7 +21,7 @@ _FAKE_RESULT = AnalysisRunResult(
     status="completed", completed_at="2026-05-17T11:00:00Z"
 )
 
-_REPORT_JSON_EMPTY = {"decisions": [], "tasks": [], "ambiguities": []}
+_REPORT_JSON_EMPTY: dict[str, list] = {"decisions": [], "tasks": [], "ambiguities": []}
 
 
 def _make_message(analysis_run_id: str = "run-1") -> MagicMock:
