@@ -2,8 +2,8 @@ import json
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 import httpx
+import pytest
 
 from main import _handle_message
 from schemas.analysis import AnalysisRunResult

@@ -17,10 +17,10 @@ from pipeline.analyze_meeting import analyze_meeting
 from routers.analysis import router as analysis_router
 from routers.health import router as health_router
 from schemas.analysis import (
-    AnalysisJobInput,
     VALID_AMBIGUITY_TYPE,
     VALID_PRIORITY,
     VALID_SEVERITY,
+    AnalysisJobInput,
 )
 
 logger = logging.getLogger(__name__)
