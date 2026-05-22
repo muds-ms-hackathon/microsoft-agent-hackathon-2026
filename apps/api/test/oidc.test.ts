@@ -77,16 +77,16 @@ describe("getJwks", () => {
     resetJwksCache();
   });
 
-  it("同一インスタンスをキャッシュして返す", () => {
-    const a = getJwks();
-    const b = getJwks();
+  it("同一インスタンスをキャッシュして返す", async () => {
+    const a = await getJwks();
+    const b = await getJwks();
     expect(a).toBe(b);
   });
 
-  it("resetJwksCache 後は別インスタンスを返す", () => {
-    const a = getJwks();
+  it("resetJwksCache 後は別インスタンスを返す", async () => {
+    const a = await getJwks();
     resetJwksCache();
-    const b = getJwks();
+    const b = await getJwks();
     expect(a).not.toBe(b);
   });
 });

@@ -24,7 +24,7 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
 
   let payload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
   try {
-    const result = await jwtVerify(token, getJwks(), {
+    const result = await jwtVerify(token, await getJwks(), {
       issuer: getIssuerUrl(),
       audience: getAudience(),
     });
@@ -35,8 +35,14 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
 
   // 自動作成に必要な claim が揃っていることを保証する
   const externalId = typeof payload.sub === "string" ? payload.sub : undefined;
+  // Entra External ID は email クレームが省略され preferred_username に入る場合がある。
+  // 標準の email クレームを優先し、なければ preferred_username にフォールバックする。
   const rawEmail =
-    typeof payload.email === "string" ? payload.email : undefined;
+    typeof payload.email === "string"
+      ? payload.email
+      : typeof payload.preferred_username === "string"
+        ? payload.preferred_username
+        : undefined;
   const name = typeof payload.name === "string" ? payload.name : undefined;
 
   if (!externalId || !rawEmail || !name) {
