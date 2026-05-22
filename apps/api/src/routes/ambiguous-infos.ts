@@ -2,33 +2,13 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
+import {
+  validateAssigneesInOrg,
+  validateRecurringMeetingsInOrg,
+} from "../lib/org-validation.js";
 import { ambiguousInfoPatchSchema } from "../lib/schemas/review-item.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireOrgMembership } from "../middleware/authz.js";
-
-async function validateAssigneesInOrg(
-  organizationId: string,
-  userIds: string[],
-): Promise<boolean> {
-  if (userIds.length === 0) return true;
-  const members = await prisma.organizationMembership.findMany({
-    where: { organizationId, userId: { in: userIds } },
-    select: { userId: true },
-  });
-  return members.length === userIds.length;
-}
-
-async function validateRecurringMeetingsInOrg(
-  organizationId: string,
-  recurringMeetingIds: string[],
-): Promise<boolean> {
-  if (recurringMeetingIds.length === 0) return true;
-  const rms = await prisma.recurringMeeting.findMany({
-    where: { id: { in: recurringMeetingIds }, organizationId },
-    select: { id: true },
-  });
-  return rms.length === recurringMeetingIds.length;
-}
 
 async function requireAmbiguousInfoAccess(
   c: Context<{ Variables: AuthVariables }>,

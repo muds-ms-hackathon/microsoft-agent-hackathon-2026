@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
+import { validateAssigneesInOrg } from "../lib/org-validation.js";
 import { decisionItemPatchSchema } from "../lib/schemas/review-item.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireOrgMembership } from "../middleware/authz.js";
@@ -40,14 +41,12 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
     if (!access.ok) return access.res;
 
     if (input.assigneeUserIds !== undefined) {
-      const members = await prisma.organizationMembership.findMany({
-        where: {
-          organizationId: access.organizationId,
-          userId: { in: input.assigneeUserIds },
-        },
-        select: { userId: true },
-      });
-      if (members.length !== input.assigneeUserIds.length) {
+      if (
+        !(await validateAssigneesInOrg(
+          access.organizationId,
+          input.assigneeUserIds,
+        ))
+      ) {
         return c.json(
           { error: "担当者は組織のメンバーである必要があります" },
           400,
