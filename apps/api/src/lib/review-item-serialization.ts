@@ -54,7 +54,7 @@ function serializeDecisionItem(item: DecisionItemWithReview) {
   };
 }
 
-// originMeetingId は review 用クエリで常に非 null（where 条件で保証）。
+// originMeetingId・originMeeting は review 用クエリの where 条件（originMeetingId: { not: null }）で非 null が保証される。
 function serializeTaskAsReviewItem(task: TaskWithReview) {
   return {
     id: task.id,
@@ -66,8 +66,10 @@ function serializeTaskAsReviewItem(task: TaskWithReview) {
     sourceQuote: task.sourceQuote,
     sourceContext: task.sourceContext,
     severity: null,
-    meetingId: task.originMeetingId as string,
-    recurringMeetingId: task.originMeeting?.recurringMeetingId ?? null,
+    // biome-ignore lint/style/noNonNullAssertion: where 条件で originMeetingId: { not: null } を保証済み
+    meetingId: task.originMeetingId!,
+    // biome-ignore lint/style/noNonNullAssertion: 同上
+    recurringMeetingId: task.originMeeting!.recurringMeetingId,
     assignees: task.assignees.map((a) => a.user),
     deadline: task.dueDate,
     version: task.version,

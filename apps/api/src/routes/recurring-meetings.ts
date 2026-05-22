@@ -183,6 +183,7 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.task.findMany({
               where: {
                 ...taskMeetingWhere,
+                originMeetingId: { not: null },
                 status: { in: ["draft", "reviewing"] },
               },
               orderBy: { createdAt: "asc" },
