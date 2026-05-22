@@ -295,12 +295,66 @@ describe("GET /meetings/:id", () => {
     const res = await app.request("/meetings/mtg-1");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      latestAnalysisRun: { id: string; status: string; summary: string };
+      latestAnalysisRun: { id: string; status: string; summary: string; recommendedAgenda: unknown | null };
     };
     expect(body.latestAnalysisRun).not.toBeNull();
     expect(body.latestAnalysisRun?.id).toBe("run-1");
     expect(body.latestAnalysisRun?.status).toBe("completed");
     expect(body.latestAnalysisRun?.summary).toBe("テストサマリー");
+    expect(body.latestAnalysisRun?.recommendedAgenda).toBeNull();
+  });
+
+  it("解析ランに recommendedAgenda がある場合 レスポンスに含む", async () => {
+    const agenda: Prisma.JsonValue = [
+      { title: "前回議事録の確認", durationMinutes: 5 },
+      { title: "プロジェクト進捗報告", durationMinutes: 20 },
+    ];
+    const run = {
+      id: "run-2",
+      meetingId: "mtg-1",
+      status: "completed",
+      currentStep: null,
+      summary: "アジェンダ付きサマリー",
+      alertLevel: "low",
+      completedAt: new Date("2026-05-18T12:00:00Z"),
+      failedAt: null,
+      errorMessage: null,
+      triggerType: "manual",
+      modelName: null,
+      apiVersion: null,
+      promptVersion: null,
+      pipelineVersion: null,
+      inputHash: null,
+      reportJson: null,
+      rawOutputsJson: null,
+      validationWarnings: null,
+      ragRetrievalJson: null,
+      recommendedAgenda: agenda,
+      resourceRefsJson: null,
+      startedAt: null,
+      createdAt: new Date("2026-05-18T11:00:00Z"),
+      updatedAt: new Date("2026-05-18T12:00:00Z"),
+    };
+    mockFindUnique.mockResolvedValue({
+      ...detailMeeting,
+      analysisRuns: [run],
+    } as MeetingDetail);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+
+    const res = await app.request("/meetings/mtg-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      latestAnalysisRun: {
+        id: string;
+        recommendedAgenda: unknown;
+      };
+    };
+    expect(body.latestAnalysisRun?.recommendedAgenda).toEqual(agenda);
   });
 
   it("会議不存在は 404", async () => {
