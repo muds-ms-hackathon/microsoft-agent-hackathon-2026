@@ -1,5 +1,6 @@
 """routers/analysis.py の挙動検証テスト。"""
 
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -132,8 +133,9 @@ async def test_analyze_raises_502_when_mark_analyzing_fails():
             await analyze(job)
 
     assert exc_info.value.status_code == 502
-    assert exc_info.value.detail["analysis_run_id"] == "run-1"
-    assert "遷移失敗" in exc_info.value.detail["underlying_error"]
+    detail = cast(dict, exc_info.value.detail)
+    assert detail["analysis_run_id"] == "run-1"
+    assert "遷移失敗" in detail["underlying_error"]
 
 
 @pytest.mark.asyncio
@@ -157,7 +159,7 @@ async def test_analyze_raises_502_when_complete_fails():
             await analyze(job)
 
     assert exc_info.value.status_code == 502
-    detail = exc_info.value.detail
+    detail = cast(dict, exc_info.value.detail)
     assert detail["analysis_run_id"] == "run-1"
     assert "保存失敗" in detail["underlying_error"]
-    assert detail["result"]["status"] == "completed"
+    assert cast(dict, detail["result"])["status"] == "completed"

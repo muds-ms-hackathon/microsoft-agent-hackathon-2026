@@ -16,7 +16,10 @@
       "Bash(npx biome *)",
       "Bash(.venv/bin/pytest tests/ -q)",
       "Bash(.venv/bin/mypy . *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(npx tsc *)",
+      "Bash(node *)",
+      "Bash(npx prisma *)"
     ]
   }
 }

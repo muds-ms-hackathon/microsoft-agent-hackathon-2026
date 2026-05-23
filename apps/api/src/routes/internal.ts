@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   type AnalysisRunStatus,
@@ -18,9 +18,9 @@ function toDate(v: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// Prisma Json 型への安全なキャスト。null / undefined は null にする。
-function toJson(v: unknown): Prisma.InputJsonValue | null {
-  if (v === null || v === undefined) return null;
+// Prisma nullable JSON 型への変換。null / undefined は DbNull（SQL NULL）にする。
+function toJson(v: unknown): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
+  if (v === null || v === undefined) return Prisma.DbNull;
   return v as Prisma.InputJsonValue;
 }
 

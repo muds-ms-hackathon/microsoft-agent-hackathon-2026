@@ -14,7 +14,7 @@ vi.mock("../src/lib/prisma.js", () => ({
   },
 }));
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 
@@ -268,7 +268,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           reason: null,
           recurrenceCount: null,
           decisionDeadline: null,
-          ambiguityFlags: null,
+          ambiguityFlags: Prisma.DbNull,
         },
         {
           meetingId: "mtg-1",
@@ -281,7 +281,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           reason: null,
           recurrenceCount: null,
           decisionDeadline: null,
-          ambiguityFlags: null,
+          ambiguityFlags: Prisma.DbNull,
         },
       ],
     });
@@ -333,7 +333,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           startDate: null,
           followUpDate: null,
           carriedOverCount: null,
-          ambiguityFlags: null,
+          ambiguityFlags: Prisma.DbNull,
           progressNote: null,
         },
         {
@@ -353,7 +353,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           startDate: null,
           followUpDate: null,
           carriedOverCount: null,
-          ambiguityFlags: null,
+          ambiguityFlags: Prisma.DbNull,
           progressNote: null,
         },
       ],
@@ -399,7 +399,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           inferenceBasis: null,
           dueDateRaw: null,
           dueDateEstimated: null,
-          affectedItemIds: null,
+          affectedItemIds: Prisma.DbNull,
         },
         {
           meetingId: "mtg-1",
@@ -412,7 +412,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           inferenceBasis: null,
           dueDateRaw: null,
           dueDateEstimated: null,
-          affectedItemIds: null,
+          affectedItemIds: Prisma.DbNull,
         },
       ],
     });
@@ -471,7 +471,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           validationWarnings: [{ type: "test_warning" }],
           ragRetrievalJson: { context: "rag_data" },
           recommendedAgenda: [{ title: "議題1" }],
-          resourceRefsJson: null,
+          resourceRefsJson: Prisma.DbNull,
         }),
       }),
     );
@@ -759,7 +759,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
           startDate: new Date("2026-06-03"),
           followUpDate: new Date("2026-06-07"),
           carriedOverCount: 1,
-          ambiguityFlags: null,
+          ambiguityFlags: Prisma.DbNull,
           progressNote: "進捗メモ",
         },
       ],
