@@ -48,7 +48,6 @@ def _parse_message_body(message: ServiceBusReceivedMessage) -> bytes:
     raise TypeError(f"未対応の message.body 型: {type(body)}")
 
 
-
 async def _handle_message(message: ServiceBusReceivedMessage) -> None:
     """Service Busからのメッセージを受信し、解析パイプラインを実行する。"""
     # 取り出し失敗で Consumer が落ちないよう、パース段階で完結させる
@@ -78,6 +77,8 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
             report = result.report_json
             decision_items = []
             for d in report.get("decisions", []):
+                if not isinstance(d, dict):
+                    continue
                 if not isinstance(d.get("topic"), str) or not d["topic"]:
                     continue
                 di: dict = {"title": d["topic"]}
@@ -88,6 +89,8 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                 decision_items.append(di)
             task_items = []
             for t in report.get("tasks", []):
+                if not isinstance(t, dict):
+                    continue
                 if not isinstance(t.get("title"), str) or not t["title"]:
                     continue
                 ti: dict = {"title": t["title"]}
@@ -100,6 +103,8 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                 task_items.append(ti)
             ambiguous_infos = []
             for a in report.get("ambiguities", []):
+                if not isinstance(a, dict):
+                    continue
                 if not isinstance(a.get("body"), str) or not a["body"]:
                     continue
                 ai: dict = {"body": a["body"]}
