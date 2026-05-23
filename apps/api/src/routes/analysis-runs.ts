@@ -134,10 +134,19 @@ export const analysisRunsRoute = new Hono()
       if (data.error_message !== undefined)
         updateData.errorMessage = data.error_message;
 
-      const updated = await prisma.meetingAnalysisRun.update({
-        where: { id },
+      // 終端状態でない場合のみ更新する（CAS方式で並行競合を防ぐ）
+      await prisma.meetingAnalysisRun.updateMany({
+        where: {
+          id,
+          status: { notIn: ["completed", "failed"] },
+        },
         data: updateData,
       });
-      return c.json(updated);
+
+      // 最新状態を取得して返す（更新件数0の場合も現状をそのまま返し冪等を保証）
+      const currentRun = await prisma.meetingAnalysisRun.findUnique({
+        where: { id },
+      });
+      return c.json(currentRun);
     },
   );
