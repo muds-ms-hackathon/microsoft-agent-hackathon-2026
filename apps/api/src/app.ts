@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { ambiguousInfosRoute } from "./routes/ambiguous-infos.js";
+import { decisionItemsRoute } from "./routes/decision-items.js";
 import { healthRoute } from "./routes/health.js";
 import { meRoute } from "./routes/me.js";
 import { meetingsRoute } from "./routes/meetings.js";
@@ -53,6 +55,8 @@ const routes = app
   .route("/organizations", organizationsRoute)
   .route("/recurring-meetings", recurringMeetingsRoute)
   .route("/tasks", tasksRoute)
+  .route("/decision-items", decisionItemsRoute)
+  .route("/ambiguous-infos", ambiguousInfosRoute)
   .route("/internal", internalRoute);
 
 export { app };
