@@ -158,7 +158,10 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                 analysis_run_id,
             )
             raise
-        elif isinstance(error, httpx.HTTPStatusError) and error.response.status_code < 500:
+        elif (
+            isinstance(error, httpx.HTTPStatusError)
+            and error.response.status_code < 500
+        ):
             # 4xx は恒久失敗：failed 保存後raise せず、 再配送ループを防ぐ
             logger.error(
                 "complete が 4xx で拒否 analysis_run_id=%s: %s",
