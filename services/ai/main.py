@@ -53,8 +53,8 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
     # 取り出し失敗で Consumer が落ちないよう、パース段階で完結させる
     try:
         body = json.loads(_parse_message_body(message).decode("utf-8"))
-    except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as e:
-        logger.error("メッセージのデコードに失敗 (破棄): %s", e)
+    except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as error:
+        logger.error("メッセージのデコードに失敗 (破棄): %s", error)
         return
     if not isinstance(body, dict):
         logger.error("メッセージボディが dict ではありません: %s", type(body).__name__)
@@ -76,45 +76,45 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
         if result.status == "completed" and result.report_json:
             report = result.report_json
             decision_items = []
-            for d in report.get("decisions", []):
-                if not isinstance(d, dict):
+            for decision in report.get("decisions", []):
+                if not isinstance(decision, dict):
                     continue
-                if not isinstance(d.get("topic"), str) or not d["topic"]:
+                if not isinstance(decision.get("topic"), str) or not decision["topic"]:
                     continue
-                di: dict = {"title": d["topic"]}
-                if isinstance(d.get("content"), str):
-                    di["body"] = d["content"]
-                if isinstance(d.get("source_quote"), str):
-                    di["sourceQuote"] = d["source_quote"]
-                decision_items.append(di)
+                decision_item: dict = {"title": decision["topic"]}
+                if isinstance(decision.get("content"), str):
+                    decision_item["body"] = decision["content"]
+                if isinstance(decision.get("source_quote"), str):
+                    decision_item["sourceQuote"] = decision["source_quote"]
+                decision_items.append(decision_item)
             task_items = []
-            for t in report.get("tasks", []):
-                if not isinstance(t, dict):
+            for task in report.get("tasks", []):
+                if not isinstance(task, dict):
                     continue
-                if not isinstance(t.get("title"), str) or not t["title"]:
+                if not isinstance(task.get("title"), str) or not task["title"]:
                     continue
-                ti: dict = {"title": t["title"]}
-                if isinstance(t.get("body"), str):
-                    ti["body"] = t["body"]
-                if isinstance(t.get("source_quote"), str):
-                    ti["sourceQuote"] = t["source_quote"]
-                if t.get("priority") in VALID_PRIORITY:
-                    ti["priority"] = t["priority"]
-                task_items.append(ti)
+                task_item: dict = {"title": task["title"]}
+                if isinstance(task.get("body"), str):
+                    task_item["body"] = task["body"]
+                if isinstance(task.get("source_quote"), str):
+                    task_item["sourceQuote"] = task["source_quote"]
+                if task.get("priority") in VALID_PRIORITY:
+                    task_item["priority"] = task["priority"]
+                task_items.append(task_item)
             ambiguous_infos = []
-            for a in report.get("ambiguities", []):
-                if not isinstance(a, dict):
+            for ambiguity in report.get("ambiguities", []):
+                if not isinstance(ambiguity, dict):
                     continue
-                if not isinstance(a.get("body"), str) or not a["body"]:
+                if not isinstance(ambiguity.get("body"), str) or not ambiguity["body"]:
                     continue
-                ai: dict = {"body": a["body"]}
-                if isinstance(a.get("source_quote"), str):
-                    ai["sourceQuote"] = a["source_quote"]
-                if a.get("ambiguity_type") in VALID_AMBIGUITY_TYPE:
-                    ai["ambiguityType"] = a["ambiguity_type"]
-                if a.get("severity") in VALID_SEVERITY:
-                    ai["severity"] = a["severity"]
-                ambiguous_infos.append(ai)
+                ambiguity_item: dict = {"body": ambiguity["body"]}
+                if isinstance(ambiguity.get("source_quote"), str):
+                    ambiguity_item["sourceQuote"] = ambiguity["source_quote"]
+                if ambiguity.get("ambiguity_type") in VALID_AMBIGUITY_TYPE:
+                    ambiguity_item["ambiguityType"] = ambiguity["ambiguity_type"]
+                if ambiguity.get("severity") in VALID_SEVERITY:
+                    ambiguity_item["severity"] = ambiguity["severity"]
+                ambiguous_infos.append(ambiguity_item)
             complete_attempted = True
             await api_client.complete_analysis_run(
                 analysis_run_id,
@@ -132,8 +132,8 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
             analysis_run_id,
             result.status,
         )
-    except Exception as e:
-        logger.error("解析失敗 analysis_run_id=%s: %s", analysis_run_id, e)
+    except Exception as error:
+        logger.error("解析失敗 analysis_run_id=%s: %s", analysis_run_id, error)
         if not complete_attempted:
             # complete 未呼び出しなので失敗確定、failed に落として再配送させる
             try:
@@ -141,7 +141,7 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                     analysis_run_id,
                     {
                         "status": "failed",
-                        "error_message": str(e),
+                        "error_message": str(error),
                         "failed_at": datetime.now(timezone.utc).isoformat(),
                     },
                 )
@@ -158,19 +158,19 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
                 analysis_run_id,
             )
             raise
-        elif isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+        elif isinstance(error, httpx.HTTPStatusError) and error.response.status_code < 500:
             # 4xx は恒久失敗：failed 保存後raise せず、 再配送ループを防ぐ
             logger.error(
                 "complete が 4xx で拒否 analysis_run_id=%s: %s",
                 analysis_run_id,
-                e,
+                error,
             )
             try:
                 await api_client.update_analysis_run_result(
                     analysis_run_id,
                     {
                         "status": "failed",
-                        "error_message": str(e),
+                        "error_message": str(error),
                         "failed_at": datetime.now(timezone.utc).isoformat(),
                     },
                 )
@@ -185,7 +185,7 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
             logger.error(
                 "complete失敗（DB状態不明）再配送 analysis_run_id=%s: %s",
                 analysis_run_id,
-                e,
+                error,
             )
             raise
 

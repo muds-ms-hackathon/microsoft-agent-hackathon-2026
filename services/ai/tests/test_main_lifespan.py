@@ -135,8 +135,8 @@ async def test_lifespan_raises_when_deployment_name_not_set():
         try:
             async with main.lifespan(main.app):
                 pass
-        except RuntimeError as e:
-            assert _DEPLOY_KEY in str(e)
+        except RuntimeError as error:
+            assert _DEPLOY_KEY in str(error)
         else:
             raise AssertionError("RuntimeError が raise されなかった")
 
@@ -152,8 +152,8 @@ async def test_lifespan_raises_when_api_key_not_set():
         try:
             async with main.lifespan(main.app):
                 pass
-        except RuntimeError as e:
-            assert _API_KEY in str(e)
+        except RuntimeError as error:
+            assert _API_KEY in str(error)
         else:
             raise AssertionError("RuntimeError が raise されなかった")
 
@@ -170,7 +170,7 @@ async def test_lifespan_raises_when_endpoint_not_set():
         try:
             async with main.lifespan(main.app):
                 pass
-        except RuntimeError as e:
-            assert "AZURE_OPENAI_ENDPOINT" in str(e)
+        except RuntimeError as error:
+            assert "AZURE_OPENAI_ENDPOINT" in str(error)
         else:
             raise AssertionError("RuntimeError が raise されなかった")
