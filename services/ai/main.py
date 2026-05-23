@@ -3,7 +3,6 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 from azure.servicebus import ServiceBusReceivedMessage
 from fastapi import FastAPI
@@ -13,6 +12,7 @@ from consumers.service_bus import ServiceBusConsumer
 from integrations.app_api_client import AppApiClient
 from llm.client import AzureOpenAIClient
 from pipeline.analyze_meeting import analyze_meeting
+from pipeline.complete_payload import build_complete_payload
 from routers.analysis import router as analysis_router
 from routers.health import router as health_router
 from schemas.analysis import AnalysisJobInput
@@ -61,33 +61,35 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
         return
     api_client = AppApiClient()
     llm_client = AzureOpenAIClient()
-    try:
-        input_data = await api_client.get_analysis_run_input(analysis_run_id)
-        job = AnalysisJobInput(**input_data)
-        result = await analyze_meeting(job, llm_client)
-        await api_client.update_analysis_run_result(
+
+    # queued → analyzing に遷移する（失敗時は例外を伝播させ再配送）
+    await api_client.mark_analyzing(analysis_run_id)
+
+    input_data = await api_client.get_analysis_run_input(analysis_run_id)
+    job = AnalysisJobInput(**input_data)
+
+    # analyze_meeting は例外を飲み込み status="failed" の結果を返す
+    result = await analyze_meeting(job, llm_client)
+
+    if result.status == "completed":
+        # 解析結果・業務データを一括保存する（失敗時は例外を伝播させ再配送）
+        await api_client.complete_analysis_run(
+            analysis_run_id, build_complete_payload(result)
+        )
+        logger.info("解析完了 analysis_run_id=%s", analysis_run_id)
+    else:
+        # パイプライン内部エラー: mark_failed が成功すれば再配送不要
+        # mark_failed 自体が失敗した場合のみ例外を伝播させる
+        await api_client.mark_failed(
             analysis_run_id,
-            result.model_dump(exclude_none=True),
+            error_message=result.error_message,
+            current_step=result.current_step,
         )
         logger.info(
-            "解析完了 analysis_run_id=%s status=%s",
+            "解析失敗を記録 analysis_run_id=%s error=%s",
             analysis_run_id,
-            result.status,
+            result.error_message,
         )
-    except Exception as e:
-        logger.error("解析失敗 analysis_run_id=%s: %s", analysis_run_id, e)
-        try:
-            await api_client.update_analysis_run_result(
-                analysis_run_id,
-                {
-                    "status": "failed",
-                    "error_message": str(e),
-                    "failed_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-        except Exception:
-            logger.exception("エラー保存にも失敗 analysis_run_id=%s", analysis_run_id)
-        raise  # Consumer に失敗を伝えて再配送させる
 
 
 def _on_consumer_done(task: asyncio.Task) -> None:

@@ -186,6 +186,41 @@ describe("GET /internal/analysis-runs/:id/input", () => {
   });
 });
 
+describe("GET /internal/analysis-runs/:id/status", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.INTERNAL_API_SECRET = SECRET;
+  });
+
+  it("存在する解析ランの status を返す", async () => {
+    mockRunFindUnique.mockResolvedValue(
+      baseRun as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>,
+    );
+
+    const res = await app.request("/internal/analysis-runs/run-1/status", {
+      headers: AUTH_HEADER,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; status: string };
+    expect(body.id).toBe("run-1");
+    expect(body.status).toBe("queued");
+  });
+
+  it("存在しない解析ランは 404", async () => {
+    mockRunFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/internal/analysis-runs/missing/status", {
+      headers: AUTH_HEADER,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("認証ヘッダなしは 401", async () => {
+    const res = await app.request("/internal/analysis-runs/run-1/status");
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("PATCH /internal/analysis-runs/:id/result", () => {
   beforeEach(() => {
     vi.clearAllMocks();
