@@ -64,7 +64,7 @@ async def test_analyze_dry_run_skips_api_client():
 
 @pytest.mark.asyncio
 async def test_analyze_with_run_id_completed_path():
-    """analysis_run_id 指定・completed: mark_analyzing → complete_analysis_run が呼ばれる。"""
+    """completed 経路: mark_analyzing → complete_analysis_run を順に呼ぶ"""
     job = _make_job(run_id="run-1")
     expected_result = _make_completed_result()
     mock_api = _make_mock_api()
@@ -138,7 +138,7 @@ async def test_analyze_raises_502_when_mark_analyzing_fails():
 
 @pytest.mark.asyncio
 async def test_analyze_raises_502_when_complete_fails():
-    """complete_analysis_run 失敗時は HTTPException(502) を投げ detail に result を含む。"""
+    """complete_analysis_run 失敗時は 502 を投げ detail に result を含む"""
     job = _make_job(run_id="run-1")
     expected_result = _make_completed_result()
     mock_api = _make_mock_api()

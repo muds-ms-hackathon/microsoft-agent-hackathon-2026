@@ -103,10 +103,21 @@ describe("PATCH /internal/analysis-runs/:id", () => {
   });
 
   it("(a) queued -> analyzing への正常遷移が成功する", async () => {
-    const analyzingRun = { ...baseRun, status: "analyzing", startedAt: new Date() };
+    const analyzingRun = {
+      ...baseRun,
+      status: "analyzing",
+      startedAt: new Date(),
+    };
     mockFindUnique
-      .mockResolvedValueOnce({ ...baseRun, status: "queued" } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>)
-      .mockResolvedValueOnce(analyzingRun as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
+      .mockResolvedValueOnce({
+        ...baseRun,
+        status: "queued",
+      } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>)
+      .mockResolvedValueOnce(
+        analyzingRun as Prisma.MeetingAnalysisRunGetPayload<
+          Record<string, never>
+        >,
+      );
     mockUpdateMany.mockResolvedValue({ count: 1 });
 
     const res = await app.request("/internal/analysis-runs/run-1", {
@@ -172,10 +183,20 @@ describe("PATCH /internal/analysis-runs/:id", () => {
   });
 
   it("(e) failed 遷移時に error_message と current_step が保存される", async () => {
-    const failedRun = { ...baseRun, status: "failed", failedAt: new Date(), errorMessage: "解析失敗" };
+    const failedRun = {
+      ...baseRun,
+      status: "failed",
+      failedAt: new Date(),
+      errorMessage: "解析失敗",
+    };
     mockFindUnique
-      .mockResolvedValueOnce({ ...baseRun, status: "analyzing" } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>)
-      .mockResolvedValueOnce(failedRun as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
+      .mockResolvedValueOnce({
+        ...baseRun,
+        status: "analyzing",
+      } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>)
+      .mockResolvedValueOnce(
+        failedRun as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>,
+      );
     mockUpdateMany.mockResolvedValue({ count: 1 });
 
     const res = await app.request("/internal/analysis-runs/run-1", {
@@ -216,7 +237,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -268,7 +291,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -339,7 +364,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -348,7 +375,11 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
         decision_items: [],
         tasks: [],
         ambiguous_infos: [
-          { body: "曖昧な箇所1", severity: "high", ambiguity_type: "unclear_scope" },
+          {
+            body: "曖昧な箇所1",
+            severity: "high",
+            ambiguity_type: "unclear_scope",
+          },
           { body: "曖昧な箇所2" },
         ],
       }),
@@ -393,7 +424,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -450,18 +483,28 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
         decision_items: [
-          { title: "決定1", decision_state: "invalid_state", reason: "bad_reason" },
+          {
+            title: "決定1",
+            decision_state: "invalid_state",
+            reason: "bad_reason",
+          },
         ],
         tasks: [{ title: "タスク1", priority: "urgent" }],
         ambiguous_infos: [
-          { body: "曖昧1", ambiguity_type: "unknown_type", severity: "critical" },
+          {
+            body: "曖昧1",
+            ambiguity_type: "unknown_type",
+            severity: "critical",
+          },
         ],
       }),
     });
@@ -479,7 +522,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     );
     expect(tx.ambiguousInfo.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: [expect.objectContaining({ ambiguityType: null, severity: null })],
+        data: [
+          expect.objectContaining({ ambiguityType: null, severity: null }),
+        ],
       }),
     );
   });
@@ -488,7 +533,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -509,7 +556,10 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     expect(tx.decisionItem.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: [
-          expect.objectContaining({ decisionState: "confirmed", reason: "no_consensus" }),
+          expect.objectContaining({
+            decisionState: "confirmed",
+            reason: "no_consensus",
+          }),
         ],
       }),
     );
@@ -521,15 +571,15 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
-        decision_items: [
-          { title: "決定1", decision_deadline: "2026-06-01" },
-        ],
+        decision_items: [{ title: "決定1", decision_deadline: "2026-06-01" }],
         tasks: [
           {
             title: "タスク1",
@@ -568,17 +618,21 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
       body: JSON.stringify({
-        decision_items: [
-          { title: "決定1", decision_deadline: "来週月曜" },
-        ],
+        decision_items: [{ title: "決定1", decision_deadline: "来週月曜" }],
         tasks: [
-          { title: "タスク1", due_date: "not-a-date", due_date_raw: "来週月曜" },
+          {
+            title: "タスク1",
+            due_date: "not-a-date",
+            due_date_raw: "来週月曜",
+          },
         ],
         ambiguous_infos: [],
       }),
@@ -594,7 +648,7 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
         data: [
           expect.objectContaining({
             dueDate: null,
-            dueDateRaw: "来週月曜",  // 元の文字列は raw に残る
+            dueDateRaw: "来週月曜", // 元の文字列は raw に残る
           }),
         ],
       }),
@@ -607,7 +661,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -654,7 +710,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -712,7 +770,9 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
@@ -761,12 +821,18 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     mockFindUnique.mockResolvedValueOnce(baseRunWithMeeting);
     const tx = makeTx();
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 1 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-      body: JSON.stringify({ decision_items: [], tasks: [], ambiguous_infos: [] }),
+      body: JSON.stringify({
+        decision_items: [],
+        tasks: [],
+        ambiguous_infos: [],
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -783,16 +849,25 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
   });
 
   it("analyzing 状態でない場合（queued）は 422 を返す", async () => {
-    mockFindUnique.mockResolvedValueOnce({ ...baseRunWithMeeting, status: "queued" });
+    mockFindUnique.mockResolvedValueOnce({
+      ...baseRunWithMeeting,
+      status: "queued",
+    });
     const tx = makeTx();
     tx.meetingAnalysisRun.findUnique.mockResolvedValue({ status: "queued" });
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 0 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-      body: JSON.stringify({ decision_items: [], tasks: [], ambiguous_infos: [] }),
+      body: JSON.stringify({
+        decision_items: [],
+        tasks: [],
+        ambiguous_infos: [],
+      }),
     });
 
     expect(res.status).toBe(422);
@@ -800,15 +875,24 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
   });
 
   it("failed の analysis run に complete すると 422 を返す", async () => {
-    mockFindUnique.mockResolvedValueOnce({ ...baseRunWithMeeting, status: "failed" });
+    mockFindUnique.mockResolvedValueOnce({
+      ...baseRunWithMeeting,
+      status: "failed",
+    });
     const tx = makeTx();
     tx.meetingAnalysisRun.findUnique.mockResolvedValue({ status: "failed" });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-      body: JSON.stringify({ decision_items: [], tasks: [], ambiguous_infos: [] }),
+      body: JSON.stringify({
+        decision_items: [],
+        tasks: [],
+        ambiguous_infos: [],
+      }),
     });
 
     expect(res.status).toBe(422);
@@ -816,16 +900,25 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
   });
 
   it("すでに completed の場合は冪等に 200 を返す（noop パス）", async () => {
-    mockFindUnique.mockResolvedValueOnce({ ...baseRunWithMeeting, status: "completed" });
+    mockFindUnique.mockResolvedValueOnce({
+      ...baseRunWithMeeting,
+      status: "completed",
+    });
     const tx = makeTx();
     tx.meetingAnalysisRun.findUnique.mockResolvedValue({ status: "completed" });
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 0 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-      body: JSON.stringify({ decision_items: [], tasks: [], ambiguous_infos: [] }),
+      body: JSON.stringify({
+        decision_items: [],
+        tasks: [],
+        ambiguous_infos: [],
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -836,18 +929,27 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
   it("CAS conflict で current=completed のとき冪等に 200 を返す", async () => {
     // 外側 findUnique は analyzing を返すが、CAS で updateMany が 0 件になり
     // 再読みしたら completed になっていた（並行リクエストが先に完了させた）ケース
-    mockFindUnique.mockResolvedValueOnce({ ...baseRunWithMeeting, status: "analyzing" });
+    mockFindUnique.mockResolvedValueOnce({
+      ...baseRunWithMeeting,
+      status: "analyzing",
+    });
     const tx = makeTx();
     tx.meetingAnalysisRun.findUnique
       .mockResolvedValueOnce({ status: "analyzing" }) // transitionAnalysisRunStatus の先読み
       .mockResolvedValueOnce({ status: "completed" }); // CAS 失敗後の再読み
     tx.meetingAnalysisRun.updateMany.mockResolvedValue({ count: 0 });
-    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) => fn(tx));
+    mockTransaction.mockImplementation((fn: (tx: typeof tx) => Promise<void>) =>
+      fn(tx),
+    );
 
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-      body: JSON.stringify({ decision_items: [], tasks: [], ambiguous_infos: [] }),
+      body: JSON.stringify({
+        decision_items: [],
+        tasks: [],
+        ambiguous_infos: [],
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -864,7 +966,11 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-      body: JSON.stringify({ decision_items: [], tasks: [], ambiguous_infos: [] }),
+      body: JSON.stringify({
+        decision_items: [],
+        tasks: [],
+        ambiguous_infos: [],
+      }),
     });
 
     expect(res.status).toBe(422);
@@ -915,7 +1021,11 @@ describe("POST /internal/analysis-runs/:id/complete", () => {
     const res = await app.request("/internal/analysis-runs/run-1/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-      body: JSON.stringify({ decision_items: [], tasks: [], ambiguous_infos: [] }),
+      body: JSON.stringify({
+        decision_items: [],
+        tasks: [],
+        ambiguous_infos: [],
+      }),
     });
 
     expect(res.status).toBe(404);
