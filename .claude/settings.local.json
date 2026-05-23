@@ -20,7 +20,8 @@
       "Bash(npx tsc *)",
       "Bash(node *)",
       "Bash(npx prisma *)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(gh issue *)"
     ]
   }
 }

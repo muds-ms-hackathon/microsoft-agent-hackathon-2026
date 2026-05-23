@@ -203,7 +203,7 @@ export const internalRoute = new Hono()
         transcriptText: payload.transcript_text ?? null,
         reportJson: toJson(payload.report_json),
         rawOutputsJson: toJson(payload.raw_outputs_json),
-        validationWarnings: toJson(payload.validation_warnings ?? null),
+        validationWarnings: toJson(payload.validation_warnings),
         ragRetrievalJson: toJson(payload.rag_retrieval_json),
         recommendedAgenda: toJson(payload.recommended_agenda),
         resourceRefsJson: toJson(payload.resource_refs_json),
