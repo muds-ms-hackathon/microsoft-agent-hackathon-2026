@@ -243,7 +243,7 @@ describe("ReviewView", () => {
         onSearchChange={noOp}
         currentOrgId="org-1"
         items={items}
-        onAddItem={noOp}
+
         onUpdate={noOp}
       />,
     );
@@ -262,7 +262,7 @@ describe("ReviewView", () => {
         onSearchChange={noOp}
         currentOrgId="org-1"
         items={items}
-        onAddItem={noOp}
+
         onUpdate={noOp}
       />,
     );
@@ -286,7 +286,7 @@ describe("ReviewView", () => {
         onSearchChange={noOp}
         currentOrgId="org-1"
         items={items}
-        onAddItem={noOp}
+
         onUpdate={noOp}
       />,
     );

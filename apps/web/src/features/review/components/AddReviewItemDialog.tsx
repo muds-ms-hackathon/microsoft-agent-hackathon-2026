@@ -1,3 +1,6 @@
+// 簡易版: title・type・sourceContext・body のみ対応。
+// 担当者・期限・重要度は POST API 非対応のため省略。
+// TODO: POST /meetings/:id/review-items は動作確認用エンドポイントのため将来削除予定。
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,29 +14,24 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useOrganizationMembers } from "@/features/organizations/hooks/useOrganizationMembers";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
 import type { MeetingListItem } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
-import { AssigneePicker } from "@/features/tasks/components/AssigneePicker";
 import { api, authHeaders } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
-import type { ReviewItem, ReviewItemSourceTable } from "../types";
-import { REVIEW_ITEM_TYPES, TYPE_LABELS } from "../types";
+import { TYPE_LABELS, REVIEW_ITEM_TYPES } from "../types";
+import { reviewItemsQueryKey } from "../useReviewItems";
 
 const formSchema = z.object({
   recurringMeetingId: z.string().min(1, "定例を選択してください"),
   meetingId: z.string().min(1, "会議を選択してください"),
   type: z.enum(["decision", "open_issue", "task_candidate", "ambiguity"]),
   title: z.string().min(1, "内容は必須です"),
-  sourceQuote: z.string(),
   sourceContext: z.string(),
-  assigneeIds: z.array(z.string()),
-  deadline: z.string(),
-  severity: z.enum(["high", "medium", "low"]).optional(),
+  body: z.string(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -43,20 +41,15 @@ const DEFAULT_VALUES: FormValues = {
   meetingId: "",
   type: "task_candidate",
   title: "",
-  sourceQuote: "",
   sourceContext: "",
-  assigneeIds: [],
-  deadline: "",
-  severity: undefined,
+  body: "",
 };
 
 function formatMeetingLabel(meeting: MeetingListItem): string {
   const d = new Date(meeting.heldAt);
-  const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
-  return `${meeting.title} · ${dateStr}`;
+  return `${meeting.title} · ${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-// 定例を選んだ後に会議一覧を取得するインナーコンポーネント
 function MeetingSelect({
   recurringMeetingId,
   value,
@@ -65,7 +58,7 @@ function MeetingSelect({
 }: {
   recurringMeetingId: string;
   value: string;
-  onChange: (meetingId: string, label: string) => void;
+  onChange: (meetingId: string) => void;
   id: string;
 }) {
   const { data: meetings = [], isLoading } = useQuery<MeetingListItem[]>({
@@ -85,10 +78,7 @@ function MeetingSelect({
     <select
       id={id}
       value={value}
-      onChange={(e) => {
-        const m = meetings.find((m) => m.id === e.target.value);
-        onChange(e.target.value, m ? formatMeetingLabel(m) : "");
-      }}
+      onChange={(e) => onChange(e.target.value)}
       disabled={isLoading || !recurringMeetingId}
       className="text-sm px-2 py-1.5 rounded-md border border-border/60 bg-card w-full"
     >
@@ -104,27 +94,22 @@ function MeetingSelect({
 
 export function AddReviewItemDialog({
   orgId,
-  onAdd,
   initialRmId,
   initialMeetingId,
 }: {
   orgId: string;
-  onAdd: (draft: Omit<ReviewItem, "id" | "status">) => void;
   initialRmId?: string;
   initialMeetingId?: string;
 }) {
   const [open, setOpen] = useState(false);
-
-  const { data: members = [] } = useOrganizationMembers(orgId);
+  const queryClient = useQueryClient();
 
   const rmId = useId();
-  const meetingId = useId();
+  const meetingFieldId = useId();
   const typeId = useId();
-  const contentId = useId();
-  const sourceQuoteId = useId();
+  const titleId = useId();
   const sourceContextId = useId();
-  const deadlineId = useId();
-  const severityId = useId();
+  const bodyId = useId();
 
   const { data: recurringMeetings = [] } = useOrganizationMeetings(orgId);
 
@@ -134,7 +119,6 @@ export function AddReviewItemDialog({
     watch,
     setValue,
     reset,
-    control,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -147,14 +131,13 @@ export function AddReviewItemDialog({
 
   const selectedRmId = watch("recurringMeetingId");
   const selectedMeetingId = watch("meetingId");
+  const selectedType = watch("type");
 
-  // 定例を切り替えたら会議の選択をリセット
   // biome-ignore lint/correctness/useExhaustiveDependencies: selectedRmId が変わったときだけリセットする意図的な依存
   useEffect(() => {
     setValue("meetingId", "");
   }, [selectedRmId, setValue]);
 
-  // ダイアログを開くたびに initialRmId を反映
   useEffect(() => {
     if (open) {
       reset({
@@ -165,39 +148,28 @@ export function AddReviewItemDialog({
     }
   }, [open, initialRmId, initialMeetingId, reset]);
 
-  const selectedType = watch("type");
+  const mutation = useMutation({
+    mutationFn: async (data: FormValues) => {
+      const body =
+        data.type === "ambiguity"
+          ? { type: data.type as const, title: data.title, sourceContext: data.sourceContext || undefined }
+          : { type: data.type as const, title: data.title, sourceContext: data.sourceContext || undefined, body: data.body || undefined };
 
-  const sourceTableFor = (type: FormValues["type"]): ReviewItemSourceTable =>
-    type === "task_candidate"
-      ? "task"
-      : type === "ambiguity"
-        ? "ambiguous_info"
-        : "decision_item";
+      const res = await api.meetings[":id"]["review-items"].$post(
+        { param: { id: data.meetingId }, json: body },
+        authHeaders(),
+      );
+      if (!res.ok) throw new Error(`Failed to create review item: ${res.status}`);
+    },
+    onSuccess: (_, data) => {
+      queryClient.invalidateQueries({
+        queryKey: reviewItemsQueryKey({ meetingId: data.meetingId }),
+      });
+      setOpen(false);
+    },
+  });
 
-  const onSubmit = (data: FormValues) => {
-    const assignees = data.assigneeIds.flatMap((id) => {
-      const m = members.find((m) => m.userId === id);
-      return m
-        ? [{ id: m.userId, name: m.name, displayName: m.displayName, email: m.email }]
-        : [];
-    });
-
-    onAdd({
-      sourceTable: sourceTableFor(data.type),
-      type: data.type,
-      title: data.title,
-      body: null,
-      sourceQuote: data.sourceQuote || null,
-      sourceContext: data.sourceContext,
-      assignees,
-      deadline: data.deadline ? `${data.deadline}T00:00:00.000Z` : null,
-      severity: data.type === "ambiguity" ? (data.severity ?? "medium") : null,
-      recurringMeetingId: data.recurringMeetingId,
-      meetingId: data.meetingId,
-      version: 0,
-    });
-    setOpen(false);
-  };
+  const onSubmit = (data: FormValues) => mutation.mutate(data);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -237,14 +209,12 @@ export function AddReviewItemDialog({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor={meetingId}>会議</Label>
+              <Label htmlFor={meetingFieldId}>会議</Label>
               <MeetingSelect
-                id={meetingId}
+                id={meetingFieldId}
                 recurringMeetingId={selectedRmId}
                 value={selectedMeetingId}
-                onChange={(v) => {
-                  setValue("meetingId", v, { shouldValidate: true });
-                }}
+                onChange={(v) => setValue("meetingId", v, { shouldValidate: true })}
               />
               {errors.meetingId && (
                 <p role="alert" className="text-destructive text-xs">
@@ -270,9 +240,9 @@ export function AddReviewItemDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor={contentId}>内容</Label>
+            <Label htmlFor={titleId}>内容</Label>
             <Input
-              id={contentId}
+              id={titleId}
               placeholder="AIが抽出した決定・課題・タスク等"
               {...register("title")}
             />
@@ -283,17 +253,20 @@ export function AddReviewItemDialog({
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={sourceQuoteId}>根拠発話（1文）</Label>
-            <Input
-              id={sourceQuoteId}
-              placeholder="「AIが根拠とした発話を1文で」"
-              {...register("sourceQuote")}
-            />
-          </div>
+          {selectedType !== "ambiguity" && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={bodyId}>詳細（任意）</Label>
+              <Textarea
+                id={bodyId}
+                placeholder="補足内容"
+                rows={2}
+                {...register("body")}
+              />
+            </div>
+          )}
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor={sourceContextId}>根拠文脈（前後の文脈）</Label>
+            <Label htmlFor={sourceContextId}>根拠文脈（任意）</Label>
             <Textarea
               id={sourceContextId}
               placeholder="発話前後の文脈"
@@ -302,43 +275,14 @@ export function AddReviewItemDialog({
             />
           </div>
 
-          {selectedType === "ambiguity" && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={severityId}>重要度</Label>
-              <select
-                id={severityId}
-                {...register("severity")}
-                className="text-sm px-2 py-1.5 rounded-md border border-border/60 bg-card"
-              >
-                <option value="high">高</option>
-                <option value="medium">中</option>
-                <option value="low">低</option>
-              </select>
-            </div>
+          {mutation.isError && (
+            <p className="text-destructive text-xs">登録に失敗しました</p>
           )}
 
-          <div className="flex flex-col gap-2">
-            <Label>担当者</Label>
-            <Controller
-              name="assigneeIds"
-              control={control}
-              render={({ field }) => (
-                <AssigneePicker
-                  organizationId={orgId}
-                  value={field.value}
-                  onChange={field.onChange}
-                />
-              )}
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={deadlineId}>期限</Label>
-            <Input id={deadlineId} type="date" {...register("deadline")} />
-          </div>
-
           <DialogFooter>
-            <Button type="submit">登録</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "登録中..." : "登録"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -99,9 +99,9 @@ export function RecurringMeetingDetailView({
   const detailQuery = useRecurringMeetingDetail(id);
   const meetingsQuery = useRecurringMeetingMeetings(id);
 
-  const { items: allReviewItems } = useReviewItems();
+  const { items: allReviewItems } = useReviewItems({ recurringMeetingId: id });
   const pendingReviewCount = allReviewItems.filter(
-    (item) => item.recurringMeetingId === id && item.status === "pending",
+    (item) => item.status === "draft" || item.status === "reviewing",
   ).length;
 
   const statusArr = parseStatusParam(search.status);
@@ -201,7 +201,7 @@ export function RecurringMeetingDetailView({
               AIが抽出した結果を確認・確定してください
             </p>
           </div>
-          <Link to="/review" search={{ recurringMeetingId: id }}>
+          <Link to="/review" search={{ recurringMeetingId: id, from: "hub" }}>
             <Button
               size="sm"
               className="gap-1 bg-orange-600 hover:bg-orange-700 text-white border-0"

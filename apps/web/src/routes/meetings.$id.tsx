@@ -101,11 +101,10 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
-  const { items: allReviewItems } = useReviewItems();
-  const meetingReviewItems = allReviewItems.filter((i) => i.meetingId === id);
-  // 決定事項は自動確定のためレビュー対象外
+  const { items: meetingReviewItems } = useReviewItems({ meetingId: id });
+  // API は draft/reviewing のみ返すため meetingReviewItems = 未確定アイテム全件
   const pendingCount = meetingReviewItems.filter(
-    (i) => i.status === "pending",
+    (i) => i.status === "draft" || i.status === "reviewing",
   ).length;
 
   const statusArr = parseStatusParam(search.status);
@@ -302,6 +301,7 @@ export function MeetingDetailView({
               search={{
                 recurringMeetingId: detail.recurringMeeting.id,
                 meetingId: id,
+                from: "hub",
               }}
             >
               <Button size="sm" className="gap-1">
@@ -315,6 +315,7 @@ export function MeetingDetailView({
               search={{
                 recurringMeetingId: detail.recurringMeeting.id,
                 meetingId: id,
+                from: "hub",
               }}
             >
               <Button size="sm" variant="outline" className="gap-1">
@@ -353,7 +354,7 @@ function ResolutionBadge({
   type: (typeof REVIEW_ITEM_TYPES)[number];
   status: ReviewItem["status"];
 }) {
-  if (status === "pending") return null;
+  if (status === "draft" || status === "reviewing") return null;
   if (status === "rejected") {
     return (
       <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
@@ -386,7 +387,7 @@ function ReviewAccordionItem({
   items: ReviewItem[];
 }) {
   const [open, setOpen] = useState(false);
-  const pendingCount = items.filter((i) => i.status === "pending").length;
+  const pendingCount = items.filter((i) => i.status === "draft" || i.status === "reviewing").length;
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -426,7 +427,7 @@ function ReviewAccordionItem({
           {items.map((item) => (
             <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm">{item.content}</p>
+                <p className="text-sm">{item.title}</p>
                 <ResolutionBadge type={type} status={item.status} />
               </div>
               {item.sourceContext && (

@@ -130,7 +130,7 @@ export type TaskListQuery = z.infer<typeof taskListQuerySchema>;
 // AND を使うため、AND 配列も含めて型を明示する。
 type TaskStatusWhere = {
   in?: TaskListQuery["status"];
-  notIn?: Array<"done" | "rejected">;
+  notIn?: Array<"draft" | "reviewing" | "done" | "rejected">;
 };
 type TaskListWhere = {
   status?: TaskStatusWhere;
@@ -150,6 +150,9 @@ export function buildTaskListWhere(
   const where: TaskListWhere = {};
   if (filters.status && filters.status.length > 0) {
     where.status = { in: filters.status };
+  } else {
+    // draft/reviewing は AI 抽出中のタスク候補のため、タスク一覧には表示しない
+    where.status = { notIn: ["draft", "reviewing"] };
   }
   if (filters.assigneeId === "none") {
     // 「未アサインのみ」絞り込み。任意の assignee を持つタスクを除外する。

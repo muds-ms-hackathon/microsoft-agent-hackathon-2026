@@ -22,6 +22,8 @@ const reviewSearchSchema = z.object({
   recurringMeetingId: z.string().optional(),
   meetingId: z.string().optional(),
   type: z.string().optional(),
+  // 定例ハブ・会議詳細から遷移した場合は "hub"。サイドバー経由は undefined。
+  from: z.enum(["hub"]).optional(),
 });
 
 type ReviewSearch = z.infer<typeof reviewSearchSchema>;
@@ -51,26 +53,28 @@ export function ReviewView({
   onSearchChange,
   currentOrgId = null,
   items,
-  onAddItem,
+  isLoading = false,
   onUpdate,
 }: {
   search: ReviewSearch;
   onSearchChange: (next: ReviewSearch) => void;
   currentOrgId?: string | null;
   items: ReviewItem[];
-  onAddItem: (draft: Omit<ReviewItem, "id" | "status">) => void;
+  isLoading?: boolean;
   onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => void;
 }) {
   const typeArr = parseTypeParam(search.type);
   const selectedRmId = search.recurringMeetingId;
+  // 定例ハブ・会議詳細から遷移した場合のみ true
+  const fromHub = search.from === "hub";
 
-  // 定例名の表示用（定例経由で開いた場合）
+  // 定例名の表示用（定例ハブから遷移した場合）
   const rmDetailQuery = useRecurringMeetingDetail(selectedRmId ?? "");
   const rmName = rmDetailQuery.data?.name ?? null;
 
-  // サイドバー経由（recurringMeetingId なし）のとき定例一覧を表示
+  // サイドバー経由のときは定例一覧を常に表示（定例選択後も再選択できるよう維持）
   const { data: recurringMeetings = [] } = useOrganizationMeetings(
-    selectedRmId ? null : currentOrgId,
+    fromHub ? null : currentOrgId,
   );
 
   const toggleType = (t: ReviewItemType) => {
@@ -108,7 +112,7 @@ export function ReviewView({
       className="container mx-auto p-8 space-y-6"
     >
       <header className="space-y-1">
-        {selectedRmId && (
+        {fromHub && selectedRmId && (
           <Link
             to="/recurring-meetings/$id"
             params={{ id: selectedRmId }}
@@ -129,7 +133,6 @@ export function ReviewView({
           {currentOrgId && (
             <AddReviewItemDialog
               orgId={currentOrgId}
-              onAdd={onAddItem}
               initialRmId={selectedRmId}
               initialMeetingId={search.meetingId}
             />
@@ -137,8 +140,8 @@ export function ReviewView({
         </div>
       </header>
 
-      {/* 定例フィルタ（サイドバー経由のときのみ表示） */}
-      {!selectedRmId && (
+      {/* 定例フィルタ（サイドバー経由のときは定例選択後も常に表示） */}
+      {!fromHub && (
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           定例
           <select
@@ -204,6 +207,10 @@ export function ReviewView({
             サイドバーから組織を選択してください
           </p>
         </div>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center rounded-xl border border-dashed py-20">
+          <p className="text-muted-foreground">読み込み中...</p>
+        </div>
       ) : isCompleted ? (
         // レビュー完了状態
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 gap-4">
@@ -242,7 +249,10 @@ function ReviewPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const currentOrgId = useAtomValue(currentOrganizationIdAtom);
-  const { items, addItem, updateItem } = useReviewItems();
+  const { items, isLoading, updateItem } = useReviewItems({
+    meetingId: search.meetingId,
+    recurringMeetingId: search.recurringMeetingId,
+  });
 
   return (
     <ReviewView
@@ -250,7 +260,7 @@ function ReviewPage() {
       onSearchChange={(next) => navigate({ search: next })}
       currentOrgId={currentOrgId}
       items={items}
-      onAddItem={addItem}
+      isLoading={isLoading}
       onUpdate={updateItem}
     />
   );
