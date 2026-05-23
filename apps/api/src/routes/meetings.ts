@@ -84,6 +84,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
             completedAt: latestRun.completedAt,
             failedAt: latestRun.failedAt,
             errorMessage: latestRun.errorMessage,
+            recommendedAgenda: latestRun.recommendedAgenda,
           }
         : null,
     });
