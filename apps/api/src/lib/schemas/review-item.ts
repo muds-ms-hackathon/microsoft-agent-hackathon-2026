@@ -106,7 +106,7 @@ export const reviewItemCreateSchema = z.discriminatedUnion("type", [
     ...baseCreateFields,
     body: z.string().optional(),
   }),
-  z.object({ type: z.literal("ambiguity"), ...baseCreateFields }),
+  z.object({ type: z.literal("ambiguity"), ...baseCreateFields }).strict(),
 ]);
 
 export type ReviewItemQuery = z.infer<typeof reviewItemQuerySchema>;
