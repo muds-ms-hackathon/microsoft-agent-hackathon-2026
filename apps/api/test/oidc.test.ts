@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   getAudience,
@@ -88,5 +88,55 @@ describe("getJwks", () => {
     resetJwksCache();
     const b = await getJwks();
     expect(a).not.toBe(b);
+  });
+});
+
+describe("getJwks (discovery 経路)", () => {
+  beforeEach(() => {
+    resetJwksCache();
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetJwksCache();
+  });
+
+  it("discovery が成功し jwks_uri が返された場合はその URL で JWKS セットを生成する", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ jwks_uri: "https://example.com/discovery/keys" }),
+    } as Response);
+
+    await getJwks();
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/.well-known/openid-configuration"),
+    );
+  });
+
+  it("discovery がネットワークエラーで失敗してもスローせず JWKS セットを返す", async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error("ECONNREFUSED"));
+
+    await expect(getJwks()).resolves.toBeDefined();
+  });
+
+  it("discovery が HTTP エラーを返してもスローせず JWKS セットを返す", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    await expect(getJwks()).resolves.toBeDefined();
+  });
+
+  it("discovery レスポンスに jwks_uri が含まれない場合もスローせず JWKS セットを返す", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    } as Response);
+
+    await expect(getJwks()).resolves.toBeDefined();
   });
 });
