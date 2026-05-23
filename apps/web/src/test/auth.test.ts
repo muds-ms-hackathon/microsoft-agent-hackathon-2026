@@ -74,6 +74,33 @@ describe("parseToken", () => {
       name: "u2",
     });
   });
+
+  it("email がなく preferred_username がある場合は preferred_username を email として返す（Entra External ID 対応）", () => {
+    // Entra External ID は email クレームを省略し preferred_username に格納することがある。
+    // JSON.stringify は undefined を省略するため、email キー自体がペイロードから除外される。
+    const token = makeFakeIdToken({
+      sub: "u3",
+      email: undefined as unknown as string,
+      preferred_username: "u3-pref@example.com",
+      name: "u3",
+    });
+
+    expect(parseToken(token)).toEqual({
+      sub: "u3",
+      email: "u3-pref@example.com",
+      name: "u3",
+    });
+  });
+
+  it("email も preferred_username もない場合は null を返す", () => {
+    const token = makeFakeIdToken({
+      sub: "u4",
+      email: undefined as unknown as string,
+      name: "u4",
+    });
+
+    expect(parseToken(token)).toBeNull();
+  });
 });
 
 describe("getInitialState", () => {

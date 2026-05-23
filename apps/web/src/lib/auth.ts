@@ -76,7 +76,8 @@ export function parseToken(token: string): AuthState["user"] {
   try {
     const payload = decodeBase64UrlJson(token.split(".")[1]) as {
       sub: string;
-      email: string;
+      email?: string;
+      preferred_username?: string;
       name: string;
       exp?: number;
     };
@@ -85,11 +86,16 @@ export function parseToken(token: string): AuthState["user"] {
     if (typeof payload.exp !== "number" || payload.exp <= Date.now() / 1000) {
       return null;
     }
-    return {
-      sub: payload.sub,
-      email: payload.email,
-      name: payload.name,
-    };
+    // Entra External ID は email クレームが省略され preferred_username に入る場合がある。
+    // バックエンド auth ミドルウェアと同じ優先順位でフォールバックする。
+    const email =
+      typeof payload.email === "string"
+        ? payload.email
+        : typeof payload.preferred_username === "string"
+          ? payload.preferred_username
+          : undefined;
+    if (!email) return null;
+    return { sub: payload.sub, email, name: payload.name };
   } catch {
     return null;
   }
