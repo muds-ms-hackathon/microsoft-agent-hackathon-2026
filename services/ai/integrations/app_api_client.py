@@ -86,13 +86,3 @@ class AppApiClient:
             )
             response.raise_for_status()
 
-    async def get_analysis_run_status(self, analysis_run_id: str) -> str:
-        """GET /internal/analysis-runs/:id/status"""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/internal/analysis-runs/{analysis_run_id}/status",
-                headers=self._headers,
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            return cast(str, response.json()["status"])
