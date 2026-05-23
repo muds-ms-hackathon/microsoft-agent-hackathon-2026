@@ -85,7 +85,7 @@ export function ReviewView({
   };
 
   const filtered = items.filter((item) => {
-    if (item.status !== "pending") return false;
+    if (item.status !== "draft" && item.status !== "reviewing") return false;
     if (selectedRmId && item.recurringMeetingId !== selectedRmId) return false;
     if (search.meetingId && item.meetingId !== search.meetingId) return false;
     if (typeArr && !typeArr.includes(item.type)) return false;
@@ -100,7 +100,7 @@ export function ReviewView({
 
   const isCompleted =
     scopedItems.length > 0 &&
-    scopedItems.filter((i) => i.status === "pending").length === 0;
+    !scopedItems.some((i) => i.status === "draft" || i.status === "reviewing");
 
   return (
     <section

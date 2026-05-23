@@ -7,13 +7,19 @@ import { AssigneeDropdown } from "@/features/tasks/components/AssigneeDropdown";
 import { useCreateTask } from "@/features/tasks/hooks/useCreateTask";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import type { ReviewItem } from "../types";
+import type { ReviewAssignee, ReviewItem } from "../types";
 import { TYPE_BADGE_CLASS, TYPE_LABELS } from "../types";
 
 // "YYYY-MM-DD" → ISO8601 UTC 00:00
 function toIsoDate(date: string): string | undefined {
   if (!date) return undefined;
   return `${date}T00:00:00.000Z`;
+}
+
+// ISO8601 または "YYYY-MM-DD" → date input 用の "YYYY-MM-DD"
+function deadlineToInputValue(deadline: string | null): string {
+  if (!deadline) return "";
+  return deadline.slice(0, 10);
 }
 
 export function ReviewItemCard({
@@ -26,15 +32,24 @@ export function ReviewItemCard({
   orgId?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(item.content);
-  const [assigneeIds, setAssigneeIds] = useState<string[]>(item.assigneeIds);
-  const [deadline, setDeadline] = useState(item.deadline ?? "");
+  const [editTitle, setEditTitle] = useState(item.title);
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>(
+    item.assignees.map((a) => a.id),
+  );
+  const [deadline, setDeadline] = useState(deadlineToInputValue(item.deadline));
 
-  // 通常表示での担当者名解決用
+  // 編集保存時に ID → ReviewAssignee へ変換するために使用
   const { data: members = [] } = useOrganizationMembers(orgId);
-  const assigneeNames = members
-    .filter((m) => item.assigneeIds.includes(m.userId))
-    .map((m) => m.displayName);
+
+  const assigneeDisplayNames = item.assignees.map((a) => a.displayName);
+
+  const buildAssignees = (): ReviewAssignee[] =>
+    selectedAssigneeIds.flatMap((id) => {
+      const m = members.find((m) => m.userId === id);
+      return m
+        ? [{ id: m.userId, name: m.name, displayName: m.displayName, email: m.email }]
+        : [];
+    });
 
   const createTask = useCreateTask();
   const isCreating = createTask.isPending;
@@ -44,9 +59,9 @@ export function ReviewItemCard({
     createTask.mutate(
       {
         organizationId: orgId,
-        title: item.content,
-        body: item.sourceContext || undefined,
-        assigneeUserIds: assigneeIds.length > 0 ? assigneeIds : undefined,
+        title: item.title,
+        body: item.body || undefined,
+        assigneeUserIds: selectedAssigneeIds.length > 0 ? selectedAssigneeIds : undefined,
         dueDate: toIsoDate(deadline),
         recurringMeetingIds: [item.recurringMeetingId],
         originMeetingId: item.meetingId,
@@ -54,9 +69,9 @@ export function ReviewItemCard({
       {
         onSuccess: () => {
           onUpdate(item.id, {
-            status: "confirmed",
-            content: item.content,
-            assigneeIds,
+            status: "decided",
+            title: item.title,
+            assignees: buildAssignees(),
             deadline: deadline || null,
           });
         },
@@ -68,21 +83,21 @@ export function ReviewItemCard({
     if (item.type === "task_candidate") {
       // タスク候補は内容・担当者・期限だけ保存し、登録は通常モードのボタンで行う
       onUpdate(item.id, {
-        content: editContent,
-        assigneeIds,
+        title: editTitle,
+        assignees: buildAssignees(),
         deadline: deadline || null,
       });
     } else if (item.type === "open_issue") {
       onUpdate(item.id, {
-        content: editContent,
-        assigneeIds,
+        title: editTitle,
+        assignees: buildAssignees(),
         deadline: deadline || null,
       });
     } else {
       onUpdate(item.id, {
-        status: "confirmed",
-        content: editContent,
-        assigneeIds,
+        status: "decided",
+        title: editTitle,
+        assignees: buildAssignees(),
         deadline: deadline || null,
       });
     }
@@ -90,9 +105,9 @@ export function ReviewItemCard({
   };
 
   const handleCancelEdit = () => {
-    setEditContent(item.content);
-    setAssigneeIds(item.assigneeIds);
-    setDeadline(item.deadline ?? "");
+    setEditTitle(item.title);
+    setSelectedAssigneeIds(item.assignees.map((a) => a.id));
+    setDeadline(deadlineToInputValue(item.deadline));
     setIsEditing(false);
   };
 
@@ -119,20 +134,15 @@ export function ReviewItemCard({
           </span>
           {isEditing ? (
             <Textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
               rows={2}
               className="text-sm"
             />
           ) : (
-            <p className="text-sm font-medium">{item.content}</p>
+            <p className="text-sm font-medium">{item.title}</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            {item.recurringMeetingName}
-            {item.meetingLabel && item.meetingLabel !== item.meetingId
-              ? ` ${item.meetingLabel}`
-              : ""}
-          </p>
+          <p className="text-xs text-muted-foreground">{item.meetingId}</p>
         </div>
 
         {/* 根拠発話・文脈 */}
@@ -187,8 +197,8 @@ export function ReviewItemCard({
                 <span className="text-xs text-muted-foreground">担当者</span>
                 <AssigneeDropdown
                   organizationId={orgId}
-                  value={assigneeIds}
-                  onChange={setAssigneeIds}
+                  value={selectedAssigneeIds}
+                  onChange={setSelectedAssigneeIds}
                 />
               </div>
             ) : null}
@@ -204,12 +214,14 @@ export function ReviewItemCard({
           </div>
         ) : (
           /* 通常表示：担当者・期限が設定済みなら小さく表示 */
-          (assigneeNames.length > 0 || item.deadline) && (
+          (assigneeDisplayNames.length > 0 || item.deadline) && (
             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              {assigneeNames.length > 0 && (
-                <span>担当: {assigneeNames.join(", ")}</span>
+              {assigneeDisplayNames.length > 0 && (
+                <span>担当: {assigneeDisplayNames.join(", ")}</span>
               )}
-              {item.deadline && <span>期限: {item.deadline}</span>}
+              {item.deadline && (
+                <span>期限: {deadlineToInputValue(item.deadline)}</span>
+              )}
             </div>
           )
         )}
@@ -233,7 +245,7 @@ export function ReviewItemCard({
                 variant="outline"
                 className="text-xs"
                 onClick={() =>
-                  onUpdate(item.id, { type: "open_issue", status: "pending" })
+                  onUpdate(item.id, { type: "open_issue", status: "reviewing" })
                 }
               >
                 未決事項にする
@@ -279,8 +291,8 @@ export function ReviewItemCard({
                   ? createTaskAndConfirm
                   : () =>
                       onUpdate(item.id, {
-                        status: "confirmed",
-                        assigneeIds,
+                        status: "decided",
+                        assignees: buildAssignees(),
                         deadline: deadline || null,
                       })
               }

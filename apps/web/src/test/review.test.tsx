@@ -57,19 +57,19 @@ import { mockJson } from "./helpers/mockJson";
 function makeItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
   return {
     id: "item-1",
+    sourceTable: "task",
     type: "task_candidate",
-    content: "テストタスク",
+    title: "テストタスク",
+    body: null,
     sourceQuote: null,
     sourceContext: "",
-    status: "pending",
-    assigneeIds: [],
+    status: "draft",
+    assignees: [],
     deadline: null,
-    aiProposedDeadline: null,
     severity: null,
     recurringMeetingId: "rmtg-1",
-    recurringMeetingName: "週次定例",
     meetingId: "mtg-1",
-    meetingLabel: "週次定例 · 5/1",
+    version: 0,
     ...overrides,
   };
 }
@@ -135,7 +135,7 @@ describe("ReviewItemCard", () => {
   it("「修正」で編集モードに入り「キャンセル」で元に戻る", async () => {
     renderWithQuery(
       <ReviewItemCard
-        item={makeItem({ content: "元の内容" })}
+        item={makeItem({ title: "元の内容" })}
         onUpdate={() => {}}
         orgId="org-1"
       />,
@@ -149,11 +149,11 @@ describe("ReviewItemCard", () => {
     expect(screen.getByText("元の内容")).toBeInTheDocument();
   });
 
-  it("task_candidate の「保存」で content・assigneeIds・deadline を onUpdate に渡す", async () => {
+  it("task_candidate の「保存」で title・assignees・deadline を onUpdate に渡す", async () => {
     const onUpdate = vi.fn();
     renderWithQuery(
       <ReviewItemCard
-        item={makeItem({ type: "task_candidate", content: "元の内容" })}
+        item={makeItem({ type: "task_candidate", title: "元の内容" })}
         onUpdate={onUpdate}
         orgId="org-1"
       />,
@@ -166,17 +166,17 @@ describe("ReviewItemCard", () => {
     await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     expect(onUpdate).toHaveBeenCalledWith("item-1", {
-      content: "修正後の内容",
-      assigneeIds: [],
+      title: "修正後の内容",
+      assignees: [],
       deadline: null,
     });
   });
 
-  it("open_issue の「保存」で content・assigneeIds・deadline を onUpdate に渡す", async () => {
+  it("open_issue の「保存」で title・assignees・deadline を onUpdate に渡す", async () => {
     const onUpdate = vi.fn();
     renderWithQuery(
       <ReviewItemCard
-        item={makeItem({ type: "open_issue", content: "元の課題" })}
+        item={makeItem({ type: "open_issue", title: "元の課題" })}
         onUpdate={onUpdate}
         orgId="org-1"
       />,
@@ -189,8 +189,8 @@ describe("ReviewItemCard", () => {
     await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     expect(onUpdate).toHaveBeenCalledWith("item-1", {
-      content: "修正後の課題",
-      assigneeIds: [],
+      title: "修正後の課題",
+      assignees: [],
       deadline: null,
     });
   });
@@ -205,7 +205,7 @@ describe("ReviewItemCard", () => {
     expect(onUpdate).toHaveBeenCalledWith("item-1", { status: "rejected" });
   });
 
-  it("open_issue の「承認」で status:confirmed のみ onUpdate に渡す（type 変換なし）", async () => {
+  it("open_issue の「承認」で status:decided を onUpdate に渡す（type 変換なし）", async () => {
     const onUpdate = vi.fn();
     renderWithQuery(
       <ReviewItemCard
@@ -216,8 +216,8 @@ describe("ReviewItemCard", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "承認" }));
     expect(onUpdate).toHaveBeenCalledWith("item-1", {
-      status: "confirmed",
-      assigneeIds: [],
+      status: "decided",
+      assignees: [],
       deadline: null,
     });
     expect(onUpdate).not.toHaveBeenCalledWith(
@@ -230,11 +230,11 @@ describe("ReviewItemCard", () => {
 describe("ReviewView", () => {
   const noOp = () => {};
 
-  it("pending アイテムのみ表示し confirmed・rejected は除外する", () => {
+  it("draft/reviewing アイテムのみ表示し decided・rejected は除外する", () => {
     const items = [
-      makeItem({ id: "i1", content: "確認待ちタスク", status: "pending" }),
-      makeItem({ id: "i2", content: "確定済みタスク", status: "confirmed" }),
-      makeItem({ id: "i3", content: "却下済みタスク", status: "rejected" }),
+      makeItem({ id: "i1", title: "確認待ちタスク", status: "draft" }),
+      makeItem({ id: "i2", title: "確定済みタスク", status: "decided" }),
+      makeItem({ id: "i3", title: "却下済みタスク", status: "rejected" }),
     ];
 
     renderWithQuery(
@@ -254,7 +254,7 @@ describe("ReviewView", () => {
   });
 
   it("全件確定後に「レビューが完了しました」を表示する", () => {
-    const items = [makeItem({ id: "i1", status: "confirmed" })];
+    const items = [makeItem({ id: "i1", status: "decided" })];
 
     renderWithQuery(
       <ReviewView
@@ -275,9 +275,9 @@ describe("ReviewView", () => {
       makeItem({
         id: "i1",
         type: "task_candidate",
-        content: "このタスクを確認",
+        title: "このタスクを確認",
       }),
-      makeItem({ id: "i2", type: "open_issue", content: "この課題を確認" }),
+      makeItem({ id: "i2", type: "open_issue", title: "この課題を確認" }),
     ];
 
     renderWithQuery(

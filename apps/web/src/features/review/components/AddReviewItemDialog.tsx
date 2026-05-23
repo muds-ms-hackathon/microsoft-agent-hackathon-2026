@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useOrganizationMembers } from "@/features/organizations/hooks/useOrganizationMembers";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
 import type { MeetingListItem } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
 import { AssigneePicker } from "@/features/tasks/components/AssigneePicker";
@@ -20,14 +21,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import type { ReviewItem } from "../types";
+import type { ReviewItem, ReviewItemSourceTable } from "../types";
 import { REVIEW_ITEM_TYPES, TYPE_LABELS } from "../types";
 
 const formSchema = z.object({
   recurringMeetingId: z.string().min(1, "定例を選択してください"),
   meetingId: z.string().min(1, "会議を選択してください"),
   type: z.enum(["decision", "open_issue", "task_candidate", "ambiguity"]),
-  content: z.string().min(1, "内容は必須です"),
+  title: z.string().min(1, "内容は必須です"),
   sourceQuote: z.string(),
   sourceContext: z.string(),
   assigneeIds: z.array(z.string()),
@@ -41,7 +42,7 @@ const DEFAULT_VALUES: FormValues = {
   recurringMeetingId: "",
   meetingId: "",
   type: "task_candidate",
-  content: "",
+  title: "",
   sourceQuote: "",
   sourceContext: "",
   assigneeIds: [],
@@ -113,7 +114,8 @@ export function AddReviewItemDialog({
   initialMeetingId?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [meetingLabel, setMeetingLabel] = useState("");
+
+  const { data: members = [] } = useOrganizationMembers(orgId);
 
   const rmId = useId();
   const meetingId = useId();
@@ -160,29 +162,39 @@ export function AddReviewItemDialog({
         recurringMeetingId: initialRmId ?? "",
         meetingId: initialMeetingId ?? "",
       });
-      setMeetingLabel("");
     }
   }, [open, initialRmId, initialMeetingId, reset]);
 
   const selectedType = watch("type");
 
+  const sourceTableFor = (type: FormValues["type"]): ReviewItemSourceTable =>
+    type === "task_candidate"
+      ? "task"
+      : type === "ambiguity"
+        ? "ambiguous_info"
+        : "decision_item";
+
   const onSubmit = (data: FormValues) => {
-    const rm = recurringMeetings.find((r) => r.id === data.recurringMeetingId);
-    if (!rm) return;
+    const assignees = data.assigneeIds.flatMap((id) => {
+      const m = members.find((m) => m.userId === id);
+      return m
+        ? [{ id: m.userId, name: m.name, displayName: m.displayName, email: m.email }]
+        : [];
+    });
 
     onAdd({
+      sourceTable: sourceTableFor(data.type),
       type: data.type,
-      content: data.content,
+      title: data.title,
+      body: null,
       sourceQuote: data.sourceQuote || null,
       sourceContext: data.sourceContext,
-      assigneeIds: data.assigneeIds,
-      deadline: data.deadline || null,
-      aiProposedDeadline: data.deadline || null,
+      assignees,
+      deadline: data.deadline ? `${data.deadline}T00:00:00.000Z` : null,
       severity: data.type === "ambiguity" ? (data.severity ?? "medium") : null,
       recurringMeetingId: data.recurringMeetingId,
-      recurringMeetingName: rm.name,
       meetingId: data.meetingId,
-      meetingLabel: meetingLabel,
+      version: 0,
     });
     setOpen(false);
   };
@@ -230,9 +242,8 @@ export function AddReviewItemDialog({
                 id={meetingId}
                 recurringMeetingId={selectedRmId}
                 value={selectedMeetingId}
-                onChange={(v, label) => {
+                onChange={(v) => {
                   setValue("meetingId", v, { shouldValidate: true });
-                  setMeetingLabel(label);
                 }}
               />
               {errors.meetingId && (
@@ -263,11 +274,11 @@ export function AddReviewItemDialog({
             <Input
               id={contentId}
               placeholder="AIが抽出した決定・課題・タスク等"
-              {...register("content")}
+              {...register("title")}
             />
-            {errors.content && (
+            {errors.title && (
               <p role="alert" className="text-destructive text-xs">
-                {errors.content.message}
+                {errors.title.message}
               </p>
             )}
           </div>

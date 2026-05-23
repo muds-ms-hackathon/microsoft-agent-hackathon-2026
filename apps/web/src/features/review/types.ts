@@ -4,28 +4,47 @@ export type ReviewItemType =
   | "task_candidate"
   | "ambiguity";
 
-export type ReviewItemStatus = "pending" | "confirmed" | "held" | "rejected";
+// API の sourceTable に対応: どのDBテーブル由来かを示す
+export type ReviewItemSourceTable = "decision_item" | "task" | "ambiguous_info";
+
+// API の status 値に合わせた共用体型
+export type ReviewItemStatus =
+  | "draft"
+  | "reviewing"
+  | "open"
+  | "decided"
+  | "cancelled"
+  | "rejected";
 
 export type AmbiguitySeverity = "high" | "medium" | "low";
 
+export type ReviewAssignee = {
+  id: string;
+  name: string;
+  displayName: string;
+  email: string;
+};
+
 export type ReviewItem = {
   id: string;
+  // どのDBテーブル由来かを示す（PATCH エンドポイントの振り分けに使用）
+  sourceTable: ReviewItemSourceTable;
   type: ReviewItemType;
-  content: string;
+  title: string;
+  body: string | null;
   // DB の sourceQuote（根拠となる発話1文）と sourceContext（前後の文脈）に対応
   sourceQuote: string | null;
   sourceContext: string;
   status: ReviewItemStatus;
-  assigneeIds: string[];
+  assignees: ReviewAssignee[];
+  // ISO 8601 datetime または null
   deadline: string | null;
-  // AI が提案した元の値（差分表示用）
-  aiProposedDeadline: string | null;
   // ambiguity のみ使用（DB の ambiguous_infos.severity に対応）
   severity: AmbiguitySeverity | null;
   recurringMeetingId: string;
-  recurringMeetingName: string;
   meetingId: string;
-  meetingLabel: string;
+  // 楽観ロック用バージョン番号
+  version: number;
 };
 
 export const TYPE_LABELS: Record<ReviewItemType, string> = {
