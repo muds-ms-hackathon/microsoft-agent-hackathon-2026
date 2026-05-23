@@ -19,7 +19,9 @@ function toDate(v: string | null | undefined): Date | null {
 }
 
 // Prisma nullable JSON 型への変換。null / undefined は DbNull（SQL NULL）にする。
-function toJson(v: unknown): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
+function toJson(
+  v: unknown,
+): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
   if (v === null || v === undefined) return Prisma.DbNull;
   return v as Prisma.InputJsonValue;
 }
