@@ -39,3 +39,24 @@ class AppApiClient:
                 timeout=30.0,
             )
             response.raise_for_status()
+
+    async def complete_analysis_run(
+        self,
+        analysis_run_id: str,
+        decision_items: list[dict],
+        tasks: list[dict],
+        ambiguous_infos: list[dict],
+    ) -> None:
+        """POST /internal/analysis-runs/:id/complete"""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/internal/analysis-runs/{analysis_run_id}/complete",
+                json={
+                    "decisionItems": decision_items,
+                    "tasks": tasks,
+                    "ambiguousInfos": ambiguous_infos,
+                },
+                headers=self._headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
