@@ -4,7 +4,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-import httpx
 from azure.servicebus import ServiceBusReceivedMessage
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,12 +15,7 @@ from pipeline.analyze_meeting import analyze_meeting
 from pipeline.complete_payload import build_complete_payload
 from routers.analysis import router as analysis_router
 from routers.health import router as health_router
-from schemas.analysis import (
-    VALID_AMBIGUITY_TYPE,
-    VALID_PRIORITY,
-    VALID_SEVERITY,
-    AnalysisJobInput,
-)
+from schemas.analysis import AnalysisJobInput
 
 logger = logging.getLogger(__name__)
 

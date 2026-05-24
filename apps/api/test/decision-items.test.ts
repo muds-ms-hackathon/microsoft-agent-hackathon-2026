@@ -121,9 +121,7 @@ describe("GET /meetings/:id/decision-items", () => {
   it("組織メンバーは 200 でリストを取得できる", async () => {
     mockMeetingFindUnique.mockResolvedValue(mockMeeting() as never);
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockDecisionItemFindMany.mockResolvedValue([
-      sampleDecisionItem,
-    ] as never);
+    mockDecisionItemFindMany.mockResolvedValue([sampleDecisionItem] as never);
 
     const res = await app.request("/meetings/mtg-1/decision-items");
     expect(res.status).toBe(200);

@@ -100,7 +100,10 @@ export const ambiguousInfoPatchSchema = z
       if (d.resolutionType === "decision_item" && d.newTask) return false;
       return true;
     },
-    { message: "resolutionType と newTask / newDecisionItem の組み合わせが不正です" },
+    {
+      message:
+        "resolutionType と newTask / newDecisionItem の組み合わせが不正です",
+    },
   );
 
 // TODO: POST /meetings/:id/review-items は動作確認用のため削除する
