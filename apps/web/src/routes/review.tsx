@@ -56,6 +56,8 @@ export function ReviewView({
   isLoading = false,
   onUpdate,
   onResolveAmbiguity,
+  rmName = null,
+  recurringMeetings = [],
 }: {
   search: ReviewSearch;
   onSearchChange: (next: ReviewSearch) => void;
@@ -64,20 +66,13 @@ export function ReviewView({
   isLoading?: boolean;
   onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => Promise<void>;
   onResolveAmbiguity: (id: string, params: AmbiguityResolution) => Promise<void>;
+  rmName?: string | null;
+  recurringMeetings?: { id: string; name: string }[];
 }) {
   const typeArr = parseTypeParam(search.type);
   const selectedRmId = search.recurringMeetingId;
   // 定例ハブ・会議詳細から遷移した場合のみ true
   const fromHub = search.from === "hub";
-
-  // 定例名の表示用（定例ハブから遷移した場合）
-  const rmDetailQuery = useRecurringMeetingDetail(selectedRmId ?? "");
-  const rmName = rmDetailQuery.data?.name ?? null;
-
-  // サイドバー経由のときは定例一覧を常に表示（定例選択後も再選択できるよう維持）
-  const { data: recurringMeetings = [] } = useOrganizationMeetings(
-    fromHub ? null : currentOrgId,
-  );
 
   const toggleType = (t: ReviewItemType) => {
     const current = new Set(typeArr ?? []);
@@ -252,6 +247,8 @@ function ReviewPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const currentOrgId = useAtomValue(currentOrganizationIdAtom);
+  const fromHub = search.from === "hub";
+
   const { items, isLoading, updateItem, resolveAmbiguity } = useReviewItems({
     meetingId: search.meetingId,
     recurringMeetingId: search.recurringMeetingId,
@@ -260,6 +257,13 @@ function ReviewPage() {
       ? currentOrgId
       : undefined,
   });
+
+  const rmDetailQuery = useRecurringMeetingDetail(search.recurringMeetingId ?? "");
+  const rmName = rmDetailQuery.data?.name ?? null;
+
+  const { data: recurringMeetings = [] } = useOrganizationMeetings(
+    fromHub ? null : currentOrgId,
+  );
 
   return (
     <ReviewView
@@ -270,6 +274,8 @@ function ReviewPage() {
       isLoading={isLoading}
       onUpdate={updateItem}
       onResolveAmbiguity={resolveAmbiguity}
+      rmName={rmName}
+      recurringMeetings={recurringMeetings}
     />
   );
 }
