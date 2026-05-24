@@ -582,7 +582,9 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         decisionItemTypeWhere,
       } = buildReviewItemTypeFilter(filters.type);
 
-      const orgWhere = { meeting: { recurringMeeting: { organizationId: id } } };
+      const orgWhere = {
+        meeting: { recurringMeeting: { organizationId: id } },
+      };
 
       const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
         includeDecision

@@ -101,10 +101,8 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
-  const {
-    items: meetingReviewItems,
-    isError: reviewItemsError,
-  } = useReviewItems({ meetingId: id });
+  const { items: meetingReviewItems, isError: reviewItemsError } =
+    useReviewItems({ meetingId: id });
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;
@@ -403,7 +401,9 @@ function ReviewAccordionItem({
   items: ReviewItem[];
 }) {
   const [open, setOpen] = useState(false);
-  const pendingCount = items.filter((i) => i.status === "draft" || i.status === "reviewing").length;
+  const pendingCount = items.filter(
+    (i) => i.status === "draft" || i.status === "reviewing",
+  ).length;
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -444,7 +444,11 @@ function ReviewAccordionItem({
             <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm">{item.title}</p>
-                <ResolutionBadge type={type} status={item.status} resolutionType={item.resolutionType} />
+                <ResolutionBadge
+                  type={type}
+                  status={item.status}
+                  resolutionType={item.resolutionType}
+                />
               </div>
               {item.sourceContext && (
                 <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">

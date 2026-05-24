@@ -7,7 +7,10 @@ import {
   type ReviewItem,
   type ReviewItemType,
 } from "@/features/review/types";
-import { useReviewItems, type AmbiguityResolution } from "@/features/review/useReviewItems";
+import {
+  useReviewItems,
+  type AmbiguityResolution,
+} from "@/features/review/useReviewItems";
 import { useRecurringMeetingDetail } from "@/features/recurring-meetings/hooks/useRecurringMeetingDetail";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
@@ -64,8 +67,14 @@ export function ReviewView({
   currentOrgId?: string | null;
   items: ReviewItem[];
   isLoading?: boolean;
-  onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => Promise<void>;
-  onResolveAmbiguity: (id: string, params: AmbiguityResolution) => Promise<void>;
+  onUpdate: (
+    id: string,
+    updates: Partial<Omit<ReviewItem, "id">>,
+  ) => Promise<void>;
+  onResolveAmbiguity: (
+    id: string,
+    params: AmbiguityResolution,
+  ) => Promise<void>;
   rmName?: string | null;
   recurringMeetings?: { id: string; name: string }[];
 }) {
@@ -253,12 +262,15 @@ function ReviewPage() {
     meetingId: search.meetingId,
     recurringMeetingId: search.recurringMeetingId,
     // 定例・会議いずれも未指定（全表示）の場合は組織全体から取得する
-    organizationId: !search.meetingId && !search.recurringMeetingId && currentOrgId
-      ? currentOrgId
-      : undefined,
+    organizationId:
+      !search.meetingId && !search.recurringMeetingId && currentOrgId
+        ? currentOrgId
+        : undefined,
   });
 
-  const rmDetailQuery = useRecurringMeetingDetail(search.recurringMeetingId ?? "");
+  const rmDetailQuery = useRecurringMeetingDetail(
+    search.recurringMeetingId ?? "",
+  );
   const rmName = rmDetailQuery.data?.name ?? null;
 
   const { data: recurringMeetings = [] } = useOrganizationMeetings(

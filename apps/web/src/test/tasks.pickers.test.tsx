@@ -150,7 +150,9 @@ describe("AssigneeDropdown", () => {
       />,
     );
 
-    expect(await screen.findByRole("button", { name: /Alice/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Alice/ }),
+    ).toBeInTheDocument();
   });
 
   it("メンバー 0 件は空メッセージ", async () => {

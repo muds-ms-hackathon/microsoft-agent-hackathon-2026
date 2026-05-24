@@ -94,21 +94,37 @@ function makeItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
 }
 
 function makeWrapper(queryKey: readonly unknown[], data: unknown[]) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   client.setQueryData(queryKey, data);
   function Wrapper({ children }: { children: React.ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
   }
   return Wrapper;
 }
 
 beforeEach(() => {
-  vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(mockJson([]));
-  vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(mockJson([]));
-  vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(mockJson([]));
-  vi.mocked(api["recurring-meetings"][":id"]["review-items"].$get).mockResolvedValue(mockJson([]));
-  vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(mockJson([]));
-  vi.mocked(api.tasks.$post).mockResolvedValue(mockJson({ id: "task-new" }, 201));
+  vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+    mockJson([]),
+  );
+  vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+    mockJson([]),
+  );
+  vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+    mockJson([]),
+  );
+  vi.mocked(
+    api["recurring-meetings"][":id"]["review-items"].$get,
+  ).mockResolvedValue(mockJson([]));
+  vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+    mockJson([]),
+  );
+  vi.mocked(api.tasks.$post).mockResolvedValue(
+    mockJson({ id: "task-new" }, 201),
+  );
 });
 
 afterEach(() => {
@@ -229,7 +245,12 @@ describe("ReviewItemCard", () => {
   it("「却下」で status:rejected を onUpdate に渡す", async () => {
     const onUpdate = vi.fn();
     renderWithQuery(
-      <ReviewItemCard item={makeItem()} onUpdate={onUpdate} onResolveAmbiguity={async () => {}} orgId="org-1" />,
+      <ReviewItemCard
+        item={makeItem()}
+        onUpdate={onUpdate}
+        onResolveAmbiguity={async () => {}}
+        orgId="org-1"
+      />,
     );
 
     await userEvent.click(screen.getByRole("button", { name: "却下" }));
@@ -275,7 +296,6 @@ describe("ReviewView", () => {
         onSearchChange={noOp}
         currentOrgId="org-1"
         items={items}
-
         onUpdate={noOp}
         onResolveAmbiguity={noOp}
       />,
@@ -295,7 +315,6 @@ describe("ReviewView", () => {
         onSearchChange={noOp}
         currentOrgId="org-1"
         items={items}
-
         onUpdate={noOp}
         onResolveAmbiguity={noOp}
       />,
@@ -320,7 +339,6 @@ describe("ReviewView", () => {
         onSearchChange={noOp}
         currentOrgId="org-1"
         items={items}
-
         onUpdate={noOp}
         onResolveAmbiguity={noOp}
       />,
@@ -362,7 +380,11 @@ describe("ReviewItemCard — ambiguity 解消ボタン", () => {
     const onResolveAmbiguity = vi.fn().mockResolvedValue(undefined);
     renderWithQuery(
       <ReviewItemCard
-        item={makeItem({ type: "ambiguity", sourceTable: "ambiguous_info", recurringMeetingId: "rmtg-1" })}
+        item={makeItem({
+          type: "ambiguity",
+          sourceTable: "ambiguous_info",
+          recurringMeetingId: "rmtg-1",
+        })}
         onUpdate={async () => {}}
         onResolveAmbiguity={onResolveAmbiguity}
         orgId="org-1"
@@ -390,7 +412,9 @@ describe("ReviewItemCard — ambiguity 解消ボタン", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "未決事項にする" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "未決事項にする" }),
+    );
 
     expect(onResolveAmbiguity).toHaveBeenCalledWith("item-1", {
       resolution: "decision_item",
@@ -418,7 +442,12 @@ describe("ReviewItemCard — ambiguity 解消ボタン", () => {
 
 describe("useReviewItems — updateItem", () => {
   it("decision_item の却下で PATCH status が cancelled になる", async () => {
-    const item = makeItem({ id: "di-1", sourceTable: "decision_item", type: "decision", version: 2 });
+    const item = makeItem({
+      id: "di-1",
+      sourceTable: "decision_item",
+      type: "decision",
+      version: 2,
+    });
     vi.mocked(api["decision-items"][":id"].$patch).mockResolvedValue(
       mockJson({ ...item, status: "cancelled" as const }),
     );
@@ -433,13 +462,20 @@ describe("useReviewItems — updateItem", () => {
     });
 
     expect(vi.mocked(api["decision-items"][":id"].$patch)).toHaveBeenCalledWith(
-      expect.objectContaining({ json: expect.objectContaining({ status: "cancelled" }) }),
+      expect.objectContaining({
+        json: expect.objectContaining({ status: "cancelled" }),
+      }),
       expect.anything(),
     );
   });
 
   it("open_issue 承認で PATCH に decisionState:confirmed が含まれる", async () => {
-    const item = makeItem({ id: "di-2", sourceTable: "decision_item", type: "open_issue", version: 1 });
+    const item = makeItem({
+      id: "di-2",
+      sourceTable: "decision_item",
+      type: "open_issue",
+      version: 1,
+    });
     vi.mocked(api["decision-items"][":id"].$patch).mockResolvedValue(
       mockJson({ ...item, status: "decided" as const }),
     );
@@ -455,21 +491,39 @@ describe("useReviewItems — updateItem", () => {
 
     expect(vi.mocked(api["decision-items"][":id"].$patch)).toHaveBeenCalledWith(
       expect.objectContaining({
-        json: expect.objectContaining({ status: "decided", decisionState: "confirmed" }),
+        json: expect.objectContaining({
+          status: "decided",
+          decisionState: "confirmed",
+        }),
       }),
       expect.anything(),
     );
   });
 
   it("task_candidate 確定で PATCH に recurringMeetingIds が含まれる", async () => {
-    const item = makeItem({ id: "t-1", sourceTable: "task", type: "task_candidate", recurringMeetingId: "rmtg-99", version: 1 });
+    const item = makeItem({
+      id: "t-1",
+      sourceTable: "task",
+      type: "task_candidate",
+      recurringMeetingId: "rmtg-99",
+      version: 1,
+    });
     vi.mocked(api.tasks[":id"].$patch).mockResolvedValue(
-      mockJson({ id: "t-1", title: item.title, status: "todo", assignees: [], dueDate: null, version: 2 }),
+      mockJson({
+        id: "t-1",
+        title: item.title,
+        status: "todo",
+        assignees: [],
+        dueDate: null,
+        version: 2,
+      }),
     );
 
     const { result } = renderHook(
       () => useReviewItems({ meetingId: "mtg-task" }),
-      { wrapper: makeWrapper(["meetings", "mtg-task", "review-items"], [item]) },
+      {
+        wrapper: makeWrapper(["meetings", "mtg-task", "review-items"], [item]),
+      },
     );
 
     await act(async () => {
@@ -478,7 +532,10 @@ describe("useReviewItems — updateItem", () => {
 
     expect(vi.mocked(api.tasks[":id"].$patch)).toHaveBeenCalledWith(
       expect.objectContaining({
-        json: expect.objectContaining({ status: "todo", recurringMeetingIds: ["rmtg-99"] }),
+        json: expect.objectContaining({
+          status: "todo",
+          recurringMeetingIds: ["rmtg-99"],
+        }),
       }),
       expect.anything(),
     );
@@ -486,7 +543,12 @@ describe("useReviewItems — updateItem", () => {
 });
 
 describe("useReviewItems — resolveAmbiguity", () => {
-  const ambigItem = makeItem({ id: "amb-1", sourceTable: "ambiguous_info", type: "ambiguity", version: 0 });
+  const ambigItem = makeItem({
+    id: "amb-1",
+    sourceTable: "ambiguous_info",
+    type: "ambiguity",
+    version: 0,
+  });
   const ambigKey = ["meetings", "mtg-amb", "review-items"] as const;
 
   it("resolution:task で PATCH に resolutionType:task が含まれる", async () => {
@@ -508,8 +570,12 @@ describe("useReviewItems — resolveAmbiguity", () => {
       });
     });
 
-    expect(vi.mocked(api["ambiguous-infos"][":id"].$patch)).toHaveBeenCalledWith(
-      expect.objectContaining({ json: expect.objectContaining({ resolutionType: "task" }) }),
+    expect(
+      vi.mocked(api["ambiguous-infos"][":id"].$patch),
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ resolutionType: "task" }),
+      }),
       expect.anything(),
     );
   });
@@ -525,11 +591,17 @@ describe("useReviewItems — resolveAmbiguity", () => {
     );
 
     await act(async () => {
-      await result.current.resolveAmbiguity("amb-1", { resolution: "decision_item" });
+      await result.current.resolveAmbiguity("amb-1", {
+        resolution: "decision_item",
+      });
     });
 
-    expect(vi.mocked(api["ambiguous-infos"][":id"].$patch)).toHaveBeenCalledWith(
-      expect.objectContaining({ json: expect.objectContaining({ resolutionType: "decision_item" }) }),
+    expect(
+      vi.mocked(api["ambiguous-infos"][":id"].$patch),
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ resolutionType: "decision_item" }),
+      }),
       expect.anything(),
     );
   });
@@ -545,11 +617,17 @@ describe("useReviewItems — resolveAmbiguity", () => {
     );
 
     await act(async () => {
-      await result.current.resolveAmbiguity("amb-1", { resolution: "rejected" });
+      await result.current.resolveAmbiguity("amb-1", {
+        resolution: "rejected",
+      });
     });
 
-    expect(vi.mocked(api["ambiguous-infos"][":id"].$patch)).toHaveBeenCalledWith(
-      expect.objectContaining({ json: expect.objectContaining({ status: "rejected" }) }),
+    expect(
+      vi.mocked(api["ambiguous-infos"][":id"].$patch),
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ status: "rejected" }),
+      }),
       expect.anything(),
     );
   });

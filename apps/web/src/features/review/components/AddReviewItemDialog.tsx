@@ -152,14 +152,24 @@ export function AddReviewItemDialog({
     mutationFn: async (data: FormValues) => {
       const body =
         data.type === "ambiguity"
-          ? { type: data.type as const, title: data.title, sourceContext: data.sourceContext || undefined }
-          : { type: data.type as const, title: data.title, sourceContext: data.sourceContext || undefined, body: data.body || undefined };
+          ? {
+              type: data.type as const,
+              title: data.title,
+              sourceContext: data.sourceContext || undefined,
+            }
+          : {
+              type: data.type as const,
+              title: data.title,
+              sourceContext: data.sourceContext || undefined,
+              body: data.body || undefined,
+            };
 
       const res = await api.meetings[":id"]["review-items"].$post(
         { param: { id: data.meetingId }, json: body },
         authHeaders(),
       );
-      if (!res.ok) throw new Error(`Failed to create review item: ${res.status}`);
+      if (!res.ok)
+        throw new Error(`Failed to create review item: ${res.status}`);
     },
     onSuccess: (_, data) => {
       queryClient.invalidateQueries({
@@ -214,7 +224,9 @@ export function AddReviewItemDialog({
                 id={meetingFieldId}
                 recurringMeetingId={selectedRmId}
                 value={selectedMeetingId}
-                onChange={(v) => setValue("meetingId", v, { shouldValidate: true })}
+                onChange={(v) =>
+                  setValue("meetingId", v, { shouldValidate: true })
+                }
               />
               {errors.meetingId && (
                 <p role="alert" className="text-destructive text-xs">

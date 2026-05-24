@@ -24,8 +24,14 @@ export function ReviewItemCard({
   orgId = null,
 }: {
   item: ReviewItem;
-  onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => Promise<void>;
-  onResolveAmbiguity: (id: string, params: AmbiguityResolution) => Promise<void>;
+  onUpdate: (
+    id: string,
+    updates: Partial<Omit<ReviewItem, "id">>,
+  ) => Promise<void>;
+  onResolveAmbiguity: (
+    id: string,
+    params: AmbiguityResolution,
+  ) => Promise<void>;
   orgId?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -50,7 +56,14 @@ export function ReviewItemCard({
     selectedAssigneeIds.flatMap((id) => {
       const m = members.find((m) => m.userId === id);
       return m
-        ? [{ id: m.userId, name: m.name, displayName: m.displayName, email: m.email }]
+        ? [
+            {
+              id: m.userId,
+              name: m.name,
+              displayName: m.displayName,
+              email: m.email,
+            },
+          ]
         : [];
     });
 
@@ -135,7 +148,9 @@ export function ReviewItemCard({
             <p className="text-sm font-medium">{item.title}</p>
           )}
           {!isEditing && item.body && (
-            <p className="text-xs text-muted-foreground whitespace-pre-wrap">{item.body}</p>
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+              {item.body}
+            </p>
           )}
           <p className="text-xs text-muted-foreground">
             {recurringMeetingName ?? item.recurringMeetingId}

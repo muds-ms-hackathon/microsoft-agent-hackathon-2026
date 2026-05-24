@@ -3,7 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReviewItem } from "./types";
 
 export type AmbiguityResolution =
-  | { resolution: "task"; assigneeUserIds: string[]; dueDate: string | null; recurringMeetingIds: string[] }
+  | {
+      resolution: "task";
+      assigneeUserIds: string[];
+      dueDate: string | null;
+      recurringMeetingIds: string[];
+    }
   | { resolution: "decision_item" }
   | { resolution: "rejected" };
 
@@ -16,7 +21,11 @@ export function reviewItemsQueryKey(params: {
     return ["meetings", params.meetingId, "review-items"] as const;
   }
   if (params.recurringMeetingId) {
-    return ["recurring-meetings", params.recurringMeetingId, "review-items"] as const;
+    return [
+      "recurring-meetings",
+      params.recurringMeetingId,
+      "review-items",
+    ] as const;
   }
   return ["organizations", params.organizationId, "review-items"] as const;
 }
@@ -31,7 +40,11 @@ export function useReviewItems({
   organizationId?: string;
 }) {
   const queryClient = useQueryClient();
-  const queryKey = reviewItemsQueryKey({ meetingId, recurringMeetingId, organizationId });
+  const queryKey = reviewItemsQueryKey({
+    meetingId,
+    recurringMeetingId,
+    organizationId,
+  });
 
   const query = useQuery<ReviewItem[]>({
     queryKey,
@@ -49,7 +62,7 @@ export function useReviewItems({
         );
       } else {
         res = await api.organizations[":id"]["review-items"].$get(
-          { param: { id: organizationId! }, query: {} },
+          { param: { id: organizationId ?? "" }, query: {} },
           authHeaders(),
         );
       }
@@ -71,7 +84,8 @@ export function useReviewItems({
       const body: Record<string, unknown> = { version: item.version };
       if (updates.status !== undefined) {
         // DecisionItem は "rejected" を持たず "cancelled" が対応する
-        body.status = updates.status === "rejected" ? "cancelled" : updates.status;
+        body.status =
+          updates.status === "rejected" ? "cancelled" : updates.status;
         // open_issue 承認時は AI の次回持ち越しを防ぐため confirmed に昇格する
         if (updates.status === "decided" && item.type === "open_issue") {
           body.decisionState = "confirmed";
@@ -89,13 +103,20 @@ export function useReviewItems({
       }
 
       const res = await api["decision-items"][":id"].$patch(
-        { param: { id }, json: body as Parameters<typeof api["decision-items"][":id"]["$patch"]>[0]["json"] },
+        {
+          param: { id },
+          json: body as Parameters<
+            (typeof api)["decision-items"][":id"]["$patch"]
+          >[0]["json"],
+        },
         authHeaders(),
       );
 
       if (res.status === 409) {
         await queryClient.invalidateQueries({ queryKey });
-        throw new Error("他のユーザーが先に更新しました。最新の状態を取得しました。");
+        throw new Error(
+          "他のユーザーが先に更新しました。最新の状態を取得しました。",
+        );
       }
       if (!res.ok) {
         throw new Error(`更新に失敗しました (${res.status})`);
@@ -128,13 +149,20 @@ export function useReviewItems({
       }
 
       const res = await api.tasks[":id"].$patch(
-        { param: { id }, json: body as Parameters<typeof api.tasks[":id"]["$patch"]>[0]["json"] },
+        {
+          param: { id },
+          json: body as Parameters<
+            (typeof api.tasks)[":id"]["$patch"]
+          >[0]["json"],
+        },
         authHeaders(),
       );
 
       if (res.status === 409) {
         await queryClient.invalidateQueries({ queryKey });
-        throw new Error("他のユーザーが先に更新しました。最新の状態を取得しました。");
+        throw new Error(
+          "他のユーザーが先に更新しました。最新の状態を取得しました。",
+        );
       }
       if (!res.ok) {
         throw new Error(`更新に失敗しました (${res.status})`);
@@ -144,7 +172,12 @@ export function useReviewItems({
         id: string;
         title: string;
         status: string;
-        assignees: { id: string; name: string; displayName: string; email: string }[];
+        assignees: {
+          id: string;
+          name: string;
+          displayName: string;
+          email: string;
+        }[];
         dueDate: string | null;
         version: number;
       };
@@ -159,7 +192,14 @@ export function useReviewItems({
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
         (prev ?? []).map((i) =>
           i.id === id
-            ? { ...i, title: task.title, assignees: task.assignees, deadline: task.dueDate, version: task.version, status: reviewStatus }
+            ? {
+                ...i,
+                title: task.title,
+                assignees: task.assignees,
+                deadline: task.dueDate,
+                version: task.version,
+                status: reviewStatus,
+              }
             : i,
         ),
       );
@@ -177,7 +217,9 @@ export function useReviewItems({
     const item = (query.data ?? []).find((i) => i.id === id);
     if (!item) return;
 
-    type PatchBody = Parameters<typeof api["ambiguous-infos"][":id"]["$patch"]>[0]["json"];
+    type PatchBody = Parameters<
+      (typeof api)["ambiguous-infos"][":id"]["$patch"]
+    >[0]["json"];
     let body: PatchBody;
     if (params.resolution === "rejected") {
       body = { version: item.version, status: "rejected" };
@@ -186,9 +228,17 @@ export function useReviewItems({
         version: item.version,
         resolutionType: "task",
         newTask: {
-          assigneeUserIds: params.assigneeUserIds.length > 0 ? params.assigneeUserIds : undefined,
-          dueDate: params.dueDate ? `${params.dueDate.slice(0, 10)}T00:00:00.000Z` : undefined,
-          recurringMeetingIds: params.recurringMeetingIds.length > 0 ? params.recurringMeetingIds : undefined,
+          assigneeUserIds:
+            params.assigneeUserIds.length > 0
+              ? params.assigneeUserIds
+              : undefined,
+          dueDate: params.dueDate
+            ? `${params.dueDate.slice(0, 10)}T00:00:00.000Z`
+            : undefined,
+          recurringMeetingIds:
+            params.recurringMeetingIds.length > 0
+              ? params.recurringMeetingIds
+              : undefined,
         },
       };
     } else {
@@ -202,7 +252,9 @@ export function useReviewItems({
 
     if (res.status === 409) {
       await queryClient.invalidateQueries({ queryKey });
-      throw new Error("他のユーザーが先に更新しました。最新の状態を取得しました。");
+      throw new Error(
+        "他のユーザーが先に更新しました。最新の状態を取得しました。",
+      );
     }
     if (!res.ok) {
       throw new Error(`更新に失敗しました (${res.status})`);
