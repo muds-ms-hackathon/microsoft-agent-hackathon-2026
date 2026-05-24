@@ -4,6 +4,28 @@ import { jwtVerify } from "jose";
 import { getAudience, getIssuerUrl, getJwks } from "../lib/oidc.js";
 import { prisma } from "../lib/prisma.js";
 
+// @ を含む最低限のメール形式チェック。RFC 完全準拠は不要だが、
+// preferred_username のような非メール値を弾くことが目的。
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+// email クレームを優先し、なければ preferred_username にフォールバックする。
+// preferred_username は OIDC 仕様上ユーザ名であり、メール形式でない場合がある。
+// DB の email カラムは @unique のため、メール形式でない値は undefined として扱う。
+function extractEmail(payload: Record<string, unknown>): string | undefined {
+  if (typeof payload.email === "string" && looksLikeEmail(payload.email.trim())) {
+    return payload.email;
+  }
+  if (
+    typeof payload.preferred_username === "string" &&
+    looksLikeEmail(payload.preferred_username.trim())
+  ) {
+    return payload.preferred_username;
+  }
+  return undefined;
+}
+
 // auth ミドルウェア通過後、ハンドラから c.var.user で参照できる
 export type AuthVariables = {
   user: User;
@@ -36,13 +58,9 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
   // 自動作成に必要な claim が揃っていることを保証する
   const externalId = typeof payload.sub === "string" ? payload.sub : undefined;
   // Entra External ID は email クレームが省略され preferred_username に入る場合がある。
-  // 標準の email クレームを優先し、なければ preferred_username にフォールバックする。
-  const rawEmail =
-    typeof payload.email === "string"
-      ? payload.email
-      : typeof payload.preferred_username === "string"
-        ? payload.preferred_username
-        : undefined;
+  // ただし preferred_username は OIDC 仕様上ユーザ名でありメールアドレスとは限らない。
+  // DB の email カラムは @unique のため、メール形式でない値の書き込みを防ぐ。
+  const rawEmail = extractEmail(payload);
   const name = typeof payload.name === "string" ? payload.name : undefined;
 
   if (!externalId || !rawEmail || !name) {

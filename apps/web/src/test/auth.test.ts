@@ -101,6 +101,33 @@ describe("parseToken", () => {
 
     expect(parseToken(token)).toBeNull();
   });
+
+  it("preferred_username がメール形式でない場合は null を返す", () => {
+    // OIDC 仕様上 preferred_username はユーザ名でありメールとは限らない
+    const token = makeFakeIdToken({
+      sub: "u5",
+      email: undefined as unknown as string,
+      preferred_username: "just-a-username",
+      name: "u5",
+    });
+
+    expect(parseToken(token)).toBeNull();
+  });
+
+  it("email がメール形式でない場合は preferred_username にフォールバックする", () => {
+    const token = makeFakeIdToken({
+      sub: "u6",
+      email: "not-an-email" as string,
+      preferred_username: "u6@example.com",
+      name: "u6",
+    });
+
+    expect(parseToken(token)).toEqual({
+      sub: "u6",
+      email: "u6@example.com",
+      name: "u6",
+    });
+  });
 });
 
 describe("getInitialState", () => {

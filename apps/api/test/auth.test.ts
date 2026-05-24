@@ -138,6 +138,51 @@ describe("auth middleware", () => {
     expect(mockFindUnique).not.toHaveBeenCalled();
   });
 
+  it("payload.email が無く preferred_username がメール形式の場合はそれを使用する", async () => {
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
+        sub: "ext-1",
+        preferred_username: "alice@example.com",
+        name: "alice",
+      }),
+    );
+    mockFindUnique.mockResolvedValueOnce(null);
+    mockCreate.mockResolvedValueOnce({
+      id: 1,
+      externalId: "ext-1",
+      email: "alice@example.com",
+      name: "alice",
+      displayName: "alice",
+    });
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ email: "alice@example.com" }),
+      }),
+    );
+  });
+
+  it("preferred_username がメール形式でない場合は 401 を返す", async () => {
+    // OIDC 仕様上 preferred_username はユーザ名でありメールとは限らない
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({
+        sub: "ext-1",
+        preferred_username: "just-a-username",
+        name: "alice",
+      }),
+    );
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(401);
+    expect(mockFindUnique).not.toHaveBeenCalled();
+  });
+
   it("payload.name が無い場合は 401 を返す", async () => {
     mockJwtVerify.mockResolvedValueOnce(
       jwtVerifyResult({ sub: "ext-1", email: "alice@example.com" }),

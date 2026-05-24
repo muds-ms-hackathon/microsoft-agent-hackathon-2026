@@ -58,6 +58,11 @@ function removeStoredToken(): void {
   localStorage.removeItem(ID_TOKEN_KEY);
 }
 
+// @ を含む最低限のメール形式チェック。preferred_username のような非メール値を弾くことが目的。
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 // JWT のペイロードは Base64URL（RFC 7515）でエンコードされており、
 // 標準 Base64 とは `-`/`_` および省略パディングの扱いが異なる。
 // また `atob` の戻り値はバイナリ文字列なので UTF-8 として再デコードする必要がある。
@@ -87,11 +92,13 @@ export function parseToken(token: string): AuthState["user"] {
       return null;
     }
     // Entra External ID は email クレームが省略され preferred_username に入る場合がある。
-    // バックエンド auth ミドルウェアと同じ優先順位でフォールバックする。
+    // preferred_username は OIDC 仕様上ユーザ名でありメール形式でない場合があるため、
+    // バックエンドと同じバリデーションを経た値のみ採用する。
     const email =
-      typeof payload.email === "string"
+      typeof payload.email === "string" && looksLikeEmail(payload.email.trim())
         ? payload.email
-        : typeof payload.preferred_username === "string"
+        : typeof payload.preferred_username === "string" &&
+            looksLikeEmail(payload.preferred_username.trim())
           ? payload.preferred_username
           : undefined;
     if (!email) return null;
