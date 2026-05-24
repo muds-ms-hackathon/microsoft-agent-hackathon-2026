@@ -171,7 +171,7 @@ export function buildTaskListWhere(
     where.dueDate = { ...(where.dueDate ?? {}), lt: now };
     if (userProvidedStatus) {
       where.AND = [
-        { status: where.status },
+        { status: where.status! },
         { status: { notIn: ["done", "rejected"] } },
       ];
       delete where.status;
