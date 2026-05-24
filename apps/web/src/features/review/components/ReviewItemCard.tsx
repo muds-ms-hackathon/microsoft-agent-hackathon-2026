@@ -5,11 +5,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useOrganizationMembers } from "@/features/organizations/hooks/useOrganizationMembers";
 import { useRecurringMeetingDetail } from "@/features/recurring-meetings/hooks/useRecurringMeetingDetail";
 import { AssigneeDropdown } from "@/features/tasks/components/AssigneeDropdown";
-import { useCreateTask } from "@/features/tasks/hooks/useCreateTask";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import type { ReviewAssignee, ReviewItem } from "../types";
 import { TYPE_BADGE_CLASS, TYPE_LABELS } from "../types";
+import type { AmbiguityResolution } from "../useReviewItems";
 
 // "YYYY-MM-DD" → ISO8601 UTC 00:00
 function toIsoDate(date: string): string | undefined {
@@ -26,10 +26,12 @@ function deadlineToInputValue(deadline: string | null): string {
 export function ReviewItemCard({
   item,
   onUpdate,
+  onResolveAmbiguity,
   orgId = null,
 }: {
   item: ReviewItem;
   onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => Promise<void>;
+  onResolveAmbiguity: (id: string, params: AmbiguityResolution) => Promise<void>;
   orgId?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -58,32 +60,16 @@ export function ReviewItemCard({
         : [];
     });
 
-  const createTask = useCreateTask();
-  const isCreating = createTask.isPending;
-
-  const createTaskAndConfirm = () => {
-    if (!orgId) return;
-    createTask.mutate(
-      {
-        organizationId: orgId,
-        title: item.title,
-        body: item.body || undefined,
-        assigneeUserIds: selectedAssigneeIds.length > 0 ? selectedAssigneeIds : undefined,
-        dueDate: toIsoDate(deadline),
-        recurringMeetingIds: [item.recurringMeetingId],
-        originMeetingId: item.meetingId,
-      },
-      {
-        onSuccess: () => {
-          onUpdate(item.id, {
-            status: "decided",
-            title: item.title,
-            assignees: buildAssignees(),
-            deadline: deadline || null,
-          });
-        },
-      },
-    );
+  const callAmbiguity = async (params: AmbiguityResolution) => {
+    setUpdateError(null);
+    setIsUpdating(true);
+    try {
+      await onResolveAmbiguity(item.id, params);
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : "更新に失敗しました");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const callUpdate = async (updates: Partial<Omit<ReviewItem, "id">>) => {
@@ -136,7 +122,7 @@ export function ReviewItemCard({
   const saveEditLabel = "保存";
 
   const primaryDisabled =
-    item.type === "task_candidate" ? isCreating || !orgId : isUpdating;
+    item.type === "task_candidate" ? isUpdating || !orgId : isUpdating;
 
   return (
     <Card>
@@ -256,19 +242,24 @@ export function ReviewItemCard({
                 size="sm"
                 variant="outline"
                 className="text-xs"
-                disabled={isCreating || !orgId}
-                onClick={createTaskAndConfirm}
+                disabled={isUpdating}
+                onClick={() =>
+                  callAmbiguity({
+                    resolution: "task",
+                    assigneeUserIds: selectedAssigneeIds,
+                    dueDate: deadline || null,
+                    recurringMeetingIds: [item.recurringMeetingId],
+                  })
+                }
               >
-                {isCreating ? "登録中..." : "タスクにする"}
+                {isUpdating ? "処理中..." : "タスクにする"}
               </Button>
               <Button
                 size="sm"
                 variant="outline"
                 className="text-xs"
                 disabled={isUpdating}
-                onClick={() =>
-                  callUpdate({ type: "open_issue", status: "reviewing" })
-                }
+                onClick={() => callAmbiguity({ resolution: "decision_item" })}
               >
                 未決事項にする
               </Button>
@@ -277,7 +268,7 @@ export function ReviewItemCard({
                 variant="outline"
                 className="text-xs text-destructive hover:text-destructive"
                 disabled={isUpdating}
-                onClick={() => callUpdate({ status: "rejected" })}
+                onClick={() => callAmbiguity({ resolution: "rejected" })}
               >
                 破棄
               </Button>
@@ -288,10 +279,10 @@ export function ReviewItemCard({
             <Button
               size="sm"
               className="text-xs"
-              disabled={isCreating || isUpdating}
+              disabled={isUpdating}
               onClick={handleSaveEdit}
             >
-              {isCreating || isUpdating ? "保存中..." : saveEditLabel}
+              {isUpdating ? "保存中..." : saveEditLabel}
             </Button>
             <Button
               size="sm"
@@ -309,18 +300,15 @@ export function ReviewItemCard({
               variant="outline"
               className="text-xs"
               disabled={primaryDisabled}
-              onClick={
-                item.type === "task_candidate"
-                  ? createTaskAndConfirm
-                  : () =>
-                      callUpdate({
-                        status: "decided",
-                        assignees: buildAssignees(),
-                        deadline: deadline || null,
-                      })
+              onClick={() =>
+                callUpdate({
+                  status: "decided",
+                  assignees: buildAssignees(),
+                  deadline: deadline || null,
+                })
               }
             >
-              {isCreating || isUpdating ? "処理中..." : primaryLabel}
+              {isUpdating ? "処理中..." : primaryLabel}
             </Button>
             <Button
               size="sm"
@@ -342,9 +330,6 @@ export function ReviewItemCard({
           </div>
         )}
 
-        {createTask.isError && (
-          <p className="text-xs text-destructive">タスクの作成に失敗しました</p>
-        )}
         {updateError && (
           <p className="text-xs text-destructive">{updateError}</p>
         )}

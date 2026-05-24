@@ -7,7 +7,7 @@ import {
   type ReviewItem,
   type ReviewItemType,
 } from "@/features/review/types";
-import { useReviewItems } from "@/features/review/useReviewItems";
+import { useReviewItems, type AmbiguityResolution } from "@/features/review/useReviewItems";
 import { useRecurringMeetingDetail } from "@/features/recurring-meetings/hooks/useRecurringMeetingDetail";
 import { useOrganizationMeetings } from "@/features/recurring-meetings/hooks/useOrganizationMeetings";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
@@ -55,6 +55,7 @@ export function ReviewView({
   items,
   isLoading = false,
   onUpdate,
+  onResolveAmbiguity,
 }: {
   search: ReviewSearch;
   onSearchChange: (next: ReviewSearch) => void;
@@ -62,6 +63,7 @@ export function ReviewView({
   items: ReviewItem[];
   isLoading?: boolean;
   onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => Promise<void>;
+  onResolveAmbiguity: (id: string, params: AmbiguityResolution) => Promise<void>;
 }) {
   const typeArr = parseTypeParam(search.type);
   const selectedRmId = search.recurringMeetingId;
@@ -234,6 +236,7 @@ export function ReviewView({
               key={item.id}
               item={item}
               onUpdate={onUpdate}
+              onResolveAmbiguity={onResolveAmbiguity}
               orgId={currentOrgId}
             />
           ))}
@@ -249,7 +252,7 @@ function ReviewPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const currentOrgId = useAtomValue(currentOrganizationIdAtom);
-  const { items, isLoading, updateItem } = useReviewItems({
+  const { items, isLoading, updateItem, resolveAmbiguity } = useReviewItems({
     meetingId: search.meetingId,
     recurringMeetingId: search.recurringMeetingId,
   });
@@ -262,6 +265,7 @@ function ReviewPage() {
       items={items}
       isLoading={isLoading}
       onUpdate={updateItem}
+      onResolveAmbiguity={resolveAmbiguity}
     />
   );
 }

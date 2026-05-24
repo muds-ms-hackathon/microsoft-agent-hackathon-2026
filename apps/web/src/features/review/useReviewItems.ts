@@ -2,6 +2,11 @@ import { api, authHeaders } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReviewItem } from "./types";
 
+export type AmbiguityResolution =
+  | { resolution: "task"; assigneeUserIds: string[]; dueDate: string | null; recurringMeetingIds: string[] }
+  | { resolution: "decision_item" }
+  | { resolution: "rejected" };
+
 export function reviewItemsQueryKey(params: {
   meetingId?: string;
   recurringMeetingId?: string;
@@ -85,9 +90,53 @@ export function useReviewItems({
       return;
     }
 
-    // Step 4 で ambiguous_info を対応。それ以外（task）もキャッシュ更新のみ。
+    // task など他 sourceTable はキャッシュ更新のみ。
     queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
       (prev ?? []).map((i) => (i.id === id ? { ...i, ...updates } : i)),
+    );
+  };
+
+  const resolveAmbiguity = async (
+    id: string,
+    params: AmbiguityResolution,
+  ): Promise<void> => {
+    const item = (query.data ?? []).find((i) => i.id === id);
+    if (!item) return;
+
+    type PatchBody = Parameters<typeof api["ambiguous-infos"][":id"]["$patch"]>[0]["json"];
+    let body: PatchBody;
+    if (params.resolution === "rejected") {
+      body = { version: item.version, status: "rejected" };
+    } else if (params.resolution === "task") {
+      body = {
+        version: item.version,
+        resolutionType: "task",
+        newTask: {
+          assigneeUserIds: params.assigneeUserIds.length > 0 ? params.assigneeUserIds : undefined,
+          dueDate: params.dueDate ? `${params.dueDate.slice(0, 10)}T00:00:00.000Z` : undefined,
+          recurringMeetingIds: params.recurringMeetingIds.length > 0 ? params.recurringMeetingIds : undefined,
+        },
+      };
+    } else {
+      body = { version: item.version, resolutionType: "decision_item" };
+    }
+
+    const res = await api["ambiguous-infos"][":id"].$patch(
+      { param: { id }, json: body },
+      authHeaders(),
+    );
+
+    if (res.status === 409) {
+      await queryClient.invalidateQueries({ queryKey });
+      throw new Error("他のユーザーが先に更新しました。最新の状態を取得しました。");
+    }
+    if (!res.ok) {
+      throw new Error(`更新に失敗しました (${res.status})`);
+    }
+
+    const updated = (await res.json()) as ReviewItem;
+    queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
+      (prev ?? []).map((i) => (i.id === id ? updated : i)),
     );
   };
 
@@ -96,5 +145,6 @@ export function useReviewItems({
     isLoading: query.isLoading,
     isError: query.isError,
     updateItem,
+    resolveAmbiguity,
   };
 }

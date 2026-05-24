@@ -95,7 +95,8 @@ describe("ReviewItemCard", () => {
     renderWithQuery(
       <ReviewItemCard
         item={makeItem({ type: "task_candidate" })}
-        onUpdate={() => {}}
+        onUpdate={async () => {}}
+        onResolveAmbiguity={async () => {}}
         orgId="org-1"
       />,
     );
@@ -108,7 +109,8 @@ describe("ReviewItemCard", () => {
     renderWithQuery(
       <ReviewItemCard
         item={makeItem({ type: "open_issue" })}
-        onUpdate={() => {}}
+        onUpdate={async () => {}}
+        onResolveAmbiguity={async () => {}}
         orgId="org-1"
       />,
     );
@@ -119,7 +121,8 @@ describe("ReviewItemCard", () => {
     renderWithQuery(
       <ReviewItemCard
         item={makeItem({ type: "ambiguity", severity: "medium" })}
-        onUpdate={() => {}}
+        onUpdate={async () => {}}
+        onResolveAmbiguity={async () => {}}
         orgId="org-1"
       />,
     );
@@ -136,7 +139,8 @@ describe("ReviewItemCard", () => {
     renderWithQuery(
       <ReviewItemCard
         item={makeItem({ title: "元の内容" })}
-        onUpdate={() => {}}
+        onUpdate={async () => {}}
+        onResolveAmbiguity={async () => {}}
         orgId="org-1"
       />,
     );
@@ -155,6 +159,7 @@ describe("ReviewItemCard", () => {
       <ReviewItemCard
         item={makeItem({ type: "task_candidate", title: "元の内容" })}
         onUpdate={onUpdate}
+        onResolveAmbiguity={async () => {}}
         orgId="org-1"
       />,
     );
@@ -178,6 +183,7 @@ describe("ReviewItemCard", () => {
       <ReviewItemCard
         item={makeItem({ type: "open_issue", title: "元の課題" })}
         onUpdate={onUpdate}
+        onResolveAmbiguity={async () => {}}
         orgId="org-1"
       />,
     );
@@ -198,7 +204,7 @@ describe("ReviewItemCard", () => {
   it("「却下」で status:rejected を onUpdate に渡す", async () => {
     const onUpdate = vi.fn();
     renderWithQuery(
-      <ReviewItemCard item={makeItem()} onUpdate={onUpdate} orgId="org-1" />,
+      <ReviewItemCard item={makeItem()} onUpdate={onUpdate} onResolveAmbiguity={async () => {}} orgId="org-1" />,
     );
 
     await userEvent.click(screen.getByRole("button", { name: "却下" }));
@@ -211,6 +217,7 @@ describe("ReviewItemCard", () => {
       <ReviewItemCard
         item={makeItem({ type: "open_issue" })}
         onUpdate={onUpdate}
+        onResolveAmbiguity={async () => {}}
         orgId="org-1"
       />,
     );
@@ -228,7 +235,7 @@ describe("ReviewItemCard", () => {
 });
 
 describe("ReviewView", () => {
-  const noOp = () => {};
+  const noOp = async () => {};
 
   it("draft/reviewing アイテムのみ表示し decided・rejected は除外する", () => {
     const items = [
@@ -245,6 +252,7 @@ describe("ReviewView", () => {
         items={items}
 
         onUpdate={noOp}
+        onResolveAmbiguity={noOp}
       />,
     );
 
@@ -264,6 +272,7 @@ describe("ReviewView", () => {
         items={items}
 
         onUpdate={noOp}
+        onResolveAmbiguity={noOp}
       />,
     );
 
@@ -288,6 +297,7 @@ describe("ReviewView", () => {
         items={items}
 
         onUpdate={noOp}
+        onResolveAmbiguity={noOp}
       />,
     );
 
