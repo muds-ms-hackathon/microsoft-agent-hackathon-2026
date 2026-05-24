@@ -215,7 +215,7 @@ export function useReviewItems({
     params: AmbiguityResolution,
   ): Promise<void> => {
     const item = (query.data ?? []).find((i) => i.id === id);
-    if (!item) return;
+    if (!item) throw new Error(`resolveAmbiguity: id="${id}" が見つかりません`);
 
     type PatchBody = Parameters<
       (typeof api)["ambiguous-infos"][":id"]["$patch"]
