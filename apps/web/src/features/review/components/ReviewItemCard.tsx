@@ -11,12 +11,6 @@ import type { ReviewAssignee, ReviewItem } from "../types";
 import { TYPE_BADGE_CLASS, TYPE_LABELS } from "../types";
 import type { AmbiguityResolution } from "../useReviewItems";
 
-// "YYYY-MM-DD" → ISO8601 UTC 00:00
-function toIsoDate(date: string): string | undefined {
-  if (!date) return undefined;
-  return `${date}T00:00:00.000Z`;
-}
-
 // ISO8601 または "YYYY-MM-DD" → date input 用の "YYYY-MM-DD"
 function deadlineToInputValue(deadline: string | null): string {
   if (!deadline) return "";

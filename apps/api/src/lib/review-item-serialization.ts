@@ -46,6 +46,7 @@ export function serializeDecisionItem(item: DecisionItemWithReview) {
     sourceQuote: item.sourceQuote,
     sourceContext: item.sourceContext,
     severity: null,
+    resolutionType: null,
     meetingId: item.meetingId,
     recurringMeetingId: item.meeting.recurringMeetingId,
     assignees: item.assignees.map((a) => a.user),
@@ -66,6 +67,7 @@ function serializeTaskAsReviewItem(task: TaskWithReview) {
     sourceQuote: task.sourceQuote,
     sourceContext: task.sourceContext,
     severity: null,
+    resolutionType: null,
     // biome-ignore lint/style/noNonNullAssertion: where 条件で originMeetingId: { not: null } を保証済み
     meetingId: task.originMeetingId!,
     // biome-ignore lint/style/noNonNullAssertion: 同上
