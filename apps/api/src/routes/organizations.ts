@@ -595,7 +595,6 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         includeTasks
           ? prisma.task.findMany({
               where: {
-                originMeetingId: { not: null },
                 originMeeting: { recurringMeeting: { organizationId: id } },
               },
               orderBy: { createdAt: "asc" },

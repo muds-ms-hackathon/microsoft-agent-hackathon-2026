@@ -4,10 +4,8 @@ export type ReviewItemType =
   | "task_candidate"
   | "ambiguity";
 
-// API の sourceTable に対応: どのDBテーブル由来かを示す
 export type ReviewItemSourceTable = "decision_item" | "task" | "ambiguous_info";
 
-// API の status 値に合わせた共用体型
 export type ReviewItemStatus =
   | "draft"
   | "reviewing"
@@ -29,12 +27,11 @@ export type AmbiguityResolutionType = "task" | "decision_item" | "discarded";
 
 export type ReviewItem = {
   id: string;
-  // どのDBテーブル由来かを示す（PATCH エンドポイントの振り分けに使用）
+  // PATCH エンドポイントの振り分けに使用
   sourceTable: ReviewItemSourceTable;
   type: ReviewItemType;
   title: string;
   body: string | null;
-  // DB の sourceQuote（根拠となる発話1文）と sourceContext（前後の文脈）に対応
   sourceQuote: string | null;
   sourceContext: string | null;
   status: ReviewItemStatus;

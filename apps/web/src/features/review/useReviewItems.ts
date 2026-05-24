@@ -166,9 +166,8 @@ export function useReviewItems({
       return;
     }
 
-    queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-      (prev ?? []).map((i) => (i.id === id ? { ...i, ...updates } : i)),
-    );
+    if (!item) throw new Error(`updateItem: id="${id}" が見つかりません`);
+    throw new Error(`updateItem: 未対応の sourceTable="${item.sourceTable}"`);
   };
 
   const resolveAmbiguity = async (
