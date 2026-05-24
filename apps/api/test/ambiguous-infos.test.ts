@@ -360,6 +360,58 @@ describe("PATCH /ambiguous-infos/:id", () => {
     expect(mockAmbiguousInfoUpdateMany).not.toHaveBeenCalled();
   });
 
+  it("resolutionType=task のとき resolvedToDecisionItemId を指定すると 400", async () => {
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: 0,
+        resolutionType: "task",
+        resolvedToDecisionItemId: "di-1",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("resolutionType=decision_item のとき resolvedToTaskId を指定すると 400", async () => {
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: 0,
+        resolutionType: "decision_item",
+        resolvedToTaskId: "task-1",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("resolutionType=discarded のとき resolvedToTaskId を指定すると 400", async () => {
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: 0,
+        resolutionType: "discarded",
+        resolvedToTaskId: "task-1",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("resolutionType=discarded のとき resolvedToDecisionItemId を指定すると 400", async () => {
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: 0,
+        resolutionType: "discarded",
+        resolvedToDecisionItemId: "di-1",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("resolutionType を null に設定できる", async () => {
     mockAmbiguousInfoFindUnique.mockResolvedValue(
       mockAmbiguousInfoRaw() as never,

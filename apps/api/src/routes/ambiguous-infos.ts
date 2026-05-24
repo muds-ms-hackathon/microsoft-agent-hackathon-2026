@@ -34,7 +34,7 @@ async function requireAmbiguousInfoAccess(
   if (!organizationId) {
     return {
       ok: false as const,
-      res: c.json({ error: "組織情報が取得できません" }, 422),
+      res: c.json({ error: "曖昧情報が見つかりません" }, 404),
     };
   }
   const guard = await requireOrgMembership(c, organizationId);

@@ -24,6 +24,28 @@ export const ambiguousInfoUpdateSchema = z
       d.resolvedToTaskId !== undefined ||
       d.resolvedToDecisionItemId !== undefined,
     { message: "更新する項目を 1 つ以上指定してください" },
+  )
+  // resolutionType と解消先 ID の種別が矛盾しないことを保証する。
+  // resolutionType=task        → resolvedToTaskId のみ許可
+  // resolutionType=decision_item → resolvedToDecisionItemId のみ許可
+  // resolutionType=discarded   → 解消先 ID は両方 null/未指定
+  .refine(
+    (d) => {
+      if (d.resolutionType === "task" && d.resolvedToDecisionItemId) {
+        return false;
+      }
+      if (d.resolutionType === "decision_item" && d.resolvedToTaskId) {
+        return false;
+      }
+      if (
+        d.resolutionType === "discarded" &&
+        (d.resolvedToTaskId || d.resolvedToDecisionItemId)
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: "resolutionType と解消先 ID の種別が一致していません" },
   );
 
 export type AmbiguousInfoUpdateInput = z.infer<
