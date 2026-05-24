@@ -47,7 +47,6 @@ vi.mock("../src/middleware/auth.js", () => ({
 
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
-import type { DecisionItemWithDetail } from "../src/lib/decision-item-serialization.js";
 
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
@@ -89,14 +88,14 @@ function mockDecisionItemRaw(overrides = {}) {
   };
 }
 
-const sampleDecisionItem: DecisionItemWithDetail = {
+const sampleDecisionItem = {
   id: "di-1",
   meetingId: "mtg-1",
   title: "AI 導入を承認する",
   body: null,
   sourceQuote: null,
   sourceContext: null,
-  status: "open",
+  status: "open" as const,
   decisionState: null,
   reason: null,
   blockingItemId: null,
@@ -110,6 +109,7 @@ const sampleDecisionItem: DecisionItemWithDetail = {
   createdAt: new Date("2026-05-17T00:00:00Z"),
   updatedAt: new Date("2026-05-17T00:00:00Z"),
   assignees: [],
+  meeting: { recurringMeetingId: "rmtg-1" },
 };
 
 // ──────────────────────────────────────────────

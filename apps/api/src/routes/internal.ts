@@ -193,14 +193,14 @@ export const internalRoute = new Hono()
       // snapshot フィールドを transitionAnalysisRunStatus の extras として渡す。
       // transitioned の場合のみ書き込まれるため、noop / conflict 時は影響なし。
       const snapshotExtras: AnalysisRunUpdateExtras = {
-        summary: payload.summary ?? null,
-        alertLevel: payload.alert_level ?? null,
-        modelName: payload.model_name ?? null,
-        apiVersion: payload.api_version ?? null,
-        promptVersion: payload.prompt_version ?? null,
-        pipelineVersion: payload.pipeline_version ?? null,
-        inputHash: payload.input_hash ?? null,
-        transcriptText: payload.transcript_text ?? null,
+        summary: payload.summary,
+        alertLevel: payload.alert_level,
+        modelName: payload.model_name,
+        apiVersion: payload.api_version,
+        promptVersion: payload.prompt_version,
+        pipelineVersion: payload.pipeline_version,
+        inputHash: payload.input_hash,
+        transcriptText: payload.transcript_text,
         reportJson: toJson(payload.report_json),
         rawOutputsJson: toJson(payload.raw_outputs_json),
         validationWarnings: toJson(payload.validation_warnings),

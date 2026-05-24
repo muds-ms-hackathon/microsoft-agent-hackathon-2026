@@ -1,26 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Prisma を全モックして ambiguous-infos / meetings ルートのロジックのみを検証する。
 vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     organizationMembership: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
-    meeting: {
-      findUnique: vi.fn(),
+    recurringMeeting: {
+      findMany: vi.fn(),
     },
     ambiguousInfo: {
       findUnique: vi.fn(),
-      findMany: vi.fn(),
-      updateMany: vi.fn(),
-      findUniqueOrThrow: vi.fn(),
     },
     task: {
-      findUnique: vi.fn(),
+      create: vi.fn(),
+    },
+    taskAssignee: {
+      createMany: vi.fn(),
+    },
+    taskRecurringMeeting: {
+      createMany: vi.fn(),
     },
     decisionItem: {
-      findUnique: vi.fn(),
+      create: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -47,21 +51,27 @@ vi.mock("../src/middleware/auth.js", () => ({
   },
 }));
 
+import type { Prisma } from "@prisma/client";
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+
+type AmbiguousInfoWithAccess = Prisma.AmbiguousInfoGetPayload<{
+  include: {
+    meeting: {
+      select: { recurringMeeting: { select: { organizationId: true } } };
+    };
+  };
+}>;
 
 const mockMembershipFindUnique = vi.mocked(
   prisma.organizationMembership.findUnique,
 );
-const mockMeetingFindUnique = vi.mocked(prisma.meeting.findUnique);
-const mockAmbiguousInfoFindUnique = vi.mocked(prisma.ambiguousInfo.findUnique);
-const mockAmbiguousInfoFindMany = vi.mocked(prisma.ambiguousInfo.findMany);
-const mockAmbiguousInfoUpdateMany = vi.mocked(prisma.ambiguousInfo.updateMany);
-const mockAmbiguousInfoFindUniqueOrThrow = vi.mocked(
-  prisma.ambiguousInfo.findUniqueOrThrow,
+const mockMembershipFindMany = vi.mocked(
+  prisma.organizationMembership.findMany,
 );
-const mockTaskFindUnique = vi.mocked(prisma.task.findUnique);
-const mockDecisionItemFindUnique = vi.mocked(prisma.decisionItem.findUnique);
+const mockRecurringFindMany = vi.mocked(prisma.recurringMeeting.findMany);
+const mockAmbiguousInfoFindUnique = vi.mocked(prisma.ambiguousInfo.findUnique);
+const mockTransaction = vi.mocked(prisma.$transaction);
 
 function membership(role: "owner" | "admin" | "member" = "member") {
   return {
@@ -72,31 +82,13 @@ function membership(role: "owner" | "admin" | "member" = "member") {
   };
 }
 
-function mockMeeting() {
-  return {
-    id: "mtg-1",
-    recurringMeetingId: "rmtg-1",
-    recurringMeeting: { organizationId: "org-1" },
-  };
-}
-
-// requireAmbiguousInfoAccess で返すモック（select 形式）。
-function mockAmbiguousInfoRaw(overrides = {}) {
-  return {
-    id: "ai-1",
-    meetingId: "mtg-1",
-    meeting: { recurringMeeting: { organizationId: "org-1" } },
-    ...overrides,
-  };
-}
-
-const sampleAmbiguousInfo = {
+const sampleItem: AmbiguousInfoWithAccess = {
   id: "ai-1",
   meetingId: "mtg-1",
-  body: "話者が不明瞭",
+  body: "担当者が不明",
   sourceQuote: null,
   sourceContext: null,
-  status: "draft" as const,
+  status: "reviewing",
   ambiguityType: null,
   severity: null,
   inferenceBasis: null,
@@ -107,333 +99,322 @@ const sampleAmbiguousInfo = {
   resolvedToTaskId: null,
   resolvedToDecisionItemId: null,
   version: 0,
-  createdAt: new Date("2026-05-17T00:00:00Z"),
-  updatedAt: new Date("2026-05-17T00:00:00Z"),
+  createdAt: new Date("2026-05-01T00:00:00Z"),
+  updatedAt: new Date("2026-05-01T00:00:00Z"),
+  meeting: { recurringMeeting: { organizationId: "org-1" } },
 };
 
-// ──────────────────────────────────────────────
-// GET /meetings/:id/ambiguous-infos
-// ──────────────────────────────────────────────
-describe("GET /meetings/:id/ambiguous-infos", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("組織メンバーは 200 でリストを取得できる", async () => {
-    mockMeetingFindUnique.mockResolvedValue(mockMeeting() as never);
-    mockMembershipFindUnique.mockResolvedValue(membership());
-    mockAmbiguousInfoFindMany.mockResolvedValue([
-      sampleAmbiguousInfo,
-    ] as never);
-
-    const res = await app.request("/meetings/mtg-1/ambiguous-infos");
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { id: string }[];
-    expect(body).toHaveLength(1);
-    expect(body[0].id).toBe("ai-1");
-  });
-
-  it("status フィルタで絞り込める", async () => {
-    mockMeetingFindUnique.mockResolvedValue(mockMeeting() as never);
-    mockMembershipFindUnique.mockResolvedValue(membership());
-    mockAmbiguousInfoFindMany.mockResolvedValue([] as never);
-
-    const res = await app.request(
-      "/meetings/mtg-1/ambiguous-infos?status=resolved",
-    );
-    expect(res.status).toBe(200);
-    expect(mockAmbiguousInfoFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          status: { in: ["resolved"] },
-          meetingId: "mtg-1",
-        }),
-      }),
-    );
-  });
-
-  it("不正な status 値は 400", async () => {
-    const res = await app.request(
-      "/meetings/mtg-1/ambiguous-infos?status=invalid",
-    );
-    expect(res.status).toBe(400);
-  });
-
-  it("会議が存在しない場合は 404", async () => {
-    mockMeetingFindUnique.mockResolvedValue(null);
-    const res = await app.request("/meetings/missing/ambiguous-infos");
-    expect(res.status).toBe(404);
-  });
-
-  it("組織非所属は 404", async () => {
-    mockMeetingFindUnique.mockResolvedValue(mockMeeting() as never);
-    mockMembershipFindUnique.mockResolvedValue(null);
-    const res = await app.request("/meetings/mtg-1/ambiguous-infos");
-    expect(res.status).toBe(404);
-  });
-});
-
-// ──────────────────────────────────────────────
-// PATCH /ambiguous-infos/:id
-// ──────────────────────────────────────────────
 describe("PATCH /ambiguous-infos/:id", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("status 更新が 200 を返す", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
-    mockMembershipFindUnique.mockResolvedValue(membership());
-    mockAmbiguousInfoUpdateMany.mockResolvedValue({ count: 1 } as never);
-    mockAmbiguousInfoFindUniqueOrThrow.mockResolvedValue({
-      ...sampleAmbiguousInfo,
-      status: "resolved",
-      version: 1,
-    } as never);
+  it("アイテムが存在しない場合は 404", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/ambiguous-infos/missing", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "rejected" }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it("組織非所属の場合は 404", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
+    mockMembershipFindUnique.mockResolvedValue(null);
 
     const res = await app.request("/ambiguous-infos/ai-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0, status: "resolved" }),
+      body: JSON.stringify({ version: 0, status: "rejected" }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it("status=rejected で 200 を返す", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTransaction.mockResolvedValue({
+      kind: "ok",
+      item: {
+        ...sampleItem,
+        status: "rejected",
+        version: 1,
+        meeting: { recurringMeetingId: "rmtg-1" },
+      },
+    });
+
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "rejected" }),
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { status: string; version: number };
-    expect(body.status).toBe("resolved");
+    const body = (await res.json()) as {
+      sourceTable: string;
+      type: string;
+      status: string;
+      version: number;
+    };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.type).toBe("ambiguity");
+    expect(body.status).toBe("rejected");
     expect(body.version).toBe(1);
   });
 
-  it("version 不一致は 409", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
+  it("status=rejected で version 不一致は 409", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockAmbiguousInfoUpdateMany.mockResolvedValue({ count: 0 } as never);
+    mockTransaction.mockResolvedValue({ kind: "version_conflict" });
 
     const res = await app.request("/ambiguous-infos/ai-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 99, status: "resolved" }),
+      body: JSON.stringify({ version: 99, status: "rejected" }),
     });
 
     expect(res.status).toBe(409);
   });
 
-  it("status=draft は 400（AI 専用なので手動 PATCH で受け付けない）", async () => {
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0, status: "draft" }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("全フィールド未指定の更新は 400", async () => {
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0 }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("version 欠落は 400", async () => {
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "resolved" }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("曖昧情報が存在しない場合は 404", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(null);
-    const res = await app.request("/ambiguous-infos/missing", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0, status: "resolved" }),
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it("組織非所属は 404", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
-    mockMembershipFindUnique.mockResolvedValue(null);
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0, status: "resolved" }),
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it("resolvedToTaskId が同一会議に属する場合は 200", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
+  it("resolutionType=discarded で 200 を返す", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
     mockMembershipFindUnique.mockResolvedValue(membership());
-    // task.originMeetingId が同一会議と一致する
-    mockTaskFindUnique.mockResolvedValue({
-      originMeetingId: "mtg-1",
-    } as never);
-    mockAmbiguousInfoUpdateMany.mockResolvedValue({ count: 1 } as never);
-    mockAmbiguousInfoFindUniqueOrThrow.mockResolvedValue({
-      ...sampleAmbiguousInfo,
-      resolvedToTaskId: "task-1",
-    } as never);
+    mockTransaction.mockResolvedValue({
+      kind: "ok",
+      item: {
+        ...sampleItem,
+        status: "resolved",
+        resolutionType: "discarded",
+        version: 1,
+        meeting: { recurringMeetingId: "rmtg-1" },
+      },
+    });
 
     const res = await app.request("/ambiguous-infos/ai-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0, resolvedToTaskId: "task-1" }),
+      body: JSON.stringify({ version: 0, resolutionType: "discarded" }),
     });
 
     expect(res.status).toBe(200);
+    const body = (await res.json()) as { sourceTable: string; status: string };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.status).toBe("resolved");
   });
 
-  it("resolvedToTaskId が別会議のタスクなら 400", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
+  it("resolutionType=task でタスクを作成し 200 を返す", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
     mockMembershipFindUnique.mockResolvedValue(membership());
-    // 別会議のタスク
-    mockTaskFindUnique.mockResolvedValue({
-      originMeetingId: "mtg-other",
-    } as never);
-
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0, resolvedToTaskId: "task-other" }),
+    const newTask = { id: "task-new", title: "担当者が不明" };
+    let taskCreated = false;
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        task: {
+          create: vi.fn(() => {
+            taskCreated = true;
+            return Promise.resolve(newTask);
+          }),
+        },
+        taskAssignee: { createMany: vi.fn() },
+        taskRecurringMeeting: { createMany: vi.fn() },
+        ambiguousInfo: {
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            ...sampleItem,
+            status: "resolved",
+            resolutionType: "task",
+            resolvedToTaskId: "task-new",
+            version: 1,
+            meeting: { recurringMeetingId: "rmtg-1" },
+          }),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
     });
 
-    expect(res.status).toBe(400);
-    expect(mockAmbiguousInfoUpdateMany).not.toHaveBeenCalled();
-  });
-
-  it("resolvedToDecisionItemId が同一会議に属する場合は 200", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
-    mockMembershipFindUnique.mockResolvedValue(membership());
-    mockDecisionItemFindUnique.mockResolvedValue({
-      meetingId: "mtg-1",
-    } as never);
-    mockAmbiguousInfoUpdateMany.mockResolvedValue({ count: 1 } as never);
-    mockAmbiguousInfoFindUniqueOrThrow.mockResolvedValue({
-      ...sampleAmbiguousInfo,
-      resolvedToDecisionItemId: "di-1",
-    } as never);
-
     const res = await app.request("/ambiguous-infos/ai-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        version: 0,
-        resolvedToDecisionItemId: "di-1",
-      }),
+      body: JSON.stringify({ version: 0, resolutionType: "task" }),
     });
 
     expect(res.status).toBe(200);
+    expect(taskCreated).toBe(true);
+    const body = (await res.json()) as { sourceTable: string; status: string };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.status).toBe("resolved");
   });
 
-  it("resolvedToDecisionItemId が別会議の決定事項なら 400", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
+  it("resolutionType=task で他組織の assignee が含まれる場合は 400", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
     mockMembershipFindUnique.mockResolvedValue(membership());
-    // 別会議の決定事項
-    mockDecisionItemFindUnique.mockResolvedValue({
-      meetingId: "mtg-other",
-    } as never);
+    // 2 名指定したが 1 名しか組織メンバーとして見つからない
+    mockMembershipFindMany.mockResolvedValue([membership()]);
 
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        version: 0,
-        resolvedToDecisionItemId: "di-other",
-      }),
-    });
-
-    expect(res.status).toBe(400);
-    expect(mockAmbiguousInfoUpdateMany).not.toHaveBeenCalled();
-  });
-
-  it("resolutionType=task のとき resolvedToDecisionItemId を指定すると 400", async () => {
     const res = await app.request("/ambiguous-infos/ai-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         version: 0,
         resolutionType: "task",
-        resolvedToDecisionItemId: "di-1",
+        newTask: { assigneeUserIds: ["user-1", "user-outside"] },
       }),
     });
+
     expect(res.status).toBe(400);
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 
-  it("resolutionType=decision_item のとき resolvedToTaskId を指定すると 400", async () => {
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        version: 0,
-        resolutionType: "decision_item",
-        resolvedToTaskId: "task-1",
-      }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("resolutionType=discarded のとき resolvedToTaskId を指定すると 400", async () => {
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        version: 0,
-        resolutionType: "discarded",
-        resolvedToTaskId: "task-1",
-      }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("resolutionType=discarded のとき resolvedToDecisionItemId を指定すると 400", async () => {
-    const res = await app.request("/ambiguous-infos/ai-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        version: 0,
-        resolutionType: "discarded",
-        resolvedToDecisionItemId: "di-1",
-      }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("resolutionType を null に設定できる", async () => {
-    mockAmbiguousInfoFindUnique.mockResolvedValue(
-      mockAmbiguousInfoRaw() as never,
-    );
+  it("resolutionType=task で他組織の recurringMeeting が含まれる場合は 400", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
     mockMembershipFindUnique.mockResolvedValue(membership());
-    mockAmbiguousInfoUpdateMany.mockResolvedValue({ count: 1 } as never);
-    mockAmbiguousInfoFindUniqueOrThrow.mockResolvedValue({
-      ...sampleAmbiguousInfo,
-      resolutionType: null,
-    } as never);
+    // 指定した 2 件のうち 1 件しか見つからない
+    mockRecurringFindMany.mockResolvedValue([{ id: "rmtg-1" }]);
 
     const res = await app.request("/ambiguous-infos/ai-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 0, resolutionType: null }),
+      body: JSON.stringify({
+        version: 0,
+        resolutionType: "task",
+        newTask: { recurringMeetingIds: ["rmtg-1", "rmtg-other"] },
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it("resolutionType=task で version 不一致は 409 かつタスクはロールバックされる", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        task: { create: vi.fn().mockResolvedValue({ id: "task-new" }) },
+        taskAssignee: { createMany: vi.fn() },
+        taskRecurringMeeting: { createMany: vi.fn() },
+        ambiguousInfo: {
+          // version 不一致で count=0 を返す
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          findUniqueOrThrow: vi.fn(),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 99, resolutionType: "task" }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it("resolutionType=decision_item で DecisionItem を作成し 200 を返す", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const newDi = { id: "di-new", title: "担当者が不明" };
+    let diCreated = false;
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        decisionItem: {
+          create: vi.fn(() => {
+            diCreated = true;
+            return Promise.resolve(newDi);
+          }),
+        },
+        ambiguousInfo: {
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            ...sampleItem,
+            status: "resolved",
+            resolutionType: "decision_item",
+            resolvedToDecisionItemId: "di-new",
+            version: 1,
+            meeting: { recurringMeetingId: "rmtg-1" },
+          }),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, resolutionType: "decision_item" }),
     });
 
     expect(res.status).toBe(200);
-    expect(mockAmbiguousInfoUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ resolutionType: null }),
+    expect(diCreated).toBe(true);
+    const body = (await res.json()) as { sourceTable: string; status: string };
+    expect(body.sourceTable).toBe("ambiguous_info");
+    expect(body.status).toBe("resolved");
+  });
+
+  it("resolutionType=decision_item で version 不一致は 409", async () => {
+    mockAmbiguousInfoFindUnique.mockResolvedValue(sampleItem);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        decisionItem: { create: vi.fn().mockResolvedValue({ id: "di-new" }) },
+        ambiguousInfo: {
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          findUniqueOrThrow: vi.fn(),
+        },
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: テスト用 tx スタブ
+      return await (fn as (t: any) => Promise<unknown>)(tx);
+    });
+
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 99, resolutionType: "decision_item" }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it("status も resolutionType も未指定は 400", async () => {
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0 }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockAmbiguousInfoFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("version 欠落は 400", async () => {
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "rejected" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("スキーマ外フィールドは 400（strict）", async () => {
+    const res = await app.request("/ambiguous-infos/ai-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: 0,
+        status: "rejected",
+        unknownField: "x",
       }),
-    );
+    });
+
+    expect(res.status).toBe(400);
   });
 });

@@ -85,4 +85,3 @@ class AppApiClient:
                 timeout=60.0,
             )
             response.raise_for_status()
-

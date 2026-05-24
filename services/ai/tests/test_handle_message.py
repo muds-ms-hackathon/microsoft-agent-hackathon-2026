@@ -1,6 +1,7 @@
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from main import _handle_message
@@ -69,6 +70,8 @@ _FAILED_RESULT = AnalysisRunResult(
     error_message="LLM呼び出しエラー",
     failed_at="2026-05-17T11:00:00Z",
 )
+
+_REPORT_JSON_EMPTY: dict[str, list] = {"decisions": [], "tasks": [], "ambiguities": []}
 
 
 def _make_message(analysis_run_id: str = "run-1") -> MagicMock:

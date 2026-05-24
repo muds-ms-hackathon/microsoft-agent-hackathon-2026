@@ -2,140 +2,211 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
-import { ambiguousInfoUpdateSchema } from "../lib/schemas/ambiguous-info.js";
+import {
+  validateAssigneesInOrg,
+  validateRecurringMeetingsInOrg,
+} from "../lib/org-validation.js";
+import {
+  ambiguousInfoReviewInclude,
+  serializeAmbiguousInfo,
+} from "../lib/review-item-serialization.js";
+import { ambiguousInfoPatchSchema } from "../lib/schemas/review-item.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireOrgMembership } from "../middleware/authz.js";
 
-// AmbiguousInfo を ID から取得し、会議の組織メンバーであることを確認する。
-// 不存在・非所属いずれも 404 で統一し、存在自体を露出させない。
 async function requireAmbiguousInfoAccess(
   c: Context<{ Variables: AuthVariables }>,
-  infoId: string,
+  itemId: string,
 ) {
-  const raw = await prisma.ambiguousInfo.findUnique({
-    where: { id: infoId },
-    select: {
-      id: true,
-      meetingId: true,
+  const item = await prisma.ambiguousInfo.findUnique({
+    where: { id: itemId },
+    include: {
       meeting: {
-        select: {
-          recurringMeeting: { select: { organizationId: true } },
-        },
+        select: { recurringMeeting: { select: { organizationId: true } } },
       },
     },
   });
-  if (!raw) {
+  const organizationId = item?.meeting.recurringMeeting?.organizationId;
+  if (!item || !organizationId) {
     return {
       ok: false as const,
-      res: c.json({ error: "曖昧情報が見つかりません" }, 404),
-    };
-  }
-  const organizationId = raw.meeting.recurringMeeting?.organizationId;
-  if (!organizationId) {
-    return {
-      ok: false as const,
-      res: c.json({ error: "曖昧情報が見つかりません" }, 404),
+      res: c.json({ error: "アイテムが見つかりません" }, 404),
     };
   }
   const guard = await requireOrgMembership(c, organizationId);
-  if (!guard.ok) {
-    return { ok: false as const, res: guard.res };
-  }
-  const { meeting: _meeting, ...info } = raw;
-  return { ok: true as const, info };
+  if (!guard.ok) return { ok: false as const, res: guard.res };
+  return { ok: true as const, item, organizationId };
 }
 
-// resolvedToTaskId が同一会議内のタスク（originMeetingId 一致）かを検証する。
-async function validateResolvedToTask(
-  meetingId: string,
-  taskId: string,
-): Promise<boolean> {
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { originMeetingId: true },
-  });
-  return task?.originMeetingId === meetingId;
-}
-
-// resolvedToDecisionItemId が同一会議内の決定事項かを検証する。
-async function validateResolvedToDecisionItem(
-  meetingId: string,
-  decisionItemId: string,
-): Promise<boolean> {
-  const item = await prisma.decisionItem.findUnique({
-    where: { id: decisionItemId },
-    select: { meetingId: true },
-  });
-  return item?.meetingId === meetingId;
-}
-
-export const ambiguousInfosRoute = new Hono<{
-  Variables: AuthVariables;
-}>()
+export const ambiguousInfosRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
-  .patch("/:id", zValidator("json", ambiguousInfoUpdateSchema), async (c) => {
+  .patch("/:id", zValidator("json", ambiguousInfoPatchSchema), async (c) => {
     const id = c.req.param("id");
     const input = c.req.valid("json");
 
     const access = await requireAmbiguousInfoAccess(c, id);
     if (!access.ok) return access.res;
+    const { item, organizationId } = access;
 
-    const { meetingId } = access.info;
-
-    // 解消先タスクは同一会議から抽出されたものに限定する。
-    if (input.resolvedToTaskId) {
-      const valid = await validateResolvedToTask(
-        meetingId,
-        input.resolvedToTaskId,
-      );
-      if (!valid) {
-        return c.json({ error: "解消先タスクが同一会議に属していません" }, 400);
+    if (input.status === "rejected") {
+      const result = await prisma.$transaction(async (tx) => {
+        const { count } = await tx.ambiguousInfo.updateMany({
+          where: { id, version: input.version },
+          data: { status: "rejected", version: { increment: 1 } },
+        });
+        if (count === 0) return { kind: "version_conflict" as const };
+        const updated = await tx.ambiguousInfo.findUniqueOrThrow({
+          where: { id },
+          include: ambiguousInfoReviewInclude,
+        });
+        return { kind: "ok" as const, item: updated };
+      });
+      if (result.kind === "version_conflict") {
+        return c.json(
+          { error: "他のユーザーが先に更新しました。最新を取得してください" },
+          409,
+        );
       }
+      return c.json(serializeAmbiguousInfo(result.item));
     }
 
-    // 解消先決定事項は同一会議のものに限定する。
-    if (input.resolvedToDecisionItemId) {
-      const valid = await validateResolvedToDecisionItem(
-        meetingId,
-        input.resolvedToDecisionItemId,
-      );
-      if (!valid) {
+    if (input.resolutionType === "discarded") {
+      const result = await prisma.$transaction(async (tx) => {
+        const { count } = await tx.ambiguousInfo.updateMany({
+          where: { id, version: input.version },
+          data: {
+            status: "resolved",
+            resolutionType: "discarded",
+            version: { increment: 1 },
+          },
+        });
+        if (count === 0) return { kind: "version_conflict" as const };
+        const updated = await tx.ambiguousInfo.findUniqueOrThrow({
+          where: { id },
+          include: ambiguousInfoReviewInclude,
+        });
+        return { kind: "ok" as const, item: updated };
+      });
+      if (result.kind === "version_conflict") {
         return c.json(
-          { error: "解消先決定事項が同一会議に属していません" },
+          { error: "他のユーザーが先に更新しました。最新を取得してください" },
+          409,
+        );
+      }
+      return c.json(serializeAmbiguousInfo(result.item));
+    }
+
+    if (input.resolutionType === "task") {
+      const newTaskData = input.newTask ?? {};
+      const assigneeUserIds = newTaskData.assigneeUserIds ?? [];
+      const recurringMeetingIds = newTaskData.recurringMeetingIds ?? [];
+
+      if (!(await validateAssigneesInOrg(organizationId, assigneeUserIds))) {
+        return c.json(
+          { error: "担当者は組織のメンバーである必要があります" },
           400,
         );
       }
+      if (
+        !(await validateRecurringMeetingsInOrg(
+          organizationId,
+          recurringMeetingIds,
+        ))
+      ) {
+        return c.json({ error: "定例は組織に属している必要があります" }, 400);
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const task = await tx.task.create({
+          data: {
+            organizationId,
+            title: newTaskData.title ?? item.body,
+            body: newTaskData.body,
+            status: "todo",
+            originMeetingId: item.meetingId,
+            dueDate: newTaskData.dueDate
+              ? new Date(newTaskData.dueDate)
+              : undefined,
+          },
+        });
+        if (assigneeUserIds.length > 0) {
+          await tx.taskAssignee.createMany({
+            data: assigneeUserIds.map((userId) => ({
+              taskId: task.id,
+              userId,
+            })),
+          });
+        }
+        if (recurringMeetingIds.length > 0) {
+          await tx.taskRecurringMeeting.createMany({
+            data: recurringMeetingIds.map((recurringMeetingId) => ({
+              taskId: task.id,
+              recurringMeetingId,
+            })),
+          });
+        }
+        // task 作成後に version チェック → version 不一致ならトランザクション全体をロールバック。
+        const { count } = await tx.ambiguousInfo.updateMany({
+          where: { id, version: input.version },
+          data: {
+            status: "resolved",
+            resolutionType: "task",
+            resolvedToTaskId: task.id,
+            version: { increment: 1 },
+          },
+        });
+        if (count === 0) return { kind: "version_conflict" as const };
+        const updated = await tx.ambiguousInfo.findUniqueOrThrow({
+          where: { id },
+          include: ambiguousInfoReviewInclude,
+        });
+        return { kind: "ok" as const, item: updated };
+      });
+
+      if (result.kind === "version_conflict") {
+        return c.json(
+          { error: "他のユーザーが先に更新しました。最新を取得してください" },
+          409,
+        );
+      }
+      return c.json(serializeAmbiguousInfo(result.item));
     }
 
-    const updateData = {
-      ...(input.status !== undefined && { status: input.status }),
-      ...(input.resolutionType !== undefined && {
-        resolutionType: input.resolutionType,
-      }),
-      ...(input.resolvedToTaskId !== undefined && {
-        resolvedToTaskId: input.resolvedToTaskId,
-      }),
-      ...(input.resolvedToDecisionItemId !== undefined && {
-        resolvedToDecisionItemId: input.resolvedToDecisionItemId,
-      }),
-      version: { increment: 1 },
-    };
+    // 未決事項に解決（resolutionType の残る唯一のケース）
+    const newDiData = input.newDecisionItem ?? {};
 
-    const { count } = await prisma.ambiguousInfo.updateMany({
-      where: { id, version: input.version },
-      data: updateData,
-    });
-    if (count === 0) {
-      return c.json(
-        {
-          error: "他のユーザーが先に更新しました。最新を取得してください",
+    const result = await prisma.$transaction(async (tx) => {
+      const decisionItem = await tx.decisionItem.create({
+        data: {
+          meetingId: item.meetingId,
+          title: newDiData.title ?? item.body,
+          body: newDiData.body,
+          status: "open",
+          decisionState: "open",
         },
+      });
+      const { count } = await tx.ambiguousInfo.updateMany({
+        where: { id, version: input.version },
+        data: {
+          status: "resolved",
+          resolutionType: "decision_item",
+          resolvedToDecisionItemId: decisionItem.id,
+          version: { increment: 1 },
+        },
+      });
+      if (count === 0) return { kind: "version_conflict" as const };
+      const updated = await tx.ambiguousInfo.findUniqueOrThrow({
+        where: { id },
+        include: ambiguousInfoReviewInclude,
+      });
+      return { kind: "ok" as const, item: updated };
+    });
+
+    if (result.kind === "version_conflict") {
+      return c.json(
+        { error: "他のユーザーが先に更新しました。最新を取得してください" },
         409,
       );
     }
-
-    const updated = await prisma.ambiguousInfo.findUniqueOrThrow({
-      where: { id },
-    });
-    return c.json(updated);
+    return c.json(serializeAmbiguousInfo(result.item));
   });

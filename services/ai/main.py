@@ -4,6 +4,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 from azure.servicebus import ServiceBusReceivedMessage
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +16,12 @@ from pipeline.analyze_meeting import analyze_meeting
 from pipeline.complete_payload import build_complete_payload
 from routers.analysis import router as analysis_router
 from routers.health import router as health_router
-from schemas.analysis import AnalysisJobInput
+from schemas.analysis import (
+    VALID_AMBIGUITY_TYPE,
+    VALID_PRIORITY,
+    VALID_SEVERITY,
+    AnalysisJobInput,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +53,8 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
     # 取り出し失敗で Consumer が落ちないよう、パース段階で完結させる
     try:
         body = json.loads(_parse_message_body(message).decode("utf-8"))
-    except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as e:
-        logger.error("メッセージのデコードに失敗 (破棄): %s", e)
+    except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as error:
+        logger.error("メッセージのデコードに失敗 (破棄): %s", error)
         return
     if not isinstance(body, dict):
         logger.error("メッセージボディが dict ではありません: %s", type(body).__name__)
