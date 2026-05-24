@@ -48,10 +48,15 @@ export async function getJwks(): Promise<
           }
         }
       } catch {
-        // ネットワーク不達等のディスカバリ失敗はフォールバックで継続
+        // ネットワーク不達・タイムアウト等のディスカバリ失敗はフォールバックで継続
       }
       return createRemoteJWKSet(getJwksUrl());
-    })();
+    })().catch((e) => {
+      // reject された Promise がキャッシュされると以降のリクエストが永遠に同じ
+      // エラーを受け取り続けるため、失敗時はキャッシュを破棄して再試行可能にする。
+      jwksCachePromise = undefined;
+      throw e;
+    });
   }
   return jwksCachePromise;
 }
