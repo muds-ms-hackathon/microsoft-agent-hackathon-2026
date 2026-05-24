@@ -69,4 +69,6 @@ describe("getMsalInstance (MSAL 設定)", () => {
       "https://test-tenant.ciamlogin.com/test-tenant-id",
     );
   });
+
+
 });

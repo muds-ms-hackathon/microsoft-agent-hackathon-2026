@@ -25,6 +25,11 @@ function getEntraConfig(): Configuration {
       'Required Vite env "VITE_ENTRA_AUTHORITY" is not set. Set it before building for production.',
     );
   }
+  if (import.meta.env.PROD && !redirectUri) {
+    throw new Error(
+      'Required Vite env "VITE_ENTRA_REDIRECT_URI" is not set. Set it before building for production.',
+    );
+  }
 
   const resolvedAuthority = (authority ?? "").replace(/\/+$/, "");
 
