@@ -255,6 +255,10 @@ function ReviewPage() {
   const { items, isLoading, updateItem, resolveAmbiguity } = useReviewItems({
     meetingId: search.meetingId,
     recurringMeetingId: search.recurringMeetingId,
+    // 定例・会議いずれも未指定（全表示）の場合は組織全体から取得する
+    organizationId: !search.meetingId && !search.recurringMeetingId && currentOrgId
+      ? currentOrgId
+      : undefined,
   });
 
   return (

@@ -10,22 +10,28 @@ export type AmbiguityResolution =
 export function reviewItemsQueryKey(params: {
   meetingId?: string;
   recurringMeetingId?: string;
+  organizationId?: string;
 }) {
   if (params.meetingId) {
     return ["meetings", params.meetingId, "review-items"] as const;
   }
-  return ["recurring-meetings", params.recurringMeetingId, "review-items"] as const;
+  if (params.recurringMeetingId) {
+    return ["recurring-meetings", params.recurringMeetingId, "review-items"] as const;
+  }
+  return ["organizations", params.organizationId, "review-items"] as const;
 }
 
 export function useReviewItems({
   meetingId,
   recurringMeetingId,
+  organizationId,
 }: {
   meetingId?: string;
   recurringMeetingId?: string;
+  organizationId?: string;
 }) {
   const queryClient = useQueryClient();
-  const queryKey = reviewItemsQueryKey({ meetingId, recurringMeetingId });
+  const queryKey = reviewItemsQueryKey({ meetingId, recurringMeetingId, organizationId });
 
   const query = useQuery<ReviewItem[]>({
     queryKey,
@@ -36,9 +42,14 @@ export function useReviewItems({
           { param: { id: meetingId }, query: {} },
           authHeaders(),
         );
-      } else {
+      } else if (recurringMeetingId) {
         res = await api["recurring-meetings"][":id"]["review-items"].$get(
-          { param: { id: recurringMeetingId! }, query: {} },
+          { param: { id: recurringMeetingId }, query: {} },
+          authHeaders(),
+        );
+      } else {
+        res = await api.organizations[":id"]["review-items"].$get(
+          { param: { id: organizationId! }, query: {} },
           authHeaders(),
         );
       }
@@ -47,7 +58,7 @@ export function useReviewItems({
       }
       return (await res.json()) as ReviewItem[];
     },
-    enabled: !!(meetingId || recurringMeetingId),
+    enabled: !!(meetingId || recurringMeetingId || organizationId),
   });
 
   const updateItem = async (
