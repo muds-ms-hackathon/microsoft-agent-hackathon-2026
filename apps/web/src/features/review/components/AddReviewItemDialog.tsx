@@ -153,12 +153,12 @@ export function AddReviewItemDialog({
       const body =
         data.type === "ambiguity"
           ? {
-              type: data.type as const,
+              type: data.type,
               title: data.title,
               sourceContext: data.sourceContext || undefined,
             }
           : {
-              type: data.type as const,
+              type: data.type,
               title: data.title,
               sourceContext: data.sourceContext || undefined,
               body: data.body || undefined,
