@@ -70,8 +70,12 @@ export function useReviewItems({
     if (item?.sourceTable === "decision_item") {
       const body: Record<string, unknown> = { version: item.version };
       if (updates.status !== undefined) {
-        // DecisionItem の API スキーマは "rejected" を持たず "cancelled" が対応する
+        // DecisionItem は "rejected" を持たず "cancelled" が対応する
         body.status = updates.status === "rejected" ? "cancelled" : updates.status;
+        // open_issue 承認時は AI の次回持ち越しを防ぐため confirmed に昇格する
+        if (updates.status === "decided" && item.type === "open_issue") {
+          body.decisionState = "confirmed";
+        }
       }
       if (updates.title !== undefined) body.title = updates.title;
       if (updates.body !== undefined) body.body = updates.body;
@@ -107,10 +111,9 @@ export function useReviewItems({
     if (item?.sourceTable === "task") {
       const body: Record<string, unknown> = { version: item.version };
 
-      // ReviewItem の "decided" は Task では "todo" に対応する
       if (updates.status === "decided") {
         body.status = "todo";
-        // 確定時に定例を紐付ける（AI 作成時点では TaskRecurringMeeting が未作成のため）
+        // AI 作成時点では TaskRecurringMeeting が未作成のため確定時に紐付ける
         body.recurringMeetingIds = [item.recurringMeetingId];
       } else if (updates.status === "rejected") body.status = "rejected";
 
@@ -146,7 +149,6 @@ export function useReviewItems({
         version: number;
       };
 
-      // Task status → ReviewItem status へ変換
       const reviewStatus: ReviewItem["status"] =
         task.status === "rejected"
           ? "rejected"
@@ -164,7 +166,6 @@ export function useReviewItems({
       return;
     }
 
-    // ambiguous_info など残る sourceTable はキャッシュ更新のみ。
     queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
       (prev ?? []).map((i) => (i.id === id ? { ...i, ...updates } : i)),
     );

@@ -36,7 +36,7 @@ export type ReviewItem = {
   body: string | null;
   // DB の sourceQuote（根拠となる発話1文）と sourceContext（前後の文脈）に対応
   sourceQuote: string | null;
-  sourceContext: string;
+  sourceContext: string | null;
   status: ReviewItemStatus;
   assignees: ReviewAssignee[];
   // ISO 8601 datetime または null
