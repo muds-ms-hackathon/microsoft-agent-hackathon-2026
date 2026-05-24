@@ -94,8 +94,11 @@ export function useReviewItems({
       const body: Record<string, unknown> = { version: item.version };
 
       // ReviewItem の "decided" は Task では "todo" に対応する
-      if (updates.status === "decided") body.status = "todo";
-      else if (updates.status === "rejected") body.status = "rejected";
+      if (updates.status === "decided") {
+        body.status = "todo";
+        // 確定時に定例を紐付ける（AI 作成時点では TaskRecurringMeeting が未作成のため）
+        body.recurringMeetingIds = [item.recurringMeetingId];
+      } else if (updates.status === "rejected") body.status = "rejected";
 
       if (updates.title !== undefined) body.title = updates.title;
       if (updates.assignees !== undefined) {
