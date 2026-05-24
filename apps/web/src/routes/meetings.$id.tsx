@@ -349,9 +349,11 @@ export function MeetingDetailView({
 function ResolutionBadge({
   type,
   status,
+  resolutionType,
 }: {
   type: (typeof REVIEW_ITEM_TYPES)[number];
   status: ReviewItem["status"];
+  resolutionType: ReviewItem["resolutionType"];
 }) {
   if (status === "draft" || status === "reviewing") return null;
   if (status === "rejected") {
@@ -361,15 +363,23 @@ function ResolutionBadge({
       </span>
     );
   }
-  // confirmed
-  const label =
-    type === "ambiguity"
-      ? "→タスク登録済み"
-      : type === "task_candidate"
-        ? "タスク登録済み"
-        : type === "open_issue"
-          ? "決定済み"
-          : "確定済み";
+  let label: string;
+  if (type === "ambiguity") {
+    label =
+      resolutionType === "task"
+        ? "→タスク登録済み"
+        : resolutionType === "decision_item"
+          ? "→未決事項に変換"
+          : resolutionType === "discarded"
+            ? "→破棄"
+            : "→解消済み";
+  } else if (type === "task_candidate") {
+    label = "タスク登録済み";
+  } else if (type === "open_issue") {
+    label = "決定済み";
+  } else {
+    label = "確定済み";
+  }
   return (
     <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
       {label}
@@ -427,7 +437,7 @@ function ReviewAccordionItem({
             <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm">{item.title}</p>
-                <ResolutionBadge type={type} status={item.status} />
+                <ResolutionBadge type={type} status={item.status} resolutionType={item.resolutionType} />
               </div>
               {item.sourceContext && (
                 <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">

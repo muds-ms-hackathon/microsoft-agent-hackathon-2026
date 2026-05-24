@@ -25,6 +25,8 @@ export type ReviewAssignee = {
   email: string;
 };
 
+export type AmbiguityResolutionType = "task" | "decision_item" | "discarded";
+
 export type ReviewItem = {
   id: string;
   // どのDBテーブル由来かを示す（PATCH エンドポイントの振り分けに使用）
@@ -41,6 +43,8 @@ export type ReviewItem = {
   deadline: string | null;
   // ambiguity のみ使用（DB の ambiguous_infos.severity に対応）
   severity: AmbiguitySeverity | null;
+  // ambiguity のみ使用（解消方法: task / decision_item / discarded）
+  resolutionType: AmbiguityResolutionType | null;
   recurringMeetingId: string;
   meetingId: string;
   // 楽観ロック用バージョン番号

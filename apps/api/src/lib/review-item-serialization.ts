@@ -87,6 +87,7 @@ export function serializeAmbiguousInfo(item: AmbiguousInfoWithReview) {
     sourceQuote: item.sourceQuote,
     sourceContext: item.sourceContext,
     severity: item.severity,
+    resolutionType: item.resolutionType,
     meetingId: item.meetingId,
     recurringMeetingId: item.meeting.recurringMeetingId,
     assignees: [],
