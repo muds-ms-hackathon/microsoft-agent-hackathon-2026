@@ -147,6 +147,9 @@ export function ReviewItemCard({
           ) : (
             <p className="text-sm font-medium">{item.title}</p>
           )}
+          {!isEditing && item.body && (
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap">{item.body}</p>
+          )}
           <p className="text-xs text-muted-foreground">
             {recurringMeetingName ?? item.recurringMeetingId}
           </p>

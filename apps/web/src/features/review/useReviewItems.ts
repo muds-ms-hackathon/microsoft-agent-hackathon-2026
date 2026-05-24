@@ -69,7 +69,10 @@ export function useReviewItems({
 
     if (item?.sourceTable === "decision_item") {
       const body: Record<string, unknown> = { version: item.version };
-      if (updates.status !== undefined) body.status = updates.status;
+      if (updates.status !== undefined) {
+        // DecisionItem の API スキーマは "rejected" を持たず "cancelled" が対応する
+        body.status = updates.status === "rejected" ? "cancelled" : updates.status;
+      }
       if (updates.title !== undefined) body.title = updates.title;
       if (updates.body !== undefined) body.body = updates.body;
       if (updates.assignees !== undefined) {

@@ -356,7 +356,7 @@ function ResolutionBadge({
   resolutionType: ReviewItem["resolutionType"];
 }) {
   if (status === "draft" || status === "reviewing") return null;
-  if (status === "rejected") {
+  if (status === "rejected" || status === "cancelled") {
     return (
       <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
         却下
