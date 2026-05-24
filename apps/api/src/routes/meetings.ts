@@ -4,9 +4,22 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { sendToServiceBus } from "../lib/service-bus.js";
 import {
+  buildDecisionItemListWhere,
+  decisionItemListQuerySchema,
+} from "../lib/schemas/decision-item.js";
+import {
+  buildAmbiguousInfoListWhere,
+  ambiguousInfoListQuerySchema,
+} from "../lib/schemas/ambiguous-info.js";
+import {
   buildTaskListWhere,
   taskListQuerySchema,
 } from "../lib/schemas/task.js";
+import {
+  decisionItemListInclude,
+  decisionItemListOrderBy,
+  serializeDecisionItem,
+} from "../lib/decision-item-serialization.js";
 import {
   serializeTask,
   taskListInclude,
@@ -110,6 +123,46 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         include: taskListInclude,
       });
       return c.json(tasks.map(serializeTask));
+    },
+  )
+  .get(
+    "/:id/decision-items",
+    auth,
+    zValidator("query", decisionItemListQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const filters = c.req.valid("query");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const items = await prisma.decisionItem.findMany({
+        where: { ...buildDecisionItemListWhere(filters), meetingId: id },
+        orderBy: decisionItemListOrderBy,
+        include: decisionItemListInclude,
+      });
+      return c.json(items.map(serializeDecisionItem));
+    },
+  )
+  .get(
+    "/:id/ambiguous-infos",
+    auth,
+    zValidator("query", ambiguousInfoListQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const filters = c.req.valid("query");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const infos = await prisma.ambiguousInfo.findMany({
+        where: {
+          ...buildAmbiguousInfoListWhere(filters),
+          meetingId: id,
+        },
+        orderBy: { updatedAt: "desc" },
+      });
+      return c.json(infos);
     },
   )
   .patch("/:id", auth, zValidator("json", meetingUpdateSchema), async (c) => {
