@@ -113,7 +113,16 @@ describe("getJwks (discovery 経路)", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining("/.well-known/openid-configuration"),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("discovery がタイムアウトしてもスローせず JWKS セットを返す", async () => {
+    vi.mocked(fetch).mockRejectedValue(
+      new DOMException("The operation was aborted.", "TimeoutError"),
+    );
+
+    await expect(getJwks()).resolves.toBeDefined();
   });
 
   it("discovery がネットワークエラーで失敗してもスローせず JWKS セットを返す", async () => {

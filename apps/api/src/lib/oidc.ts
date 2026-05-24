@@ -38,7 +38,9 @@ export async function getJwks(): Promise<
       const issuer = getIssuerUrl().replace(/\/+$/, "");
       const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
       try {
-        const res = await fetch(discoveryUrl);
+        const res = await fetch(discoveryUrl, {
+          signal: AbortSignal.timeout(3000),
+        });
         if (res.ok) {
           const config = (await res.json()) as { jwks_uri?: string };
           if (typeof config.jwks_uri === "string") {
