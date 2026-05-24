@@ -109,7 +109,6 @@ const sampleDecisionItem = {
   createdAt: new Date("2026-05-17T00:00:00Z"),
   updatedAt: new Date("2026-05-17T00:00:00Z"),
   assignees: [],
-  meeting: { recurringMeetingId: "rmtg-1" },
 };
 
 // ──────────────────────────────────────────────

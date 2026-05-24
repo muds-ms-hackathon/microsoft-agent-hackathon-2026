@@ -3,10 +3,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
 import { validateAssigneesInOrg } from "../lib/org-validation.js";
-import {
-  decisionItemReviewInclude,
-  serializeDecisionItem,
-} from "../lib/review-item-serialization.js";
+import { decisionItemListInclude } from "../lib/decision-item-serialization.js";
 import { decisionItemPatchSchema } from "../lib/schemas/review-item.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireOrgMembership } from "../middleware/authz.js";
@@ -113,7 +110,7 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
 
       const updated = await tx.decisionItem.findUniqueOrThrow({
         where: { id },
-        include: decisionItemReviewInclude,
+        include: decisionItemListInclude,
       });
       return { kind: "ok" as const, item: updated };
     });
@@ -125,5 +122,6 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
       );
     }
 
-    return c.json(serializeDecisionItem(result.item));
+    const { assignees, ...rest } = result.item;
+    return c.json({ ...rest, assignees: assignees.map((a) => a.user) });
   });
