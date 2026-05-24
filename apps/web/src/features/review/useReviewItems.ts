@@ -90,7 +90,64 @@ export function useReviewItems({
       return;
     }
 
-    // task など他 sourceTable はキャッシュ更新のみ。
+    if (item?.sourceTable === "task") {
+      const body: Record<string, unknown> = { version: item.version };
+
+      // ReviewItem の "decided" は Task では "todo" に対応する
+      if (updates.status === "decided") body.status = "todo";
+      else if (updates.status === "rejected") body.status = "rejected";
+
+      if (updates.title !== undefined) body.title = updates.title;
+      if (updates.assignees !== undefined) {
+        body.assigneeUserIds = updates.assignees.map((a) => a.id);
+      }
+      if (updates.deadline !== undefined) {
+        body.dueDate = updates.deadline
+          ? `${updates.deadline.slice(0, 10)}T00:00:00.000Z`
+          : null;
+      }
+
+      const res = await api.tasks[":id"].$patch(
+        { param: { id }, json: body as Parameters<typeof api.tasks[":id"]["$patch"]>[0]["json"] },
+        authHeaders(),
+      );
+
+      if (res.status === 409) {
+        await queryClient.invalidateQueries({ queryKey });
+        throw new Error("他のユーザーが先に更新しました。最新の状態を取得しました。");
+      }
+      if (!res.ok) {
+        throw new Error(`更新に失敗しました (${res.status})`);
+      }
+
+      const task = (await res.json()) as {
+        id: string;
+        title: string;
+        status: string;
+        assignees: { id: string; name: string; displayName: string; email: string }[];
+        dueDate: string | null;
+        version: number;
+      };
+
+      // Task status → ReviewItem status へ変換
+      const reviewStatus: ReviewItem["status"] =
+        task.status === "rejected"
+          ? "rejected"
+          : task.status === "draft" || task.status === "reviewing"
+            ? item.status
+            : "decided";
+
+      queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
+        (prev ?? []).map((i) =>
+          i.id === id
+            ? { ...i, title: task.title, assignees: task.assignees, deadline: task.dueDate, version: task.version, status: reviewStatus }
+            : i,
+        ),
+      );
+      return;
+    }
+
+    // ambiguous_info など残る sourceTable はキャッシュ更新のみ。
     queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
       (prev ?? []).map((i) => (i.id === id ? { ...i, ...updates } : i)),
     );
