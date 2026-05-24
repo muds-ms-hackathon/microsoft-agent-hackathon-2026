@@ -40,23 +40,48 @@ class AppApiClient:
             )
             response.raise_for_status()
 
-    async def complete_analysis_run(
+    async def mark_analyzing(self, analysis_run_id: str) -> None:
+        """PATCH /internal/analysis-runs/:id  status=analyzing"""
+        async with httpx.AsyncClient() as client:
+            response = await client.patch(
+                f"{self.base_url}/internal/analysis-runs/{analysis_run_id}",
+                json={"status": "analyzing"},
+                headers=self._headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+
+    async def mark_failed(
         self,
         analysis_run_id: str,
-        decision_items: list[dict],
-        tasks: list[dict],
-        ambiguous_infos: list[dict],
+        *,
+        error_message: str | None = None,
+        current_step: str | None = None,
+    ) -> None:
+        """PATCH /internal/analysis-runs/:id  status=failed"""
+        payload: dict[str, Any] = {"status": "failed"}
+        if error_message is not None:
+            payload["error_message"] = error_message
+        if current_step is not None:
+            payload["current_step"] = current_step
+        async with httpx.AsyncClient() as client:
+            response = await client.patch(
+                f"{self.base_url}/internal/analysis-runs/{analysis_run_id}",
+                json=payload,
+                headers=self._headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+
+    async def complete_analysis_run(
+        self, analysis_run_id: str, payload: dict[str, Any]
     ) -> None:
         """POST /internal/analysis-runs/:id/complete"""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/internal/analysis-runs/{analysis_run_id}/complete",
-                json={
-                    "decisionItems": decision_items,
-                    "tasks": tasks,
-                    "ambiguousInfos": ambiguous_infos,
-                },
+                json=payload,
                 headers=self._headers,
-                timeout=30.0,
+                timeout=60.0,
             )
             response.raise_for_status()

@@ -62,6 +62,18 @@ export const analysisRunsRoute = new Hono()
       previous_report_json: previousReportJson,
     });
   })
+  // GET /:id/status — complete timeout 時などに AI Service が現在 status を確認する
+  .get("/:id/status", async (c) => {
+    const id = c.req.param("id");
+    const run = await prisma.meetingAnalysisRun.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!run) {
+      return c.json({ error: "解析ランが見つかりません" }, 404);
+    }
+    return c.json({ id: run.id, status: run.status });
+  })
   // PATCH /:id/result — AI Service が解析結果を保存する
   .patch(
     "/:id/result",

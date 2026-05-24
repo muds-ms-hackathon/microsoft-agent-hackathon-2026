@@ -58,11 +58,26 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
       }
     }
 
+    // status が "decided" になったら decidedBy / decidedAt を自動設定。
+    // "decided" 以外のステータスへ変わったら decidedBy / decidedAt をクリア。
+    const prevStatus = access.item.status;
+    const nextStatus = input.status;
+    let decidedBy: string | null | undefined;
+    let decidedAt: Date | null | undefined;
+    if (nextStatus === "decided") {
+      decidedBy = c.var.user.id;
+      decidedAt = new Date();
+    } else if (nextStatus !== undefined && prevStatus === "decided") {
+      decidedBy = null;
+      decidedAt = null;
+    }
+
     const updateData = {
       ...(input.status !== undefined && { status: input.status }),
       ...(input.decisionState !== undefined && {
         decisionState: input.decisionState,
       }),
+      ...(input.reason !== undefined && { reason: input.reason }),
       ...(input.title !== undefined && { title: input.title }),
       ...(input.body !== undefined && { body: input.body }),
       ...(input.decisionDeadline !== undefined && {
@@ -70,6 +85,8 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.decisionDeadline)
           : null,
       }),
+      ...(decidedBy !== undefined && { decidedBy }),
+      ...(decidedAt !== undefined && { decidedAt }),
       version: { increment: 1 },
     };
 
