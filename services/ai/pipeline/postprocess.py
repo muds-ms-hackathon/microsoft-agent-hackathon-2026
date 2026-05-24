@@ -1,20 +1,21 @@
 """後処理関数群。絵文字除去・担当者解決・ID採番など。"""
+
 import re
 import unicodedata
 
 _EMOJI_PATTERN = re.compile(
     "["
-    "\U0001F600-\U0001F64F"   # Emoticons
-    "\U0001F300-\U0001F5FF"   # Misc Symbols and Pictographs
-    "\U0001F680-\U0001F6FF"   # Transport and Map
-    "\U0001F1E0-\U0001F1FF"   # Flags
-    "\U0001F900-\U0001F9FF"   # Supplemental Symbols and Pictographs
-    "\U0001FA00-\U0001FA6F"   # Chess Symbols
-    "\U0001FA70-\U0001FAFF"   # Symbols and Pictographs Extended-A
-    "☀-⛿"           # Miscellaneous Symbols
-    "✀-➿"           # Dingbats
-    "︀-️"           # Variation Selectors
-    "‍"                   # Zero Width Joiner
+    "\U0001f600-\U0001f64f"  # Emoticons
+    "\U0001f300-\U0001f5ff"  # Misc Symbols and Pictographs
+    "\U0001f680-\U0001f6ff"  # Transport and Map
+    "\U0001f1e0-\U0001f1ff"  # Flags
+    "\U0001f900-\U0001f9ff"  # Supplemental Symbols and Pictographs
+    "\U0001fa00-\U0001fa6f"  # Chess Symbols
+    "\U0001fa70-\U0001faff"  # Symbols and Pictographs Extended-A
+    "☀-⛿"  # Miscellaneous Symbols
+    "✀-➿"  # Dingbats
+    "︀-️"  # Variation Selectors
+    "‍"  # Zero Width Joiner
     "]+",
     flags=re.UNICODE,
 )
@@ -105,9 +106,7 @@ def apply_due_date_conversions(
 ) -> list[dict]:
     """Call 5の変換結果をタスクのdue_dateフィールドに適用する。"""
     conversion_map = {
-        c["original"]: c.get("resolved")
-        for c in conversions
-        if c.get("original")
+        c["original"]: c.get("resolved") for c in conversions if c.get("original")
     }
     for task in tasks:
         raw = task.get("due_date_raw")

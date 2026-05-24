@@ -21,7 +21,9 @@
       "Bash(node *)",
       "Bash(npx prisma *)",
       "Bash(npx vitest *)",
-      "Bash(gh issue *)"
+      "Bash(gh issue *)",
+      "Bash(.venv/bin/python -m pytest tests/test_analyze_pipeline.py tests/test_handle_message.py -v)",
+      "Bash(.venv/bin/python *)"
     ]
   }
 }

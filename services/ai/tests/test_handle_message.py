@@ -26,8 +26,8 @@ _COMPLETED_RESULT = AnalysisRunResult(
     report_json={
         "decisions": [
             {
-                "topic": "決定事項A",
-                "content": "本文A",
+                "title": "決定事項A",
+                "body": "本文A",
                 "source_quote": "引用A",
                 "source_context": "文脈A",
                 "decision_state": "confirmed",
@@ -35,7 +35,7 @@ _COMPLETED_RESULT = AnalysisRunResult(
         ],
         "open_issues": [
             {
-                "topic": "未決事項B",
+                "title": "未決事項B",
                 "body": "詳細B",
                 "reason": "no_consensus",
                 "recurrence_count": 2,
@@ -205,11 +205,11 @@ def test_build_complete_payload_decision_items():
         status="completed",
         report_json={
             "decisions": [
-                {"topic": "決定A", "content": "本文A", "decision_state": "confirmed"}
+                {"title": "決定A", "body": "本文A", "decision_state": "confirmed"}
             ],
             "open_issues": [
                 {
-                    "topic": "未決B",
+                    "title": "未決B",
                     "reason": "no_consensus",
                     "recurrence_count": 1,
                     "expected_resolution_date": "2026-06-01",
