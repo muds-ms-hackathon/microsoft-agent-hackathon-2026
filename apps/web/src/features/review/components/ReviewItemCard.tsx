@@ -79,14 +79,7 @@ export function ReviewItemCard({
   };
 
   const handleSaveEdit = async () => {
-    if (item.type === "task_candidate") {
-      // タスク候補は内容・担当者・期限だけ保存し、登録は通常モードのボタンで行う
-      await callUpdate({
-        title: editTitle,
-        assignees: buildAssignees(),
-        deadline: deadline || null,
-      });
-    } else if (item.type === "open_issue") {
+    if (item.type === "task_candidate" || item.type === "open_issue") {
       await callUpdate({
         title: editTitle,
         assignees: buildAssignees(),

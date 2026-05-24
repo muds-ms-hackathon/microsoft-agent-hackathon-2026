@@ -101,7 +101,10 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
-  const { items: meetingReviewItems } = useReviewItems({ meetingId: id });
+  const {
+    items: meetingReviewItems,
+    isError: reviewItemsError,
+  } = useReviewItems({ meetingId: id });
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;
@@ -324,7 +327,11 @@ export function MeetingDetailView({
             </Link>
           ) : null}
         </div>
-        {meetingReviewItems.length === 0 ? (
+        {reviewItemsError ? (
+          <p className="text-sm text-destructive">
+            AI抽出結果の取得に失敗しました
+          </p>
+        ) : meetingReviewItems.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             AI抽出結果はまだありません
           </p>
