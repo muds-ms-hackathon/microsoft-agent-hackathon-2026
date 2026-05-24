@@ -172,7 +172,6 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.decisionItem.findMany({
               where: {
                 ...meetingWhere,
-                status: { in: ["draft", "reviewing"] },
                 ...decisionItemTypeWhere,
               },
               orderBy: { createdAt: "asc" },
@@ -188,7 +187,6 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
                 ...(filters.meetingId
                   ? {}
                   : { originMeetingId: { not: null } }),
-                status: { in: ["draft", "reviewing"] },
               },
               orderBy: { createdAt: "asc" },
               include: taskReviewInclude,
@@ -198,7 +196,6 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.ambiguousInfo.findMany({
               where: {
                 ...meetingWhere,
-                status: { in: ["draft", "reviewing"] },
               },
               orderBy: { createdAt: "asc" },
               include: ambiguousInfoReviewInclude,

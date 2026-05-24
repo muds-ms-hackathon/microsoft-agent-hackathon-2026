@@ -102,7 +102,6 @@ export function MeetingDetailView({
 }) {
   const detailQuery = useMeetingDetail(id);
   const { items: meetingReviewItems } = useReviewItems({ meetingId: id });
-  // API は draft/reviewing のみ返すため meetingReviewItems = 未確定アイテム全件
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;

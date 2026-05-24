@@ -140,7 +140,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.decisionItem.findMany({
               where: {
                 meetingId: id,
-                status: { in: ["draft", "reviewing"] },
                 ...decisionItemTypeWhere,
               },
               orderBy: { createdAt: "asc" },
@@ -151,7 +150,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.task.findMany({
               where: {
                 originMeetingId: id,
-                status: { in: ["draft", "reviewing"] },
               },
               orderBy: { createdAt: "asc" },
               include: taskReviewInclude,
@@ -161,7 +159,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.ambiguousInfo.findMany({
               where: {
                 meetingId: id,
-                status: { in: ["draft", "reviewing"] },
               },
               orderBy: { createdAt: "asc" },
               include: ambiguousInfoReviewInclude,
