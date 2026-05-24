@@ -29,7 +29,7 @@ export function ReviewItemCard({
   orgId = null,
 }: {
   item: ReviewItem;
-  onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => void;
+  onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => Promise<void>;
   orgId?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -38,6 +38,8 @@ export function ReviewItemCard({
     item.assignees.map((a) => a.id),
   );
   const [deadline, setDeadline] = useState(deadlineToInputValue(item.deadline));
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // 定例名の表示用。ReviewView が同じキーを先にフェッチしていればキャッシュから即返る。
   const { data: rmDetail } = useRecurringMeetingDetail(item.recurringMeetingId);
@@ -84,22 +86,34 @@ export function ReviewItemCard({
     );
   };
 
-  const handleSaveEdit = () => {
+  const callUpdate = async (updates: Partial<Omit<ReviewItem, "id">>) => {
+    setUpdateError(null);
+    setIsUpdating(true);
+    try {
+      await onUpdate(item.id, updates);
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : "更新に失敗しました");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
     if (item.type === "task_candidate") {
       // タスク候補は内容・担当者・期限だけ保存し、登録は通常モードのボタンで行う
-      onUpdate(item.id, {
+      await callUpdate({
         title: editTitle,
         assignees: buildAssignees(),
         deadline: deadline || null,
       });
     } else if (item.type === "open_issue") {
-      onUpdate(item.id, {
+      await callUpdate({
         title: editTitle,
         assignees: buildAssignees(),
         deadline: deadline || null,
       });
     } else {
-      onUpdate(item.id, {
+      await callUpdate({
         status: "decided",
         title: editTitle,
         assignees: buildAssignees(),
@@ -122,7 +136,7 @@ export function ReviewItemCard({
   const saveEditLabel = "保存";
 
   const primaryDisabled =
-    item.type === "task_candidate" ? isCreating || !orgId : false;
+    item.type === "task_candidate" ? isCreating || !orgId : isUpdating;
 
   return (
     <Card>
@@ -251,8 +265,9 @@ export function ReviewItemCard({
                 size="sm"
                 variant="outline"
                 className="text-xs"
+                disabled={isUpdating}
                 onClick={() =>
-                  onUpdate(item.id, { type: "open_issue", status: "reviewing" })
+                  callUpdate({ type: "open_issue", status: "reviewing" })
                 }
               >
                 未決事項にする
@@ -261,7 +276,8 @@ export function ReviewItemCard({
                 size="sm"
                 variant="outline"
                 className="text-xs text-destructive hover:text-destructive"
-                onClick={() => onUpdate(item.id, { status: "rejected" })}
+                disabled={isUpdating}
+                onClick={() => callUpdate({ status: "rejected" })}
               >
                 破棄
               </Button>
@@ -272,10 +288,10 @@ export function ReviewItemCard({
             <Button
               size="sm"
               className="text-xs"
-              disabled={isCreating}
+              disabled={isCreating || isUpdating}
               onClick={handleSaveEdit}
             >
-              {isCreating ? "登録中..." : saveEditLabel}
+              {isCreating || isUpdating ? "保存中..." : saveEditLabel}
             </Button>
             <Button
               size="sm"
@@ -297,14 +313,14 @@ export function ReviewItemCard({
                 item.type === "task_candidate"
                   ? createTaskAndConfirm
                   : () =>
-                      onUpdate(item.id, {
+                      callUpdate({
                         status: "decided",
                         assignees: buildAssignees(),
                         deadline: deadline || null,
                       })
               }
             >
-              {isCreating ? "登録中..." : primaryLabel}
+              {isCreating || isUpdating ? "処理中..." : primaryLabel}
             </Button>
             <Button
               size="sm"
@@ -318,7 +334,8 @@ export function ReviewItemCard({
               size="sm"
               variant="outline"
               className="text-xs text-destructive hover:text-destructive"
-              onClick={() => onUpdate(item.id, { status: "rejected" })}
+              disabled={isUpdating}
+              onClick={() => callUpdate({ status: "rejected" })}
             >
               却下
             </Button>
@@ -327,6 +344,9 @@ export function ReviewItemCard({
 
         {createTask.isError && (
           <p className="text-xs text-destructive">タスクの作成に失敗しました</p>
+        )}
+        {updateError && (
+          <p className="text-xs text-destructive">{updateError}</p>
         )}
       </CardContent>
     </Card>

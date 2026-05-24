@@ -61,7 +61,7 @@ export function ReviewView({
   currentOrgId?: string | null;
   items: ReviewItem[];
   isLoading?: boolean;
-  onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => void;
+  onUpdate: (id: string, updates: Partial<Omit<ReviewItem, "id">>) => Promise<void>;
 }) {
   const typeArr = parseTypeParam(search.type);
   const selectedRmId = search.recurringMeetingId;
