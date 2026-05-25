@@ -45,9 +45,6 @@ function getEntraConfig(): Configuration {
       authority: resolvedAuthority,
       redirectUri: redirectUri ?? `${window.location.origin}/login`,
       knownAuthorities,
-      // ログイン後に元のリクエスト URL へ自動遷移させない。
-      // SPA では TanStack Router 側でリダイレクト先を制御するため無効化する。
-      navigateToLoginRequestUrl: false,
     },
     cache: {
       // sessionStorage は localStorage より安全（タブを閉じると消える）

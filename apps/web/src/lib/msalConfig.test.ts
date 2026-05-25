@@ -47,13 +47,6 @@ describe("getMsalInstance (MSAL 設定)", () => {
     ]);
   });
 
-  it("navigateToLoginRequestUrl が false に設定される", async () => {
-    const { getMsalInstance } = await import("@/lib/msalConfig");
-    getMsalInstance();
-
-    expect(capturedConfig[0]?.auth?.navigateToLoginRequestUrl).toBe(false);
-  });
-
   it("cacheLocation が sessionStorage に設定される", async () => {
     const { getMsalInstance } = await import("@/lib/msalConfig");
     getMsalInstance();

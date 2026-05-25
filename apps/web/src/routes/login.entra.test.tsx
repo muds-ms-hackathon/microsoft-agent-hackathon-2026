@@ -31,7 +31,7 @@ vi.mock("@/lib/msalConfig", () => ({
 // @/lib/auth は atomWithStorage を使い module load 時に localStorage を参照するため、
 // vi.resetModules() 後の動的 import で localStorage 未初期化エラーが起きる。
 // importOriginal を使わず、純粋な atom だけで構成した完全モックで代替する。
-const loginSpy = vi.fn<[string], void>();
+const loginSpy = vi.fn<(token: string) => void>();
 const loginAtom = atom(null, (_get, _set, token: string) => {
   loginSpy(token);
 });
@@ -74,13 +74,12 @@ describe("Login コンポーネント (AUTH_PROVIDER=entra)", () => {
   // テスト用ルーターを組み立て、resetModules 後に再ロードした Login を /login に配置する
   async function renderLogin() {
     const { Route } = await import("@/routes/login");
-    const LoginComponent = Route.options.component as React.ComponentType;
 
     const rootRoute = createRootRoute({ component: Outlet });
     const loginRoute = createRoute({
       getParentRoute: () => rootRoute,
       path: "/login",
-      component: LoginComponent,
+      component: Route.options.component,
     });
     const homeRoute = createRoute({
       getParentRoute: () => rootRoute,
