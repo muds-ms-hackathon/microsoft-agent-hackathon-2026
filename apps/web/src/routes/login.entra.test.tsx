@@ -36,7 +36,11 @@ const loginAtom = atom(null, (_get, _set, token: string) => {
   loginSpy(token);
 });
 const logoutAtom = atom(null, () => {});
-const authAtom = atom({ isAuthenticated: false, idToken: null as string | null, user: null });
+const authAtom = atom({
+  isAuthenticated: false,
+  idToken: null as string | null,
+  user: null,
+});
 
 vi.mock("@/lib/auth", () => ({
   loginAtom,

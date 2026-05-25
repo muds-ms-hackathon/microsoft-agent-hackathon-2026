@@ -10,10 +10,12 @@ type CapturedConfig = {
 const capturedConfig: CapturedConfig[] = [];
 
 vi.mock("@azure/msal-browser", () => ({
-  PublicClientApplication: vi.fn().mockImplementation((config: CapturedConfig) => {
-    capturedConfig.push(config);
-    return {};
-  }),
+  PublicClientApplication: vi
+    .fn()
+    .mockImplementation((config: CapturedConfig) => {
+      capturedConfig.push(config);
+      return {};
+    }),
 }));
 
 describe("getMsalInstance (MSAL 設定)", () => {
