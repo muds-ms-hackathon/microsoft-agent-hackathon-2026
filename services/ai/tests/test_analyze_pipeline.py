@@ -1,4 +1,5 @@
 """パイプラインのユニットテスト。FakeLLMClientを使い、Azure OpenAI不要で動作する。"""
+
 import json
 
 import pytest
@@ -26,91 +27,98 @@ from schemas.analysis import AnalysisJobInput, SpeakerInfo
 
 # ──────────────────────── FakeLLMClient用フィクスチャ ─────────────────────────
 
+
 def _make_fake_responses() -> dict[str, str]:
     """各Callに対応するFakeレスポンスを返す。
     キーはFakeLLMClientが prompt に対して部分一致するユニーク文字列。
     各プロンプトテンプレートにある識別文字列を選ぶ。
     """
     call1_resp = json.dumps(["プロジェクトA", "予算", "期限", "設計書"])
-    call2_resp = json.dumps({
-        "decisions": [
-            {
-                "topic": "予算の増額",
-                "decision_state": "confirmed",
-                "content": "来期予算を10%増額する",
-                "source_quote": "予算は10%増やしましょう",
-                "source_context": "予算議題の後半",
-                "status": "draft",
-            }
-        ],
-        "open_issues": [
-            {
-                "topic": "設計書のレビュー担当",
-                "reason": "no_consensus",
-                "status": "open",
-                "source_quote": "設計書のレビューは誰がやる？",
-                "source_context": "タスク分担の議論",
-                "expected_resolution_date": None,
-                "responsible_raw": None,
-            }
-        ],
-    })
-    call3_resp = json.dumps({
-        "tasks": [
-            {
-                "title": "設計書の更新",
-                "body": "最新仕様を反映する",
-                "assignee_raw": "田中",
-                "due_date_raw": "来週金曜",
-                "priority": "required",
-                "assignee_source": "explicit_mention",
-                "source_quote": "田中さん、設計書お願いします",
-                "source_context": "タスク分担",
-                "status": "draft",
-            }
-        ],
-        "progress_notes": [],
-    })
+    call2_resp = json.dumps(
+        {
+            "decisions": [
+                {
+                    "title": "予算の増額",
+                    "decision_state": "confirmed",
+                    "body": "来期予算を10%増額する",
+                    "source_quote": "予算は10%増やしましょう",
+                    "source_context": "予算議題の後半",
+                    "status": "draft",
+                }
+            ],
+            "open_issues": [
+                {
+                    "title": "設計書のレビュー担当",
+                    "reason": "no_consensus",
+                    "status": "open",
+                    "source_quote": "設計書のレビューは誰がやる？",
+                    "source_context": "タスク分担の議論",
+                    "expected_resolution_date": None,
+                    "responsible_raw": None,
+                }
+            ],
+        }
+    )
+    call3_resp = json.dumps(
+        {
+            "tasks": [
+                {
+                    "title": "設計書の更新",
+                    "body": "最新仕様を反映する",
+                    "assignee_raw": "田中",
+                    "due_date_raw": "来週金曜",
+                    "priority": "required",
+                    "assignee_source": "explicit_mention",
+                    "source_quote": "田中さん、設計書お願いします",
+                    "source_context": "タスク分担",
+                    "status": "draft",
+                }
+            ],
+            "progress_notes": [],
+        }
+    )
     call4a_resp = json.dumps({"ambiguities_quality": []})
-    call4b_resp = json.dumps({
-        "ambiguities_content": [
-            {
-                "ambiguity_type": "no_deadline_absolute",
-                "severity": "medium",
-                "body": "設計書更新の期限が相対表現のみ",
-                "source_quote": None,
-                "source_context": "タスク分担",
-                "inference_basis": "due_date_rawが相対表現",
-                "affected_item_ids": [],
-            }
-        ]
-    })
-    call5_resp = json.dumps({
-        "conversions": [
-            {"original": "来週金曜", "resolved": "2026-05-22"}
-        ]
-    })
-    call6_resp = json.dumps({
-        "summary": "予算増額が確定し、設計書更新タスクが発生した",
-        "recommended_agenda": [
-            {
-                "title": "設計書レビュー担当の確定",
-                "estimated_minutes": 5,
-                "reason": "未決事項の解消",
-            }
-        ],
-        "estimation_note": "次回会議の想定所要時間: 約20分",
-    })
+    call4b_resp = json.dumps(
+        {
+            "ambiguities_content": [
+                {
+                    "ambiguity_type": "no_deadline_absolute",
+                    "severity": "medium",
+                    "body": "設計書更新の期限が相対表現のみ",
+                    "source_quote": None,
+                    "source_context": "タスク分担",
+                    "inference_basis": "due_date_rawが相対表現",
+                    "affected_item_ids": [],
+                }
+            ]
+        }
+    )
+    call5_resp = json.dumps(
+        {"conversions": [{"original": "来週金曜", "resolved": "2026-05-22"}]}
+    )
+    call6_resp = json.dumps(
+        {
+            "summary": "予算増額が確定し、設計書更新タスクが発生した",
+            "recommended_agenda": [
+                {
+                    "title": "設計書レビュー担当の確定",
+                    "estimated_minutes": 5,
+                    "reason": "未決事項の解消",
+                }
+            ],
+            "estimation_note": "次回会議の想定所要時間: 約20分",
+        }
+    )
 
     # キーはプロンプトテンプレート内のユニークな部分文字列
     return {
-        "キーワードを抽出": call1_resp,            # call1
-        "決定事項と未決事項を抽出": call2_resp,   # call2
-        "タスクを抽出してください": call3_resp,   # call3
-        "書き起こし品質に起因する曖昧情報": call4a_resp,   # call4a
-        "会議内容に起因する曖昧情報": call4b_resp, # call4b
-        "絶対日付（YYYY-MM-DD）に変換": call5_resp,        # call5
-        "サマリーと推奨アジェンダを生成": call6_resp,      # call6
+        "キーワードを抽出": call1_resp,  # call1
+        "決定事項と未決事項を抽出": call2_resp,  # call2
+        "タスクを抽出してください": call3_resp,  # call3
+        "書き起こし品質に起因する曖昧情報": call4a_resp,  # call4a
+        "会議内容に起因する曖昧情報": call4b_resp,  # call4b
+        "絶対日付（YYYY-MM-DD）に変換": call5_resp,  # call5
+        "サマリーと推奨アジェンダを生成": call6_resp,  # call6
     }
 
 
@@ -139,6 +147,7 @@ def _make_job() -> AnalysisJobInput:
 
 # ──────────────────────── パイプライン縦断テスト ──────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_analyze_meeting_completed():
     """FakeLLMClientを使ったCall 1〜6の縦断テスト。"""
@@ -157,7 +166,7 @@ async def test_analyze_meeting_completed():
     assert report is not None
     assert "decisions" in report
     assert len(report["decisions"]) == 1
-    assert report["decisions"][0]["topic"] == "予算の増額"
+    assert report["decisions"][0]["title"] == "予算の増額"
 
     assert "tasks" in report
     assert len(report["tasks"]) == 1
@@ -285,16 +294,16 @@ def test_validate_outputs_no_warnings():
 def test_prepare_prev_open_issues_excludes_resolved_human():
     prev_json = {
         "open_issues": [
-            {"topic": "A", "status": "open"},
-            {"topic": "B", "status": "resolved_human"},
-            {"topic": "C", "status": "resolved_ai"},
+            {"title": "A", "status": "open"},
+            {"title": "B", "status": "resolved_human"},
+            {"title": "C", "status": "resolved_ai"},
         ]
     }
     result = prepare_prev_open_issues_for_call2(prev_json)
-    topics = [o["topic"] for o in result]
-    assert "A" in topics
-    assert "C" in topics
-    assert "B" not in topics
+    titles = [o["title"] for o in result]
+    assert "A" in titles
+    assert "C" in titles
+    assert "B" not in titles
 
 
 def test_prepare_prev_tasks_excludes_done_rejected():
@@ -321,8 +330,8 @@ def test_prepare_change_summary_for_call6():
             {"title": "継続タスク", "status": "todo"},
         ],
         "open_issues": [
-            {"topic": "解決済み", "status": "resolved_human", "recurrence_count": 1},
-            {"topic": "継続中", "status": "open", "recurrence_count": 4},
+            {"title": "解決済み", "status": "resolved_human", "recurrence_count": 1},
+            {"title": "継続中", "status": "open", "recurrence_count": 4},
         ],
     }
     summary = prepare_change_summary_for_call6(prev_json)

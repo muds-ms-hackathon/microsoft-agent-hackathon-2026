@@ -53,9 +53,7 @@ async def test_lifespan_starts_consumer_when_env_set():
         _ENDPOINT_KEY: _ENDPOINT_VAL,
     }
     with patch.dict(os.environ, env):
-        with patch(
-            "main.ServiceBusConsumer", return_value=mock_consumer
-        ) as mock_cls:
+        with patch("main.ServiceBusConsumer", return_value=mock_consumer) as mock_cls:
             async with main.lifespan(main.app):
                 await asyncio.wait_for(started.wait(), timeout=1.0)
 

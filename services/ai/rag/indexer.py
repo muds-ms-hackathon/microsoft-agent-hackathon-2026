@@ -1,4 +1,5 @@
 """RAGインデックス登録インターフェース。初期実装はモック。"""
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,20 +16,14 @@ def build_rag_document(
     confirmed かつ rejected でない決定事項のテキストのみを含める。
     """
     confirmed_decision_texts = [
-        d.get("content", "")
+        d.get("body", "")
         for d in decisions
         if d.get("decision_state") == "confirmed" and d.get("status") != "rejected"
     ]
     open_issue_texts = [
-        o.get("topic", "")
-        for o in open_issues
-        if o.get("status") == "open"
+        o.get("title", "") for o in open_issues if o.get("status") == "open"
     ]
-    participant_names = [
-        s.get("name", "")
-        for s in speakers
-        if s.get("name")
-    ]
+    participant_names = [s.get("name", "") for s in speakers if s.get("name")]
 
     return {
         "theme_keywords": keywords,

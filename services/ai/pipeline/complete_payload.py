@@ -9,8 +9,8 @@ def build_complete_payload(result: AnalysisRunResult) -> dict:
 
     decision_items = [
         {
-            "title": d.get("topic", ""),
-            "body": d.get("content") or d.get("body"),
+            "title": d.get("title", ""),
+            "body": d.get("body"),
             "source_quote": d.get("source_quote"),
             "source_context": d.get("source_context"),
             "decision_state": d.get("decision_state"),
@@ -19,8 +19,8 @@ def build_complete_payload(result: AnalysisRunResult) -> dict:
         for d in report_json.get("decisions", [])
     ] + [
         {
-            "title": o.get("topic", ""),
-            "body": o.get("body") or o.get("content"),
+            "title": o.get("title", ""),
+            "body": o.get("body"),
             "source_quote": o.get("source_quote"),
             "source_context": o.get("source_context"),
             "decision_state": "open",

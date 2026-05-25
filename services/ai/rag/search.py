@@ -1,4 +1,5 @@
 """RAG検索インターフェース。初期実装はモック。"""
+
 import logging
 
 logger = logging.getLogger(__name__)
