@@ -133,11 +133,6 @@ export function AddReviewItemDialog({
   const selectedMeetingId = watch("meetingId");
   const selectedType = watch("type");
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedRmId が変わったときだけリセットする意図的な依存
-  useEffect(() => {
-    setValue("meetingId", "");
-  }, [selectedRmId, setValue]);
-
   useEffect(() => {
     if (open) {
       reset({
@@ -201,7 +196,9 @@ export function AddReviewItemDialog({
               <Label htmlFor={rmId}>定例</Label>
               <select
                 id={rmId}
-                {...register("recurringMeetingId")}
+                {...register("recurringMeetingId", {
+                  onChange: () => setValue("meetingId", ""),
+                })}
                 className="text-sm px-2 py-1.5 rounded-md border border-border/60 bg-card"
               >
                 <option value="">定例を選択</option>
