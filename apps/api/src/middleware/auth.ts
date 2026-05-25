@@ -15,7 +15,10 @@ function looksLikeEmail(value: string): boolean {
 // preferred_username は OIDC 仕様上ユーザ名であり、メール形式でない場合がある。
 // DB の email カラムは @unique のため、メール形式でない値は undefined として扱う。
 function extractEmail(payload: Record<string, unknown>): string | undefined {
-  if (typeof payload.email === "string" && looksLikeEmail(payload.email.trim())) {
+  if (
+    typeof payload.email === "string" &&
+    looksLikeEmail(payload.email.trim())
+  ) {
     return payload.email;
   }
   if (
