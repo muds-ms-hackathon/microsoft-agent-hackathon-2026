@@ -8,7 +8,7 @@ import { readRequiredViteEnv } from "@/lib/env";
 import { ENTRA_SCOPES, getMsalInstance } from "@/lib/msalConfig";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -30,6 +30,7 @@ const FAKE_AUTH_URL =
 function Login() {
   const navigate = useNavigate();
   const setLogin = useSetAtom(loginAtom);
+  const [error, setError] = useState<string | null>(null);
   // state/nonce の検証は消費型（1 回限り）。React StrictMode の二重実行や
   // 親の再レンダリングによる useEffect 再実行で 2 回目に no_expected_params
   // と判定されないよう、明示的に 1 度だけハンドラを走らせる。
@@ -47,30 +48,38 @@ function Login() {
     handleFakeAuthLogin();
 
     async function handleEntraLogin() {
-      const msal = getMsalInstance();
-      // MSAL は initialize() 完了後でないと他の API を呼べない
-      await msal.initialize();
+      try {
+        const msal = getMsalInstance();
+        // MSAL は initialize() 完了後でないと他の API を呼べない
+        await msal.initialize();
 
-      // リダイレクト後のコールバック処理。result が null の場合は認証前。
-      // navigateToLoginRequestUrl: false でリダイレクト完了後に元 URL へ戻る動作を抑制する。
-      // MSAL v5 では Configuration ではなく handleRedirectPromise のオプションに移動した。
-      const result = await msal.handleRedirectPromise({ navigateToLoginRequestUrl: false });
+        // リダイレクト後のコールバック処理。result が null の場合は認証前。
+        // navigateToLoginRequestUrl: false でリダイレクト完了後に元 URL へ戻る動作を抑制する。
+        // MSAL v5 では Configuration ではなく handleRedirectPromise のオプションに移動した。
+        const result = await msal.handleRedirectPromise({
+          navigateToLoginRequestUrl: false,
+        });
 
-      if (result?.idToken) {
-        // MSAL が返す idToken を既存の localStorage ベースの仕組みに橋渡しする
-        setLogin(result.idToken);
-        navigate({ to: "/" });
-        return;
+        if (result?.idToken) {
+          // MSAL が返す idToken を既存の localStorage ベースの仕組みに橋渡しする
+          setLogin(result.idToken);
+          navigate({ to: "/" });
+          return;
+        }
+
+        // 既にログイン済みの場合はホームへ
+        if (getIdToken()) {
+          navigate({ to: "/" });
+          return;
+        }
+
+        // 未認証: Entra ID へリダイレクト（MSAL が PKCE を内部処理）
+        await msal.loginRedirect({ scopes: ENTRA_SCOPES });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error("[login] Entra 認証エラー:", e);
+        setError(message);
       }
-
-      // 既にログイン済みの場合はホームへ
-      if (getIdToken()) {
-        navigate({ to: "/" });
-        return;
-      }
-
-      // 未認証: Entra ID へリダイレクト（MSAL が PKCE を内部処理）
-      await msal.loginRedirect({ scopes: ENTRA_SCOPES });
     }
 
     function handleFakeAuthLogin() {
@@ -124,7 +133,11 @@ function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
-        <p className="text-muted-foreground">ログイン中...</p>
+        {error ? (
+          <p className="text-destructive">認証エラー: {error}</p>
+        ) : (
+          <p className="text-muted-foreground">ログイン中...</p>
+        )}
       </div>
     </div>
   );
