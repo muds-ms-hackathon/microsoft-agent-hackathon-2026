@@ -1,4 +1,4 @@
-import { AssigneeDropdown } from "@/features/tasks/components/AssigneeDropdown";
+import { AssigneeDropdown } from "@/features/common/components/AssigneeDropdown";
 import { AssigneePicker } from "@/features/tasks/components/AssigneePicker";
 import { RecurringMeetingPicker } from "@/features/tasks/components/RecurringMeetingPicker";
 import { screen } from "@testing-library/react";

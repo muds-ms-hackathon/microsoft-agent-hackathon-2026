@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrganizationMembers } from "@/features/organizations/hooks/useOrganizationMembers";
-import { AssigneeDropdown } from "@/features/tasks/components/AssigneeDropdown";
+import { AssigneeDropdown } from "@/features/common/components/AssigneeDropdown";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import type { ReviewAssignee, ReviewItem } from "../types";
