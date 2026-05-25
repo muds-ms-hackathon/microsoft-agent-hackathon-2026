@@ -1,3 +1,5 @@
+import "./helpers/link-mock";
+
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,34 +39,6 @@ vi.mock("@/lib/api", () => ({
   },
   authHeaders: () => ({ headers: {} }),
 }));
-
-// 定例カードに /recurring-meetings/$id への Link が含まれるため router を mock し、
-// href の検証ができる形（素の <a>）で描画する。
-vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
-    "@tanstack/react-router",
-  );
-  type MockLinkProps = {
-    to: string;
-    params?: Record<string, string>;
-    children?: React.ReactNode;
-    className?: string;
-  };
-  return {
-    ...actual,
-    Link: ({ to, params, children, className }: MockLinkProps) => {
-      const href =
-        typeof to === "string"
-          ? to.replace(/\$(\w+)/g, (_, k: string) => params?.[k] ?? "")
-          : String(to);
-      return (
-        <a href={href} className={className}>
-          {children}
-        </a>
-      );
-    },
-  };
-});
 
 import { api } from "@/lib/api";
 

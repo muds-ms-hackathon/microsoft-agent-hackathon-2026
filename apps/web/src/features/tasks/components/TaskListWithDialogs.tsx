@@ -1,20 +1,12 @@
 import { DeleteTaskDialog } from "@/features/tasks/components/DeleteTaskDialog";
 import { EditTaskDialog } from "@/features/tasks/components/EditTaskDialog";
 import { TaskRow } from "@/features/tasks/components/TaskRow";
-import { useTaskDetail } from "@/features/tasks/hooks/useTaskDetail";
+import { useTaskDialogState } from "@/features/tasks/hooks/useTaskDialogState";
 import type { TaskListItem } from "@/features/tasks/types";
-import { useState } from "react";
 
 // タスク一覧の行クリック → 編集ダイアログ → 削除ダイアログまで一気通貫で扱う共通ラッパー。
 // 各ページ（My タスク・定例詳細・会議詳細）で重複する「行クリック state + useTaskDetail
-// + EditTaskDialog + DeleteTaskDialog の連動」をここに閉じ込める。
-//
-// 動作:
-//   1. 行クリック → selectedTaskId をセット
-//   2. useTaskDetail で詳細取得（取得中はダイアログ未表示）
-//   3. 取得成功で EditTaskDialog を開く
-//   4. 削除ボタン押下で DeleteTaskDialog を開く
-//   5. ダイアログ閉鎖時に selectedTaskId をクリア
+// + EditTaskDialog + DeleteTaskDialog の連動」を useTaskDialogState で共通化している。
 export function TaskListWithDialogs({
   tasks,
   ariaLabel,
@@ -24,30 +16,23 @@ export function TaskListWithDialogs({
   ariaLabel: string;
   now?: Date;
 }) {
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  // taskId が null の時は useTaskDetail 側で enabled:false になり fetch されない。
-  const detailQuery = useTaskDetail(selectedTaskId);
-  const task = detailQuery.data ?? null;
-  const isLoading = selectedTaskId !== null && detailQuery.isLoading;
-  const isError = selectedTaskId !== null && detailQuery.isError;
-
-  const closeAll = () => {
-    setDeleteOpen(false);
-    setSelectedTaskId(null);
-  };
+  const {
+    task,
+    isLoading,
+    isError,
+    deleteOpen,
+    detailQuery,
+    select,
+    openDelete,
+    setDeleteOpen,
+    closeAll,
+  } = useTaskDialogState();
 
   return (
     <>
       <ul aria-label={ariaLabel} className="grid gap-2">
         {tasks.map((t) => (
-          <TaskRow
-            key={t.id}
-            task={t}
-            now={now}
-            onClick={() => setSelectedTaskId(t.id)}
-          />
+          <TaskRow key={t.id} task={t} now={now} onClick={() => select(t.id)} />
         ))}
       </ul>
 
@@ -70,8 +55,7 @@ export function TaskListWithDialogs({
         </div>
       )}
 
-      {/* 取得中はダイアログを開かず、UI を阻害しないよう軽い表示のみ。
-          長時間かかる場合はトーストやスケルトンへ拡張する余地を残す。 */}
+      {/* 取得中はダイアログを開かず、UI を阻害しないよう軽い表示のみ。 */}
       {isLoading && (
         <p className="text-xs text-muted-foreground" role="status">
           タスク詳細を読み込み中...
@@ -88,7 +72,7 @@ export function TaskListWithDialogs({
             // Edit が閉じられたら全状態をリセット（次の行クリックを受けられる状態に戻す）。
             if (!next && !deleteOpen) closeAll();
           }}
-          onRequestDelete={() => setDeleteOpen(true)}
+          onRequestDelete={openDelete}
         />
       )}
 

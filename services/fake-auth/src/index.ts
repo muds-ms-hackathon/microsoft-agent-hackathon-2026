@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { html } from "hono/html";
 import {
   exportJWK,
   importJWK,
@@ -81,6 +82,8 @@ app.get("/.well-known/jwks.json", async (c) => {
 });
 
 // Authorize - GET (login form)
+// クエリ・ユーザー情報を直接埋め込むため、hono/html の `html` タグ関数で
+// 自動 HTML エスケープを適用し XSS を防ぐ。
 app.get("/authorize", (c) => {
   const redirectUri = c.req.query("redirect_uri");
   const state = c.req.query("state") ?? "";
@@ -90,14 +93,12 @@ app.get("/authorize", (c) => {
     return c.text("redirect_uri is required", 400);
   }
 
-  const usersList = getAllUsers()
-    .map(
-      ([key, user]) =>
-        `<option value="${key}">${user.displayName} (${user.email})</option>`,
-    )
-    .join("");
+  const userOptions = getAllUsers().map(
+    ([key, user]) =>
+      html`<option value="${key}">${user.displayName} (${user.email})</option>`,
+  );
 
-  const html = `<!DOCTYPE html>
+  const page = html`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -138,14 +139,14 @@ app.get("/authorize", (c) => {
     <input type="hidden" name="nonce" value="${nonce}">
     <select name="user" required>
       <option value="">-- ユーザーを選択 --</option>
-      ${usersList}
+      ${userOptions}
     </select>
     <button type="submit">ログイン</button>
   </form>
 </body>
 </html>`;
 
-  return c.html(html);
+  return c.html(page);
 });
 
 // Authorize - POST (generate ID token and redirect)

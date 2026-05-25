@@ -1,0 +1,287 @@
+[call1_keywords]
+template = """以下の会議書き起こしから、主要なキーワードを抽出してください。
+
+## 書き起こし
+$transcript
+
+## 出力ルール
+- 固有名詞・技術用語・議題名・プロジェクト名・人名などを中心に抽出する
+- 10〜20個程度を目安とする
+- JSON配列でキーワードを返す
+
+出力例:
+["プロジェクトA", "予算", "期限延長", "設計書", "田中"]
+
+JSONのみ返してください（コードブロック不要）。"""
+
+[call2]
+template = """あなたは会議議事録の構造化AIです。以下の書き起こしから決定事項と未決事項を抽出してください。
+
+## 会議参加者
+$speakers
+
+## 関連過去会議（RAGコンテキスト）
+$rag_context
+
+$prev_open_issues_section
+
+## 書き起こし
+$transcript
+
+## 抽出ルール
+決定事項（decisions）:
+- decision_state: "confirmed"（明確な合意）または"tentative"（仮決定・要確認）
+- statusは常に"draft"
+- source_quoteは書き起こし原文をそのまま引用（絵文字も除去しない）
+- source_contextは前後の文脈を簡潔に説明
+
+未決事項（open_issues）:
+- reason: "no_consensus"（合意なし）"information_lack"（情報不足）"intentional_defer"（意図的先送り）"not_discussed"（未議論）
+- statusは常に"open"
+- 前回から持ち越しの未決事項は resolved_ai/resolved_human を適切に設定する
+
+## 出力フォーマット（JSON）
+{
+  "decisions": [
+    {
+      "title": "決定事項のタイトル（30字以内）",
+      "decision_state": "confirmed",
+      "body": "決定内容の詳細",
+      "source_quote": "書き起こしからの引用文（原文ママ）",
+      "source_context": "前後の文脈説明",
+      "status": "draft"
+    }
+  ],
+  "open_issues": [
+    {
+      "title": "未決事項のタイトル（30字以内）",
+      "reason": "no_consensus",
+      "status": "open",
+      "source_quote": "書き起こしからの引用文（原文ママ）",
+      "source_context": "前後の文脈説明",
+      "expected_resolution_date": null,
+      "responsible_raw": null
+    }
+  ]
+}
+
+JSONのみ返してください（コードブロック不要）。"""
+
+[continuity_call2_prev_open_issues]
+template = """## 前回の未決事項（持ち越し）
+以下の未決事項が前回から持ち越されています。今回の書き起こしを確認し、各未決事項が解決・言及されたかを判定してください。
+- 今回の会議で解決が確認できた場合: status を "resolved_ai" に変更
+- 引き続き未解決の場合: status を "open" のまま維持
+- recurrence_countを引き継いでください
+
+$prev_open_issues"""
+
+[call3]
+template = """あなたは会議議事録の構造化AIです。以下の書き起こしからタスクを抽出してください。
+
+## 会議参加者
+$speakers
+
+## 抽出済みコンテキスト（決定事項・未決事項）
+$context_summary
+
+$prev_tasks_section
+
+## 書き起こし
+$transcript
+
+## 抽出ルール
+- 会議中に発生した「誰が何をするか」を全て抽出する
+- assignee_source: "explicit_mention"（名指し）"self_assignment"（自己申告）"request_target"（依頼先）"inferred_from_context"（文脈推定）"unknown"
+- due_date_rawは相対表現のまま（例: "来週月曜"、"5月末"）。絶対日付は変換しない
+- priority: "required"（必須）または"optional"（任意）
+- statusは常に"draft"
+- progress_notesは前回タスクの進捗報告があった場合に記録する
+
+## 出力フォーマット（JSON）
+{
+  "tasks": [
+    {
+      "title": "タスクのタイトル（40字以内）",
+      "body": "タスクの詳細説明",
+      "assignee_raw": "担当者名（書き起こし上の表現）",
+      "due_date_raw": "来週月曜",
+      "priority": "required",
+      "assignee_source": "explicit_mention",
+      "source_quote": "書き起こしからの引用文（原文ママ）",
+      "source_context": "前後の文脈説明",
+      "status": "draft"
+    }
+  ],
+  "progress_notes": [
+    {
+      "prev_task_ref": "前回タスクのタイトル",
+      "note": "進捗内容"
+    }
+  ]
+}
+
+JSONのみ返してください（コードブロック不要）。"""
+
+[continuity_call3_prev_tasks]
+template = """## 前回のタスク（持ち越し）
+以下のタスクが前回から持ち越されています。今回の書き起こしで進捗・完了・却下の言及があればprogress_notesに記録してください。
+- 完了が確認できた場合: progress_notesに記録し、statusを"done"に
+- 却下・中止が確認できた場合: statusを"rejected"に
+- 引き続き進行中の場合: statusはそのまま
+- carried_over_countを引き継いでください
+
+$prev_tasks"""
+
+[call4a_quality_ambiguities]
+template = """以下の会議書き起こしと書き起こし品質情報から、書き起こし品質に起因する曖昧情報を検出してください。
+
+## 書き起こし品質
+$transcription_quality
+（full=完全、partial=部分的、poor=品質低下）
+
+## 抽出済みコンテキスト
+$context_summary
+
+## 書き起こし
+$transcript
+
+## 検出対象（ambiguity_type）
+- missing_speaker: 発言者が不明・記録なしの発言
+- transcription_error_low: 軽微な聞き取りエラー（前後から推定可能）
+- transcription_error_high: 重大な聞き取りエラー（内容不明）
+
+## severity基準
+- high: 決定事項・タスクに直接影響する
+- medium: 確認が望ましい
+- low: 影響軽微
+
+## 出力フォーマット（JSON）
+{
+  "ambiguities_quality": [
+    {
+      "ambiguity_type": "missing_speaker",
+      "severity": "medium",
+      "body": "曖昧情報の説明",
+      "source_quote": "書き起こしからの引用（原文ママ）",
+      "source_context": "前後の文脈",
+      "inference_basis": "推定根拠"
+    }
+  ]
+}
+
+JSONのみ返してください（コードブロック不要）。"""
+
+[call4b_content_ambiguities]
+template = """以下の抽出済みコンテキストから、会議内容に起因する曖昧情報を検出してください。
+
+## 抽出済みコンテキスト（決定事項・未決事項・タスク）
+$context_summary
+
+## 検出対象（ambiguity_type）
+- no_assignee: 担当者が明示されていないタスク
+- no_deadline_mentioned: 期限の言及が全くないタスク
+- no_deadline_absolute: 相対日付のみで絶対日付が確定していない
+- unclear_decision: 決定内容が不明確・曖昧
+- insufficient_basis: 根拠が不十分な決定
+- unclear_scope: スコープ・範囲が不明確
+
+## severity基準
+- high: 次のアクションに直接影響
+- medium: 確認が望ましい
+- low: 影響軽微
+
+## 出力フォーマット（JSON）
+{
+  "ambiguities_content": [
+    {
+      "ambiguity_type": "no_assignee",
+      "severity": "high",
+      "body": "曖昧情報の説明",
+      "source_quote": null,
+      "source_context": "関連コンテキスト",
+      "inference_basis": "検出根拠",
+      "affected_item_ids": []
+    }
+  ]
+}
+
+JSONのみ返してください（コードブロック不要）。"""
+
+[call5_due_date_conversion]
+template = """以下の相対日付表現を、基準日からの絶対日付（YYYY-MM-DD）に変換してください。
+
+## 基準日（会議開催日）
+$meeting_date
+
+## 変換対象（カンマ区切り）
+$due_date_raws
+
+## 変換ルール
+- 「来週」は次の月曜から始まる週を意味する（月曜を起点とする）
+- 「今月末」は当月の最終日
+- 「来月」は翌月の同日（同日がない場合は月末）
+- 「〇月〇日」は年が明示されない場合は会議年を使用
+- 変換不可能・曖昧すぎる場合は resolved を null にする
+
+## 出力フォーマット（JSON）
+{
+  "conversions": [
+    {
+      "original": "来週月曜",
+      "resolved": "2026-05-25"
+    }
+  ]
+}
+
+JSONのみ返してください（コードブロック不要）。"""
+
+[call6]
+template = """あなたは会議運営AIです。以下の情報を元に、次回会議に向けたサマリーと推奨アジェンダを生成してください。
+
+## 会議参加者
+$speakers
+
+## 決定事項
+$decisions_summary
+
+## 未決事項
+$open_issues_summary
+
+## タスク
+$tasks_summary
+
+## 曖昧情報
+$ambiguities_summary
+
+## 見積もり情報
+$estimation_note
+
+## 推奨参加者（RAG由来）
+$suggested_participants
+
+$change_summary_section
+
+## 出力ルール
+- summaryは今回の会議全体を200字以内で要約する
+- recommended_agendaは次回会議で議論すべき項目を優先度順に並べる
+- estimation_noteは次回会議の所要時間見積もりを記す
+
+## 出力フォーマット（JSON）
+{
+  "summary": "会議全体のサマリー（200字以内）",
+  "recommended_agenda": [
+    {
+      "title": "アジェンダ項目のタイトル",
+      "estimated_minutes": 10,
+      "reason": "このアジェンダが必要な理由"
+    }
+  ],
+  "estimation_note": "次回会議の所要時間見積もりメモ"
+}
+
+JSONのみ返してください（コードブロック不要）。"""
+
+[continuity_call6_change_summary]
+template = """## 前回からの変化サマリー
+$change_summary"""

@@ -3,7 +3,7 @@ import { EditTaskDialog } from "@/features/tasks/components/EditTaskDialog";
 import { KanbanCard } from "@/features/tasks/components/KanbanCard";
 import { KanbanColumn } from "@/features/tasks/components/KanbanColumn";
 import { useKanbanStatusUpdate } from "@/features/tasks/hooks/useKanbanStatusUpdate";
-import { useTaskDetail } from "@/features/tasks/hooks/useTaskDetail";
+import { useTaskDialogState } from "@/features/tasks/hooks/useTaskDialogState";
 import { TaskVersionConflictError } from "@/features/tasks/hooks/useUpdateTask";
 import type { ManualTaskStatus, TaskListItem } from "@/features/tasks/types";
 import {
@@ -49,23 +49,22 @@ export function KanbanBoard({
 }) {
   const statusUpdate = useKanbanStatusUpdate(queryKey);
   const [dndError, setDndError] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const detailQuery = useTaskDetail(selectedTaskId);
-  const task = detailQuery.data ?? null;
-  const isError = selectedTaskId !== null && detailQuery.isError;
+  const {
+    task,
+    isError,
+    deleteOpen,
+    detailQuery,
+    select,
+    openDelete,
+    setDeleteOpen,
+    closeAll,
+  } = useTaskDialogState();
 
   // PointerSensor の activationConstraint で短いクリックは drag を発火させない。
   // distance: 5 で十分（タスクカードのクリック=編集と区別）。
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
-
-  const closeAll = () => {
-    setDeleteOpen(false);
-    setSelectedTaskId(null);
-  };
 
   // 列ごとにタスクを振り分け。手動 4 status 以外は無視（AI 専用は将来別 UI）。
   const byStatus = new Map<ManualTaskStatus, TaskListItem[]>(
@@ -82,13 +81,13 @@ export function KanbanBoard({
     const dropStatus = String(over.id);
     if (!isManualStatus(dropStatus)) return;
 
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    if (task.status === dropStatus) return; // 同じ列に戻したケースは no-op
+    const target = tasks.find((t) => t.id === taskId);
+    if (!target) return;
+    if (target.status === dropStatus) return; // 同じ列に戻したケースは no-op
 
     setDndError(null);
     statusUpdate.mutate(
-      { taskId, version: task.version, status: dropStatus },
+      { taskId, version: target.version, status: dropStatus },
       {
         onError: (err) => {
           // 409 とそれ以外でメッセージを区別する。useKanbanStatusUpdate 側で rollback 済み。
@@ -128,7 +127,7 @@ export function KanbanBoard({
                       key={t.id}
                       task={t}
                       now={now}
-                      onClick={() => setSelectedTaskId(t.id)}
+                      onClick={() => select(t.id)}
                     />
                   ))
                 )}
@@ -157,7 +156,7 @@ export function KanbanBoard({
       )}
 
       {/* TaskListWithDialogs と同じ詳細取得 → 編集ダイアログ → 削除ダイアログの動線。
-          重複は将来 useTaskDialogState 等で共通化する余地あり。 */}
+          state machine は useTaskDialogState で共通化済み。 */}
       {isError && (
         <div
           role="alert"
@@ -183,7 +182,7 @@ export function KanbanBoard({
           onOpenChange={(next) => {
             if (!next && !deleteOpen) closeAll();
           }}
-          onRequestDelete={() => setDeleteOpen(true)}
+          onRequestDelete={openDelete}
         />
       )}
 
