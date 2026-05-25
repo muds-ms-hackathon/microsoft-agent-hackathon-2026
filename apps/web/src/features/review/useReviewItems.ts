@@ -27,7 +27,7 @@ export function reviewItemsQueryKey(params: {
       "review-items",
     ] as const;
   }
-  return ["organizations", params.organizationId, "review-items"] as const;
+  return ["organizations", params.organizationId ?? "_none", "review-items"] as const;
 }
 
 export function useReviewItems({
