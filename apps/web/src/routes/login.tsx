@@ -52,7 +52,9 @@ function Login() {
       await msal.initialize();
 
       // リダイレクト後のコールバック処理。result が null の場合は認証前。
-      const result = await msal.handleRedirectPromise();
+      // navigateToLoginRequestUrl: false でリダイレクト完了後に元 URL へ戻る動作を抑制する。
+      // MSAL v5 では Configuration ではなく handleRedirectPromise のオプションに移動した。
+      const result = await msal.handleRedirectPromise({ navigateToLoginRequestUrl: false });
 
       if (result?.idToken) {
         // MSAL が返す idToken を既存の localStorage ベースの仕組みに橋渡しする
