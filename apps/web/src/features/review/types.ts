@@ -43,6 +43,7 @@ export type ReviewItem = {
   // ambiguity のみ使用（解消方法: task / decision_item / discarded）
   resolutionType: AmbiguityResolutionType | null;
   recurringMeetingId: string;
+  recurringMeetingName: string;
   meetingId: string;
   // 楽観ロック用バージョン番号
   version: number;

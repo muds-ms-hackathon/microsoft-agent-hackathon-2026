@@ -135,7 +135,7 @@ describe("PATCH /decision-items/:id", () => {
             title: "更新後",
             version: 1,
             assignees: [],
-            meeting: { recurringMeetingId: "rmtg-1" },
+            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
           }),
         },
         decisionItemAssignee: { deleteMany: vi.fn(), createMany: vi.fn() },
@@ -212,7 +212,7 @@ describe("PATCH /decision-items/:id", () => {
           findUniqueOrThrow: vi.fn().mockResolvedValue({
             ...sampleItem,
             assignees: [],
-            meeting: { recurringMeetingId: "rmtg-1" },
+            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
           }),
         },
         decisionItemAssignee: {

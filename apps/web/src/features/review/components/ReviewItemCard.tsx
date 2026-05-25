@@ -3,7 +3,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrganizationMembers } from "@/features/organizations/hooks/useOrganizationMembers";
-import { useRecurringMeetingDetail } from "@/features/recurring-meetings/hooks/useRecurringMeetingDetail";
 import { AssigneeDropdown } from "@/features/tasks/components/AssigneeDropdown";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -42,10 +41,6 @@ export function ReviewItemCard({
   const [deadline, setDeadline] = useState(deadlineToInputValue(item.deadline));
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-
-  // 定例名の表示用。ReviewView が同じキーを先にフェッチしていればキャッシュから即返る。
-  const { data: rmDetail } = useRecurringMeetingDetail(item.recurringMeetingId);
-  const recurringMeetingName = rmDetail?.name ?? null;
 
   // 編集保存時に ID → ReviewAssignee へ変換するために使用
   const { data: members = [] } = useOrganizationMembers(orgId);
@@ -153,7 +148,7 @@ export function ReviewItemCard({
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            {recurringMeetingName ?? item.recurringMeetingId}
+            {item.recurringMeetingName}
           </p>
         </div>
 

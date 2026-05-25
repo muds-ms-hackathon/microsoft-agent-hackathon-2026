@@ -814,7 +814,7 @@ describe("GET /meetings/:id/review-items", () => {
     createdAt: new Date("2026-05-17T00:00:00Z"),
     updatedAt: new Date("2026-05-17T00:00:00Z"),
     assignees: [],
-    meeting: { recurringMeetingId: "rmtg-1" },
+    meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
   } as DecisionItemWithReview;
 
   const sampleReviewTask = {
@@ -842,7 +842,7 @@ describe("GET /meetings/:id/review-items", () => {
     createdAt: new Date("2026-05-17T00:00:00Z"),
     updatedAt: new Date("2026-05-17T00:00:00Z"),
     assignees: [],
-    originMeeting: { recurringMeetingId: "rmtg-1" },
+    originMeeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
   } as TaskWithReview;
 
   const sampleAmbiguousInfo = {
@@ -856,7 +856,7 @@ describe("GET /meetings/:id/review-items", () => {
     version: 0,
     createdAt: new Date("2026-05-17T00:00:00Z"),
     updatedAt: new Date("2026-05-17T00:00:00Z"),
-    meeting: { recurringMeetingId: "rmtg-1" },
+    meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
   } as AmbiguousInfoWithReview;
 
   it("type 未指定 → 3 テーブル全件を取得して統合レスポンスを返す", async () => {
