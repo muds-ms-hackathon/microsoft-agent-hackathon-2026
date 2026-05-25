@@ -95,7 +95,6 @@ export function ReviewView({
   };
 
   const filtered = items.filter((item) => {
-    if (item.status !== "draft" && item.status !== "reviewing") return false;
     if (selectedRmId && item.recurringMeetingId !== selectedRmId) return false;
     if (search.meetingId && item.meetingId !== search.meetingId) return false;
     if (typeArr && !typeArr.includes(item.type)) return false;
@@ -108,9 +107,11 @@ export function ReviewView({
     return true;
   });
 
+  // API がデフォルトで pending のみを返すため、スコープ指定あり・ロード完了・0件 = レビュー完了
   const isCompleted =
-    scopedItems.length > 0 &&
-    !scopedItems.some((i) => i.status === "draft" || i.status === "reviewing");
+    !isLoading &&
+    (!!selectedRmId || !!search.meetingId) &&
+    scopedItems.length === 0;
 
   return (
     <section

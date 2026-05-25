@@ -6,6 +6,7 @@ import { normalizeEmail } from "../lib/email.js";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingCreateSchema } from "../lib/schemas/recurring-meeting.js";
 import {
+  buildReviewItemStatusFilter,
   buildReviewItemTypeFilter,
   reviewItemQuerySchema,
 } from "../lib/schemas/review-item.js";
@@ -581,6 +582,8 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         includeAmbiguousInfos,
         decisionItemTypeWhere,
       } = buildReviewItemTypeFilter(filters.type);
+      const { decisionItemStatusWhere, taskStatusWhere, ambiguousInfoStatusWhere } =
+        buildReviewItemStatusFilter(filters.status);
 
       const orgWhere = {
         meeting: { recurringMeeting: { organizationId: id } },
@@ -589,7 +592,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
         includeDecision
           ? prisma.decisionItem.findMany({
-              where: { ...orgWhere, ...decisionItemTypeWhere },
+              where: { ...orgWhere, ...decisionItemTypeWhere, ...decisionItemStatusWhere },
               orderBy: { createdAt: "asc" },
               include: decisionItemReviewInclude,
             })
@@ -598,6 +601,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.task.findMany({
               where: {
                 originMeeting: { recurringMeeting: { organizationId: id } },
+                ...taskStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: taskReviewInclude,
@@ -605,7 +609,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
           : [],
         includeAmbiguousInfos
           ? prisma.ambiguousInfo.findMany({
-              where: orgWhere,
+              where: { ...orgWhere, ...ambiguousInfoStatusWhere },
               orderBy: { createdAt: "asc" },
               include: ambiguousInfoReviewInclude,
             })

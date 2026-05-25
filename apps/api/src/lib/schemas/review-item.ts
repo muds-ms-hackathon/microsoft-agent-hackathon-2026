@@ -22,8 +22,12 @@ const commaSeparatedTypes = z
   )
   .pipe(z.array(z.enum(reviewItemTypeValues)));
 
+const reviewItemStatusValues = ["pending", "all", "decided"] as const;
+
 export const reviewItemQuerySchema = z.object({
   type: commaSeparatedTypes.optional(),
+  // pending（デフォルト）: draft/reviewing のみ。all: 全件。decided: 確定済みのみ。
+  status: z.enum(reviewItemStatusValues).optional(),
 });
 
 export const recurringMeetingReviewItemQuerySchema =
@@ -149,5 +153,36 @@ export function buildReviewItemTypeFilter(typeFilter: ReviewItemQuery["type"]) {
     includeTasks,
     includeAmbiguousInfos,
     decisionItemTypeWhere,
+  };
+}
+
+type ReviewItemStatusValue = (typeof reviewItemStatusValues)[number];
+
+export function buildReviewItemStatusFilter(
+  status: ReviewItemStatusValue | undefined,
+): {
+  decisionItemStatusWhere: Pick<Prisma.DecisionItemWhereInput, "status">;
+  taskStatusWhere: Pick<Prisma.TaskWhereInput, "status">;
+  ambiguousInfoStatusWhere: Pick<Prisma.AmbiguousInfoWhereInput, "status">;
+} {
+  if (!status || status === "pending") {
+    return {
+      decisionItemStatusWhere: { status: { in: ["draft", "reviewing"] } },
+      taskStatusWhere: { status: { in: ["draft", "reviewing"] } },
+      ambiguousInfoStatusWhere: { status: { in: ["draft", "reviewing"] } },
+    };
+  }
+  if (status === "decided") {
+    return {
+      decisionItemStatusWhere: { status: { in: ["open", "decided"] } },
+      taskStatusWhere: { status: { in: ["todo", "in_progress", "done"] } },
+      ambiguousInfoStatusWhere: { status: { in: ["resolved"] } },
+    };
+  }
+  // "all" → ステータス絞り込みなし
+  return {
+    decisionItemStatusWhere: {},
+    taskStatusWhere: {},
+    ambiguousInfoStatusWhere: {},
   };
 }

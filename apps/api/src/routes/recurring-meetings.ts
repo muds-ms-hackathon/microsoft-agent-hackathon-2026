@@ -11,6 +11,7 @@ import {
   taskReviewInclude,
 } from "../lib/review-item-serialization.js";
 import {
+  buildReviewItemStatusFilter,
   buildReviewItemTypeFilter,
   recurringMeetingReviewItemQuerySchema,
 } from "../lib/schemas/review-item.js";
@@ -159,6 +160,8 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
         includeAmbiguousInfos,
         decisionItemTypeWhere,
       } = buildReviewItemTypeFilter(filters.type);
+      const { decisionItemStatusWhere, taskStatusWhere, ambiguousInfoStatusWhere } =
+        buildReviewItemStatusFilter(filters.status);
 
       const meetingWhere = filters.meetingId
         ? { meetingId: filters.meetingId }
@@ -173,6 +176,7 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
               where: {
                 ...meetingWhere,
                 ...decisionItemTypeWhere,
+                ...decisionItemStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: decisionItemReviewInclude,
@@ -187,6 +191,7 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
                 ...(filters.meetingId
                   ? {}
                   : { originMeetingId: { not: null } }),
+                ...taskStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: taskReviewInclude,
@@ -196,6 +201,7 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.ambiguousInfo.findMany({
               where: {
                 ...meetingWhere,
+                ...ambiguousInfoStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: ambiguousInfoReviewInclude,

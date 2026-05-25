@@ -283,11 +283,10 @@ describe("ReviewItemCard", () => {
 describe("ReviewView", () => {
   const noOp = async () => {};
 
-  it("draft/reviewing アイテムのみ表示し decided・rejected は除外する", () => {
+  it("渡されたアイテムをステータスに関わらずすべて表示する（ステータス絞り込みは API 側で行う）", () => {
     const items = [
       makeItem({ id: "i1", title: "確認待ちタスク", status: "draft" }),
       makeItem({ id: "i2", title: "確定済みタスク", status: "decided" }),
-      makeItem({ id: "i3", title: "却下済みタスク", status: "rejected" }),
     ];
 
     renderWithQuery(
@@ -302,19 +301,16 @@ describe("ReviewView", () => {
     );
 
     expect(screen.getByText("確認待ちタスク")).toBeInTheDocument();
-    expect(screen.queryByText("確定済みタスク")).not.toBeInTheDocument();
-    expect(screen.queryByText("却下済みタスク")).not.toBeInTheDocument();
+    expect(screen.getByText("確定済みタスク")).toBeInTheDocument();
   });
 
-  it("全件確定後に「レビューが完了しました」を表示する", () => {
-    const items = [makeItem({ id: "i1", status: "decided" })];
-
+  it("定例スコープ指定で pending アイテムが 0 件のとき「レビューが完了しました」を表示する", () => {
     renderWithQuery(
       <ReviewView
-        search={{}}
+        search={{ recurringMeetingId: "rm-1" }}
         onSearchChange={noOp}
         currentOrgId="org-1"
-        items={items}
+        items={[]}
         onUpdate={noOp}
         onResolveAmbiguity={noOp}
       />,
