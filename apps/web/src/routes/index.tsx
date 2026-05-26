@@ -9,8 +9,7 @@ import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -109,28 +108,6 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
   const isLoading = isRmLoading || meetingQueries.some((q) => q.isLoading);
   const isMeetingsError = meetingQueries.some((q) => q.isError);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const updateScrollState = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 0);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-  };
-
-  useEffect(() => {
-    updateScrollState();
-  });
-
-  const scroll = (dir: "left" | "right") => {
-    scrollRef.current?.scrollBy({
-      left: dir === "left" ? -272 : 272,
-      behavior: "smooth",
-    });
-  };
-
   if (isLoading) {
     return (
       <div
@@ -178,36 +155,8 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          次回会議
-        </h2>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => scroll("left")}
-            disabled={!canScrollLeft}
-            aria-label="前へ"
-            className="p-1 rounded-md border text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => scroll("right")}
-            disabled={!canScrollRight}
-            aria-label="次へ"
-            className="p-1 rounded-md border text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
-      <div
-        ref={scrollRef}
-        onScroll={updateScrollState}
-        className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide"
-      >
+      <h2 className="text-sm font-semibold text-muted-foreground">次回会議</h2>
+      <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
         {candidates.map((c) => (
           <NextMeetingCard
             key={c.recurringMeetingId}
