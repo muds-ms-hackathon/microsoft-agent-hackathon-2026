@@ -9,7 +9,8 @@ import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -54,14 +55,13 @@ function NextMeetingCard({
   next: MeetingListItem;
 }) {
   return (
-    <Card>
+    <Card className="w-64 shrink-0 snap-start">
       <CardHeader className="pb-2">
-        <CardTitle>次回会議</CardTitle>
+        <CardTitle className="text-sm font-medium truncate">
+          {recurringMeetingName}
+        </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-muted-foreground truncate">
-          {recurringMeetingName}
-        </p>
         <p className="text-xs text-muted-foreground tabular-nums">
           {formatMeetingTime(next.heldAt, next.estimatedDurationMinutes)}
         </p>
@@ -87,8 +87,7 @@ function NextMeetingCard({
 }
 
 // ===== 次回会議セクション =====
-// 全定例の会議を並列取得し、最も直近の upcoming 会議を1件だけ表示する。
-// TODO: 表示件数（直近N件・当日・今週など）は別 Issue で検討・対応する。
+// 定例ごとに最も直近の upcoming 会議を1件取得し、日付順で横スクロール表示する。
 
 type Candidate = {
   recurringMeetingId: string;
@@ -103,13 +102,34 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
     isError: isRmError,
   } = useOrganizationMeetings(orgId);
 
-  // 全定例の会議を並列取得
   const meetingQueries = useQueries({
     queries: recurringMeetings.map((rm) => meetingListQueryOptions(rm.id)),
   });
 
   const isLoading = isRmLoading || meetingQueries.some((q) => q.isLoading);
   const isMeetingsError = meetingQueries.some((q) => q.isError);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  useEffect(() => {
+    updateScrollState();
+  });
+
+  const scroll = (dir: "left" | "right") => {
+    scrollRef.current?.scrollBy({
+      left: dir === "left" ? -272 : 272,
+      behavior: "smooth",
+    });
+  };
 
   if (isLoading) {
     return (
@@ -124,7 +144,6 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
     return <p className="text-sm text-destructive">定例の取得に失敗しました</p>;
   }
 
-  // 全定例から最も直近の upcoming 会議を1件選ぶ
   const candidates: Candidate[] = [];
   for (const [i, rm] of recurringMeetings.entries()) {
     const meetings = meetingQueries[i]?.data ?? [];
@@ -137,13 +156,12 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
       });
     }
   }
+  candidates.sort(
+    (a, b) =>
+      new Date(a.next.heldAt).getTime() - new Date(b.next.heldAt).getTime(),
+  );
 
-  const nearest = candidates.reduce<Candidate | null>((min, c) => {
-    if (!min) return c;
-    return new Date(c.next.heldAt) < new Date(min.next.heldAt) ? c : min;
-  }, null);
-
-  if (!nearest) {
+  if (candidates.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -159,11 +177,47 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
   }
 
   return (
-    <NextMeetingCard
-      recurringMeetingId={nearest.recurringMeetingId}
-      recurringMeetingName={nearest.recurringMeetingName}
-      next={nearest.next}
-    />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          次回会議
+        </h2>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => scroll("left")}
+            disabled={!canScrollLeft}
+            aria-label="前へ"
+            className="p-1 rounded-md border text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => scroll("right")}
+            disabled={!canScrollRight}
+            aria-label="次へ"
+            className="p-1 rounded-md border text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+      <div
+        ref={scrollRef}
+        onScroll={updateScrollState}
+        className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide"
+      >
+        {candidates.map((c) => (
+          <NextMeetingCard
+            key={c.recurringMeetingId}
+            recurringMeetingId={c.recurringMeetingId}
+            recurringMeetingName={c.recurringMeetingName}
+            next={c.next}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -368,15 +422,15 @@ export function Dashboard() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
-          {/* 左列：次回会議 + レビュー待ち */}
-          <div className="flex flex-col gap-4">
-            <NextMeetingsSection orgId={orgId} />
-            <ReviewPendingCard />
-          </div>
+        <div className="flex flex-col gap-4">
+          {/* 上段：次回会議（横スクロール） */}
+          <NextMeetingsSection orgId={orgId} />
 
-          {/* 右列：未完了タスク */}
-          <IncompleteTasksCard />
+          {/* 下段：レビュー待ち（左）・未完了タスク（右） */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ReviewPendingCard />
+            <IncompleteTasksCard />
+          </div>
         </div>
       )}
     </section>
