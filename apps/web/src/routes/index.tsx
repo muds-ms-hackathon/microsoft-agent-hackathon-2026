@@ -9,7 +9,7 @@ import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
-import { ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -182,17 +182,23 @@ const MOCK_REVIEW_ROWS: ReviewRow[] = [
 ];
 
 function ReviewPendingCard() {
+  const total = MOCK_REVIEW_ROWS.reduce((sum, r) => sum + r.count, 0);
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>レビュー待ち</CardTitle>
-          <span className="text-sm text-muted-foreground font-normal">
-            {MOCK_REVIEW_ROWS.reduce((sum, r) => sum + r.count, 0)} 件
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-0">
+    <Card className="gap-0 py-0 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50">
+        <span className="text-sm font-semibold flex-1">レビュー待ち</span>
+        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+          {total}
+        </span>
+        {/* TODO: レビュー画面が実装されたらリンクに変更する */}
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowRight size={15} />
+        </button>
+      </div>
+      <div className="px-5 py-1">
         {MOCK_REVIEW_ROWS.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-sm text-muted-foreground">
@@ -203,27 +209,16 @@ function ReviewPendingCard() {
           MOCK_REVIEW_ROWS.map((row) => (
             <div
               key={row.label}
-              className="flex items-center justify-between py-3 border-b border-border/80"
+              className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
             >
               <span className="text-sm">{row.label}</span>
-              <span className="flex items-center gap-1 text-sm text-destructive font-medium">
+              <span className="text-sm text-destructive font-medium">
                 {row.count} 件
-                <ChevronRight size={14} />
               </span>
             </div>
           ))
         )}
-        {/* TODO: レビュー画面が実装されたらリンクに変更する */}
-        <div className="flex justify-end pt-3">
-          <button
-            type="button"
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            レビューする
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }
@@ -292,60 +287,55 @@ const URGENCY_STYLE: Record<
 
 function IncompleteTasksCard() {
   return (
-    <Card className="flex flex-col h-[470px]">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>未完了タスク</CardTitle>
-          <span className="text-sm text-muted-foreground font-normal">
-            {MOCK_TASKS.length} 件
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col flex-1 overflow-hidden pb-3">
-        <div className="flex flex-col flex-1 overflow-y-auto divide-y divide-border/80">
-          {MOCK_TASKS.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                未完了のタスクはありません
-              </p>
-            </div>
-          ) : (
-            MOCK_TASKS.slice(0, 5).map((item, i) => {
-              const style = URGENCY_STYLE[item.urgency];
-              return (
-                // biome-ignore lint/suspicious/noArrayIndexKey: モックデータのため index で代替
-                <div key={i} className="py-2">
-                  <div
-                    className={`flex items-center gap-3 border-l-2 pl-3 py-2 rounded-r-md hover:bg-muted/40 transition-colors ${style.border}`}
-                  >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-sm font-medium truncate">
-                        {item.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground truncate">
-                        {item.meeting}
-                      </span>
-                    </div>
-                    <span className={`text-xs shrink-0 ${style.deadline}`}>
-                      {item.deadline}
+    <Card className="gap-0 py-0 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50">
+        <span className="text-sm font-semibold flex-1">未完了タスク</span>
+        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+          {MOCK_TASKS.length}
+        </span>
+        {/* TODO: タスク一覧が実装されたらリンクに変更する */}
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowRight size={15} />
+        </button>
+      </div>
+      <div className="px-5 py-2 overflow-y-auto max-h-96">
+        {MOCK_TASKS.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-sm text-muted-foreground">
+              未完了のタスクはありません
+            </p>
+          </div>
+        ) : (
+          MOCK_TASKS.slice(0, 5).map((item) => {
+            const style = URGENCY_STYLE[item.urgency];
+            return (
+              <div
+                key={item.name}
+                className="py-2 border-b border-border/50 last:border-b-0"
+              >
+                <div
+                  className={`flex items-center gap-3 border-l-2 pl-3 py-2.5 ${style.border}`}
+                >
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-sm font-medium truncate">
+                      {item.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {item.meeting}
                     </span>
                   </div>
+                  <span className={`text-xs shrink-0 ${style.deadline}`}>
+                    {item.deadline}
+                  </span>
                 </div>
-              );
-            })
-          )}
-        </div>
-        {/* TODO: タスク一覧画面が実装されたらリンクに変更する */}
-        <div className="flex justify-end pt-2">
-          <button
-            type="button"
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            全て見る
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      </CardContent>
+              </div>
+            );
+          })
+        )}
+      </div>
     </Card>
   );
 }
@@ -376,7 +366,7 @@ export function Dashboard() {
           <NextMeetingsSection orgId={orgId} />
 
           {/* 下段：レビュー待ち（左）・未完了タスク（右） */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4">
             <ReviewPendingCard />
             <IncompleteTasksCard />
           </div>
