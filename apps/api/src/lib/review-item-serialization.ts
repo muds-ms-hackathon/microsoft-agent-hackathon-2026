@@ -52,8 +52,10 @@ export function serializeDecisionItem(item: DecisionItemWithReview) {
     severity: null,
     resolutionType: null,
     meetingId: item.meetingId,
-    recurringMeetingId: item.meeting.recurringMeeting.id,
-    recurringMeetingName: item.meeting.recurringMeeting.name,
+    // biome-ignore lint/style/noNonNullAssertion: レビューアイテムは必ず定例配下の会議に属する
+    recurringMeetingId: item.meeting.recurringMeeting!.id,
+    // biome-ignore lint/style/noNonNullAssertion: 同上
+    recurringMeetingName: item.meeting.recurringMeeting!.name,
     assignees: item.assignees.map((a) => a.user),
     deadline: item.decisionDeadline,
     version: item.version,
@@ -76,9 +78,9 @@ function serializeTaskAsReviewItem(task: TaskWithReview) {
     // biome-ignore lint/style/noNonNullAssertion: where 条件で originMeetingId: { not: null } を保証済み
     meetingId: task.originMeetingId!,
     // biome-ignore lint/style/noNonNullAssertion: 同上
-    recurringMeetingId: task.originMeeting!.recurringMeeting.id,
+    recurringMeetingId: task.originMeeting!.recurringMeeting!.id,
     // biome-ignore lint/style/noNonNullAssertion: 同上
-    recurringMeetingName: task.originMeeting!.recurringMeeting.name,
+    recurringMeetingName: task.originMeeting!.recurringMeeting!.name,
     assignees: task.assignees.map((a) => a.user),
     deadline: task.dueDate,
     version: task.version,
@@ -98,8 +100,10 @@ export function serializeAmbiguousInfo(item: AmbiguousInfoWithReview) {
     severity: item.severity,
     resolutionType: item.resolutionType,
     meetingId: item.meetingId,
-    recurringMeetingId: item.meeting.recurringMeeting.id,
-    recurringMeetingName: item.meeting.recurringMeeting.name,
+    // biome-ignore lint/style/noNonNullAssertion: レビューアイテムは必ず定例配下の会議に属する
+    recurringMeetingId: item.meeting.recurringMeeting!.id,
+    // biome-ignore lint/style/noNonNullAssertion: 同上
+    recurringMeetingName: item.meeting.recurringMeeting!.name,
     assignees: [],
     deadline: null,
     version: item.version,
