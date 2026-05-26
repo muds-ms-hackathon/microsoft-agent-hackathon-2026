@@ -38,11 +38,18 @@ export const recurringMeetingReviewItemQuerySchema =
 export const decisionItemPatchSchema = z
   .object({
     version: z.number().int().nonnegative(),
-    status: z
-      .enum(["draft", "reviewing", "open", "decided", "cancelled"])
-      .optional(),
+    status: z.enum(["open", "decided", "cancelled"]).optional(),
     decisionState: z
       .enum(["confirmed", "tentative", "open"])
+      .nullable()
+      .optional(),
+    reason: z
+      .enum([
+        "no_consensus",
+        "information_lack",
+        "intentional_defer",
+        "not_discussed",
+      ])
       .nullable()
       .optional(),
     title: z.string().min(1).optional(),
@@ -55,6 +62,7 @@ export const decisionItemPatchSchema = z
     (d) =>
       d.status !== undefined ||
       d.decisionState !== undefined ||
+      d.reason !== undefined ||
       d.title !== undefined ||
       d.body !== undefined ||
       d.assigneeUserIds !== undefined ||
@@ -86,7 +94,21 @@ export const ambiguousInfoPatchSchema = z
   .strict()
   .refine((d) => d.status !== undefined || d.resolutionType !== undefined, {
     message: "status または resolutionType を指定してください",
-  });
+  })
+  // resolutionType と newTask / newDecisionItem の組み合わせ整合性チェック。
+  .refine(
+    (d) => {
+      if (d.resolutionType === "discarded" && (d.newTask || d.newDecisionItem))
+        return false;
+      if (d.resolutionType === "task" && d.newDecisionItem) return false;
+      if (d.resolutionType === "decision_item" && d.newTask) return false;
+      return true;
+    },
+    {
+      message:
+        "resolutionType と newTask / newDecisionItem の組み合わせが不正です",
+    },
+  );
 
 // TODO: POST /meetings/:id/review-items は動作確認用のため削除する
 // ambiguity は AmbiguousInfo.body に title を格納するため body フィールドを持たない。

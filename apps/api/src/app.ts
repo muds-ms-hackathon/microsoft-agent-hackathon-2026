@@ -3,12 +3,12 @@ import { cors } from "hono/cors";
 import { ambiguousInfosRoute } from "./routes/ambiguous-infos.js";
 import { decisionItemsRoute } from "./routes/decision-items.js";
 import { healthRoute } from "./routes/health.js";
+import { internalRoute } from "./routes/internal.js";
 import { meRoute } from "./routes/me.js";
 import { meetingsRoute } from "./routes/meetings.js";
 import { organizationsRoute } from "./routes/organizations.js";
 import { recurringMeetingsRoute } from "./routes/recurring-meetings.js";
 import { tasksRoute } from "./routes/tasks.js";
-import { internalRoute } from "./routes/internal.js";
 import { internalAuth } from "./middleware/internal-auth.js";
 
 const app = new Hono();
