@@ -87,6 +87,7 @@ function makeItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
     severity: null,
     resolutionType: null,
     recurringMeetingId: "rmtg-1",
+    recurringMeetingName: "週次定例",
     meetingId: "mtg-1",
     version: 0,
     ...overrides,
