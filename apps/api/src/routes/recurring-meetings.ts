@@ -160,8 +160,11 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
         includeAmbiguousInfos,
         decisionItemTypeWhere,
       } = buildReviewItemTypeFilter(filters.type);
-      const { decisionItemStatusWhere, taskStatusWhere, ambiguousInfoStatusWhere } =
-        buildReviewItemStatusFilter(filters.status);
+      const {
+        decisionItemStatusWhere,
+        taskStatusWhere,
+        ambiguousInfoStatusWhere,
+      } = buildReviewItemStatusFilter(filters.status);
 
       const meetingWhere = filters.meetingId
         ? { meetingId: filters.meetingId }

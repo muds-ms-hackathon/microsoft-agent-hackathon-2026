@@ -170,8 +170,9 @@ export function buildTaskListWhere(
   if (filters.overdueOnly === true) {
     where.dueDate = { ...(where.dueDate ?? {}), lt: now };
     if (userProvidedStatus) {
+      const userStatus = where.status ?? {};
       where.AND = [
-        { status: where.status! },
+        { status: userStatus },
         { status: { notIn: ["done", "rejected"] } },
       ];
       delete where.status;

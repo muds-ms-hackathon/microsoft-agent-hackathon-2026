@@ -582,8 +582,11 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         includeAmbiguousInfos,
         decisionItemTypeWhere,
       } = buildReviewItemTypeFilter(filters.type);
-      const { decisionItemStatusWhere, taskStatusWhere, ambiguousInfoStatusWhere } =
-        buildReviewItemStatusFilter(filters.status);
+      const {
+        decisionItemStatusWhere,
+        taskStatusWhere,
+        ambiguousInfoStatusWhere,
+      } = buildReviewItemStatusFilter(filters.status);
 
       const orgWhere = {
         meeting: { recurringMeeting: { organizationId: id } },
@@ -592,7 +595,11 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
         includeDecision
           ? prisma.decisionItem.findMany({
-              where: { ...orgWhere, ...decisionItemTypeWhere, ...decisionItemStatusWhere },
+              where: {
+                ...orgWhere,
+                ...decisionItemTypeWhere,
+                ...decisionItemStatusWhere,
+              },
               orderBy: { createdAt: "asc" },
               include: decisionItemReviewInclude,
             })

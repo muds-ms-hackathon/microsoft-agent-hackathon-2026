@@ -50,17 +50,25 @@ function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+  );
 }
 
 describe("AddReviewItemDialog", () => {
   it("initialMeetingId を渡してダイアログを開いたとき、会議セレクトが initialMeetingId を保持する", async () => {
     const user = userEvent.setup();
     renderWithClient(
-      <AddReviewItemDialog orgId="org-1" initialRmId="rm-1" initialMeetingId="mtg-1" />,
+      <AddReviewItemDialog
+        orgId="org-1"
+        initialRmId="rm-1"
+        initialMeetingId="mtg-1"
+      />,
     );
 
-    await user.click(screen.getByRole("button", { name: "サンプルデータを入力" }));
+    await user.click(
+      screen.getByRole("button", { name: "サンプルデータを入力" }),
+    );
     const dialog = await screen.findByRole("dialog");
 
     const meetingSelect = within(dialog).getByLabelText("会議");
@@ -70,10 +78,16 @@ describe("AddReviewItemDialog", () => {
   it("定例セレクトをユーザーが変更したとき、会議セレクトはクリアされる", async () => {
     const user = userEvent.setup();
     renderWithClient(
-      <AddReviewItemDialog orgId="org-1" initialRmId="rm-1" initialMeetingId="mtg-1" />,
+      <AddReviewItemDialog
+        orgId="org-1"
+        initialRmId="rm-1"
+        initialMeetingId="mtg-1"
+      />,
     );
 
-    await user.click(screen.getByRole("button", { name: "サンプルデータを入力" }));
+    await user.click(
+      screen.getByRole("button", { name: "サンプルデータを入力" }),
+    );
     const dialog = await screen.findByRole("dialog");
 
     // 初期値が保持されていることを確認
