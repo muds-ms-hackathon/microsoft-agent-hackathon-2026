@@ -103,7 +103,7 @@ describe("Login コンポーネント (AUTH_PROVIDER=entra)", () => {
 
   it("コールバックで idToken が返された場合、loginAtom にトークンをセットしてホームへ遷移する", async () => {
     const { makeFakeIdToken } = await import("../test/helpers/auth");
-    const { getIdToken } = await import("@/lib/auth");
+    const { getIdToken, parseToken } = await import("@/lib/auth");
 
     const fakeToken = makeFakeIdToken({
       sub: "u1",
@@ -112,6 +112,11 @@ describe("Login コンポーネント (AUTH_PROVIDER=entra)", () => {
     });
     mockMsal.handleRedirectPromise.mockResolvedValue({ idToken: fakeToken });
     vi.mocked(getIdToken).mockReturnValue(null);
+    vi.mocked(parseToken).mockReturnValue({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+    });
 
     const { router } = await renderLogin();
 
@@ -139,6 +144,32 @@ describe("Login コンポーネント (AUTH_PROVIDER=entra)", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/");
     });
+    expect(mockMsal.loginRedirect).not.toHaveBeenCalled();
+  });
+
+  it("idToken が返されても parseToken が null を返す場合はエラーを表示し loginAtom を呼ばない", async () => {
+    const { makeFakeIdToken } = await import("../test/helpers/auth");
+    const { getIdToken, parseToken } = await import("@/lib/auth");
+
+    const fakeToken = makeFakeIdToken({
+      sub: "u1",
+      email: "u1@example.com",
+      name: "u1",
+    });
+    mockMsal.handleRedirectPromise.mockResolvedValue({ idToken: fakeToken });
+    vi.mocked(getIdToken).mockReturnValue(null);
+    // parseToken がクレーム検証で null を返すケース（Entra CIAM のメール形式不備など）
+    vi.mocked(parseToken).mockReturnValue(null);
+
+    const { router } = await renderLogin();
+
+    await waitFor(() => {
+      expect(
+        document.body.textContent?.includes("認証トークンにメールアドレスが含まれていません"),
+      ).toBe(true);
+    });
+    expect(loginSpy).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe("/login");
     expect(mockMsal.loginRedirect).not.toHaveBeenCalled();
   });
 

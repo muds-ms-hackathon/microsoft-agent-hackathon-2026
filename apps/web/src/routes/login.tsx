@@ -1,6 +1,7 @@
 import {
   getIdToken,
   loginAtom,
+  parseToken,
   saveExpectedAuthParams,
   verifyAndConsumeAuthParams,
 } from "@/lib/auth";
@@ -61,6 +62,15 @@ function Login() {
         });
 
         if (result?.idToken) {
+          // parseToken でクレームを検証してから保存する。
+          // 検証なしに setLogin すると beforeLoad で token が除去されて
+          // /login → / → /login の無限ループが発生する。
+          if (!parseToken(result.idToken)) {
+            setError(
+              "認証トークンにメールアドレスが含まれていません。管理者に連絡してください。",
+            );
+            return;
+          }
           // MSAL が返す idToken を既存の localStorage ベースの仕組みに橋渡しする
           setLogin(result.idToken);
           navigate({ to: "/" });
