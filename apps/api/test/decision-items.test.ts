@@ -109,7 +109,7 @@ const sampleDecisionItem = {
   createdAt: new Date("2026-05-17T00:00:00Z"),
   updatedAt: new Date("2026-05-17T00:00:00Z"),
   assignees: [],
-  meeting: { recurringMeetingId: "rmtg-1" },
+  meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
 };
 
 // ──────────────────────────────────────────────
@@ -267,20 +267,16 @@ describe("PATCH /decision-items/:id", () => {
     mockTransaction.mockImplementation(async (fn) => {
       const tx = {
         decisionItem: {
-          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findUniqueOrThrow: vi.fn().mockResolvedValue({
-            ...sampleItem,
-            title: "更新後",
-            version: 1,
-            assignees: [],
-            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
           updateMany: vi.fn().mockImplementation(({ data }) => {
             capturedData = data;
             return Promise.resolve({ count: 1 });
           }),
-          findUniqueOrThrow: vi
-            .fn()
-            .mockResolvedValue({ ...sampleDecisionItem, status: "decided" }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            ...sampleDecisionItem,
+            status: "decided",
+            assignees: [],
+            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+          }),
         },
         decisionItemAssignee: { deleteMany: vi.fn(), createMany: vi.fn() },
       };
@@ -417,7 +413,7 @@ describe("PATCH /decision-items/:id", () => {
         decisionItem: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue({
-            ...sampleItem,
+            ...sampleDecisionItem,
             assignees: [],
             meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
           }),
