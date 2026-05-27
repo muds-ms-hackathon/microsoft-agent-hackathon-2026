@@ -96,7 +96,7 @@ export function Sidebar() {
   return (
     <aside
       aria-label="サイドバー"
-      className="w-52 border-r border-border/50 bg-muted/30 flex flex-col shrink-0"
+      className="w-52 border-r border-border/50 bg-muted/30 flex flex-col shrink-0 overflow-y-auto"
     >
       <OrganizationSelector
         isLoading={isLoading}

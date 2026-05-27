@@ -35,7 +35,7 @@ function RootLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-background">
       <Topbar />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
