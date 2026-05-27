@@ -715,7 +715,9 @@ describe("GET /tasks/me", () => {
     };
     // now はサーバ側現在時刻のため、Date インスタンスが入っていることだけ確認する。
     expect(where.dueDate?.lt).toBeInstanceOf(Date);
-    expect(where.status).toEqual({ notIn: ["done", "rejected"] });
+    expect(where.status).toEqual({
+      notIn: ["draft", "reviewing", "done", "rejected"],
+    });
   });
 
   it("overdueOnly=true と status=todo の併用は AND で結合される", async () => {

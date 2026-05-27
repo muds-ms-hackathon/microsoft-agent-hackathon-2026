@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReviewRouteImport } from './routes/review'
 import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvitationsRouteImport } from './routes/invitations'
@@ -19,6 +20,11 @@ import { Route as RecurringMeetingsIdRouteImport } from './routes/recurring-meet
 import { Route as OrganizationsIdRouteImport } from './routes/organizations.$id'
 import { Route as MeetingsIdRouteImport } from './routes/meetings.$id'
 
+const ReviewRoute = ReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OrganizationsRoute = OrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/invitations': typeof InvitationsRoute
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
+  '/review': typeof ReviewRoute
   '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/invitations': typeof InvitationsRoute
   '/login': typeof LoginRoute
+  '/review': typeof ReviewRoute
   '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/invitations': typeof InvitationsRoute
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
+  '/review': typeof ReviewRoute
   '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/invitations'
     | '/login'
     | '/organizations'
+    | '/review'
     | '/meetings/$id'
     | '/organizations/$id'
     | '/recurring-meetings/$id'
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/'
     | '/invitations'
     | '/login'
+    | '/review'
     | '/meetings/$id'
     | '/organizations/$id'
     | '/recurring-meetings/$id'
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/invitations'
     | '/login'
     | '/organizations'
+    | '/review'
     | '/meetings/$id'
     | '/organizations/$id'
     | '/recurring-meetings/$id'
@@ -138,6 +150,7 @@ export interface RootRouteChildren {
   InvitationsRoute: typeof InvitationsRoute
   LoginRoute: typeof LoginRoute
   OrganizationsRoute: typeof OrganizationsRouteWithChildren
+  ReviewRoute: typeof ReviewRoute
   MeetingsIdRoute: typeof MeetingsIdRoute
   RecurringMeetingsIdRoute: typeof RecurringMeetingsIdRoute
   TasksIndexRoute: typeof TasksIndexRoute
@@ -145,6 +158,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/review': {
+      id: '/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof ReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/organizations': {
       id: '/organizations'
       path: '/organizations'
@@ -230,6 +250,7 @@ const rootRouteChildren: RootRouteChildren = {
   InvitationsRoute: InvitationsRoute,
   LoginRoute: LoginRoute,
   OrganizationsRoute: OrganizationsRouteWithChildren,
+  ReviewRoute: ReviewRoute,
   MeetingsIdRoute: MeetingsIdRoute,
   RecurringMeetingsIdRoute: RecurringMeetingsIdRoute,
   TasksIndexRoute: TasksIndexRoute,

@@ -130,7 +130,7 @@ export type TaskListQuery = z.infer<typeof taskListQuerySchema>;
 // AND を使うため、AND 配列も含めて型を明示する。
 type TaskStatusWhere = {
   in?: TaskListQuery["status"];
-  notIn?: Array<"done" | "rejected">;
+  notIn?: Array<"draft" | "reviewing" | "done" | "rejected">;
 };
 type TaskListWhere = {
   status?: TaskStatusWhere;
@@ -148,7 +148,8 @@ export function buildTaskListWhere(
   now: Date = new Date(),
 ): TaskListWhere {
   const where: TaskListWhere = {};
-  if (filters.status && filters.status.length > 0) {
+  const userProvidedStatus = !!(filters.status && filters.status.length > 0);
+  if (userProvidedStatus) {
     where.status = { in: filters.status };
   }
   if (filters.assigneeId === "none") {
@@ -165,18 +166,23 @@ export function buildTaskListWhere(
   // overdueOnly: 「期限超過 かつ 未完了」に絞る。
   // - dueDate.lt = now（dueBefore があれば lte と共存させる）
   // - status は「done/rejected を外す」が、ユーザーの status filter と両立させるため
-  //   filter が既にあるときは AND で結合する（Prisma は同一フィールドの上書きになるため）。
+  //   ユーザー指定がある場合のみ AND で結合する（Prisma は同一フィールドの上書きになるため）。
   if (filters.overdueOnly === true) {
     where.dueDate = { ...(where.dueDate ?? {}), lt: now };
-    if (where.status) {
+    if (userProvidedStatus) {
+      const userStatus = where.status ?? {};
       where.AND = [
-        { status: where.status },
+        { status: userStatus },
         { status: { notIn: ["done", "rejected"] } },
       ];
       delete where.status;
     } else {
-      where.status = { notIn: ["done", "rejected"] };
+      // draft/reviewing（AI抽出中）+ done/rejected（完了）を一括除外
+      where.status = { notIn: ["draft", "reviewing", "done", "rejected"] };
     }
+  } else if (!userProvidedStatus) {
+    // draft/reviewing は AI 抽出中のタスク候補のため、タスク一覧には表示しない
+    where.status = { notIn: ["draft", "reviewing"] };
   }
   return where;
 }

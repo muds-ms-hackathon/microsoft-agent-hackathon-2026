@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { CreateMeetingDialog } from "@/features/recurring-meetings/components/CreateMeetingDialog";
 import { MeetingCard } from "@/features/recurring-meetings/components/MeetingCard";
 import { useRecurringMeetingDetail } from "@/features/recurring-meetings/hooks/useRecurringMeetingDetail";
@@ -7,6 +8,7 @@ import {
   describeCron,
   parseCron,
 } from "@/features/recurring-meetings/scheduleCron";
+import { useReviewItems } from "@/features/review/useReviewItems";
 import { AssigneeFilter } from "@/features/tasks/components/AssigneeFilter";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
@@ -23,6 +25,7 @@ import type { TaskListFilters, TaskStatus } from "@/features/tasks/types";
 import { authAtom } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ChevronRight } from "lucide-react";
 import { useAtomValue } from "jotai";
 import { z } from "zod";
 
@@ -95,6 +98,11 @@ export function RecurringMeetingDetailView({
 }) {
   const detailQuery = useRecurringMeetingDetail(id);
   const meetingsQuery = useRecurringMeetingMeetings(id);
+
+  const { items: allReviewItems } = useReviewItems({ recurringMeetingId: id });
+  const pendingReviewCount = allReviewItems.filter(
+    (item) => item.status === "draft" || item.status === "reviewing",
+  ).length;
 
   const statusArr = parseStatusParam(search.status);
   // Kanban view では status は列として可視化されるため、フィルタ UI も API への
@@ -178,6 +186,32 @@ export function RecurringMeetingDetailView({
           <span>デフォルト {detail.defaultDurationMinutes} 分</span>
         </div>
       </header>
+
+      {/* レビュー待ちセクション（あれば最優先表示） */}
+      {pendingReviewCount > 0 && (
+        <section
+          aria-label="レビュー待ち"
+          className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3"
+        >
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium text-orange-900">
+              レビュー待ち {pendingReviewCount}件
+            </p>
+            <p className="text-xs text-orange-700">
+              AIが抽出した結果を確認・確定してください
+            </p>
+          </div>
+          <Link to="/review" search={{ recurringMeetingId: id, from: "hub" }}>
+            <Button
+              size="sm"
+              className="gap-1 bg-orange-600 hover:bg-orange-700 text-white border-0"
+            >
+              レビューする
+              <ChevronRight size={14} />
+            </Button>
+          </Link>
+        </section>
+      )}
 
       {meetingsQuery.isError ? (
         // 会議取得だけ失敗したケース。定例ヘッダは見せ続けたいので分離して表示。

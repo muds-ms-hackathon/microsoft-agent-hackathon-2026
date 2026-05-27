@@ -27,6 +27,12 @@ vi.mock("../src/lib/prisma.js", () => ({
     task: {
       findMany: vi.fn(),
     },
+    decisionItem: {
+      findMany: vi.fn(),
+    },
+    ambiguousInfo: {
+      findMany: vi.fn(),
+    },
     meeting: {
       findMany: vi.fn(),
     },
@@ -76,6 +82,11 @@ import {
 import { app } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
 import type { TaskWithList } from "../src/lib/task-serialization.js";
+import type {
+  ambiguousInfoReviewInclude,
+  decisionItemReviewInclude,
+  taskReviewInclude,
+} from "../src/lib/review-item-serialization.js";
 
 // ハンドラ側で利用している include 形に合わせた Prisma 型エイリアス。
 // findMany / findUnique のモック戻り値を `as never` で渡すのを避けるためのもの。
@@ -96,6 +107,17 @@ type InvitationWithInviter = Prisma.OrganizationInvitationGetPayload<{
     };
   };
 }>;
+// GET /organizations/:id/review-items ハンドラ用
+type DecisionItemWithReview = Prisma.DecisionItemGetPayload<{
+  include: typeof decisionItemReviewInclude;
+}>;
+type TaskWithReview = Prisma.TaskGetPayload<{
+  include: typeof taskReviewInclude;
+}>;
+type AmbiguousInfoWithReview = Prisma.AmbiguousInfoGetPayload<{
+  include: typeof ambiguousInfoReviewInclude;
+}>;
+
 // GET /organizations/:id/next-meetings の findMany が select で取得する形。
 // ハンドラの select 句と一致させる必要がある（ズレるとここで型エラーになる）。
 type NextMeetingRow = Prisma.MeetingGetPayload<{
@@ -132,6 +154,8 @@ const mockInvitationFindMany = vi.mocked(
 );
 const mockInvitationUpdate = vi.mocked(prisma.organizationInvitation.update);
 const mockTaskFindMany = vi.mocked(prisma.task.findMany);
+const mockDecisionItemFindMany = vi.mocked(prisma.decisionItem.findMany);
+const mockAmbiguousInfoFindMany = vi.mocked(prisma.ambiguousInfo.findMany);
 const mockMeetingFindMany = vi.mocked(prisma.meeting.findMany);
 const mockTransaction = vi.mocked(prisma.$transaction);
 
@@ -1735,5 +1759,149 @@ describe("GET /organizations/:id/next-meetings", () => {
       recurringMeetingName: string | null;
     }>;
     expect(body[0].recurringMeetingName).toBeNull();
+  });
+});
+
+describe("GET /organizations/:id/review-items", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function setupMembership() {
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+  }
+
+  const sampleDecisionItem = {
+    id: "di-1",
+    meetingId: "mtg-1",
+    title: "認証方式を決定する",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "draft",
+    decisionState: "confirmed",
+    decisionDeadline: null,
+    version: 0,
+    createdAt: new Date("2026-05-17T00:00:00Z"),
+    updatedAt: new Date("2026-05-17T00:00:00Z"),
+    assignees: [],
+    meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+  } as DecisionItemWithReview;
+
+  const sampleReviewTask = {
+    id: "task-review-1",
+    organizationId: "org-1",
+    originMeetingId: "mtg-1",
+    decisionItemId: null,
+    title: "ドキュメント整備",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "draft",
+    priority: null,
+    dueDateRaw: null,
+    dueDateEstimated: null,
+    assigneeRaw: null,
+    blockingItemId: null,
+    carriedOverCount: null,
+    ambiguityFlags: null,
+    progressNote: null,
+    dueDate: null,
+    startDate: null,
+    followUpDate: null,
+    version: 0,
+    createdAt: new Date("2026-05-17T00:00:00Z"),
+    updatedAt: new Date("2026-05-17T00:00:00Z"),
+    assignees: [],
+    originMeeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+  } as TaskWithReview;
+
+  const sampleAmbiguousInfo = {
+    id: "ai-1",
+    meetingId: "mtg-1",
+    body: "要件が不明確",
+    sourceQuote: null,
+    sourceContext: null,
+    status: "draft",
+    severity: null,
+    resolutionType: null,
+    version: 0,
+    createdAt: new Date("2026-05-17T00:00:00Z"),
+    updatedAt: new Date("2026-05-17T00:00:00Z"),
+    meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+  } as AmbiguousInfoWithReview;
+
+  it("type 未指定 → 3 テーブル全件を取得して統合レスポンスを返す", async () => {
+    setupMembership();
+    mockDecisionItemFindMany.mockResolvedValue([sampleDecisionItem]);
+    // biome-ignore lint/suspicious/noExplicitAny: TaskWithReview は TaskWithList と include 形が異なるため
+    mockTaskFindMany.mockResolvedValue([sampleReviewTask] as any);
+    mockAmbiguousInfoFindMany.mockResolvedValue([sampleAmbiguousInfo]);
+
+    const res = await app.request("/organizations/org-1/review-items");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      sourceTable: string;
+      type: string;
+    }>;
+    expect(body).toHaveLength(3);
+    expect(body[0].sourceTable).toBe("decision_item");
+    expect(body[1].sourceTable).toBe("task");
+    expect(body[2].sourceTable).toBe("ambiguous_info");
+    expect(mockDecisionItemFindMany).toHaveBeenCalledTimes(1);
+    expect(mockTaskFindMany).toHaveBeenCalledTimes(1);
+    expect(mockAmbiguousInfoFindMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("?type=task_candidate → task のみ呼ばれ decisionItem・ambiguousInfo は呼ばれない", async () => {
+    setupMembership();
+    // biome-ignore lint/suspicious/noExplicitAny: TaskWithReview は TaskWithList と include 形が異なるため
+    mockTaskFindMany.mockResolvedValue([sampleReviewTask] as any);
+
+    const res = await app.request(
+      "/organizations/org-1/review-items?type=task_candidate",
+    );
+    expect(res.status).toBe(200);
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          originMeeting: { recurringMeeting: { organizationId: "org-1" } },
+        }),
+      }),
+    );
+    expect(mockDecisionItemFindMany).not.toHaveBeenCalled();
+    expect(mockAmbiguousInfoFindMany).not.toHaveBeenCalled();
+  });
+
+  it("?type=ambiguity → ambiguousInfo のみ呼ばれ decisionItem・task は呼ばれない", async () => {
+    setupMembership();
+    mockAmbiguousInfoFindMany.mockResolvedValue([sampleAmbiguousInfo]);
+
+    const res = await app.request(
+      "/organizations/org-1/review-items?type=ambiguity",
+    );
+    expect(res.status).toBe(200);
+    expect(mockAmbiguousInfoFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          meeting: { recurringMeeting: { organizationId: "org-1" } },
+        }),
+      }),
+    );
+    expect(mockDecisionItemFindMany).not.toHaveBeenCalled();
+    expect(mockTaskFindMany).not.toHaveBeenCalled();
+  });
+
+  it("組織非所属は 404 を返しクエリを実行しない", async () => {
+    mockMembershipFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/organizations/org-1/review-items");
+    expect(res.status).toBe(404);
+    expect(mockDecisionItemFindMany).not.toHaveBeenCalled();
+    expect(mockTaskFindMany).not.toHaveBeenCalled();
+    expect(mockAmbiguousInfoFindMany).not.toHaveBeenCalled();
   });
 });

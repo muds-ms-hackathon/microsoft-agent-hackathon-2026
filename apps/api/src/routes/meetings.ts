@@ -18,6 +18,7 @@ import {
   taskReviewInclude,
 } from "../lib/review-item-serialization.js";
 import {
+  buildReviewItemStatusFilter,
   buildReviewItemTypeFilter,
   reviewItemCreateSchema,
   reviewItemQuerySchema,
@@ -147,14 +148,19 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         includeAmbiguousInfos,
         decisionItemTypeWhere,
       } = buildReviewItemTypeFilter(filters.type);
+      const {
+        decisionItemStatusWhere,
+        taskStatusWhere,
+        ambiguousInfoStatusWhere,
+      } = buildReviewItemStatusFilter(filters.status);
 
       const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
         includeDecision
           ? prisma.decisionItem.findMany({
               where: {
                 meetingId: id,
-                status: { in: ["draft", "reviewing"] },
                 ...decisionItemTypeWhere,
+                ...decisionItemStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: decisionItemReviewInclude,
@@ -164,7 +170,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.task.findMany({
               where: {
                 originMeetingId: id,
-                status: { in: ["draft", "reviewing"] },
+                ...taskStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: taskReviewInclude,
@@ -174,7 +180,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.ambiguousInfo.findMany({
               where: {
                 meetingId: id,
-                status: { in: ["draft", "reviewing"] },
+                ...ambiguousInfoStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: ambiguousInfoReviewInclude,

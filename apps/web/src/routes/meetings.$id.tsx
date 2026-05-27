@@ -1,4 +1,12 @@
+import { Button } from "@/components/ui/button";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import {
+  REVIEW_ITEM_TYPES,
+  TYPE_BADGE_CLASS,
+  TYPE_LABELS,
+  type ReviewItem,
+} from "@/features/review/types";
+import { useReviewItems } from "@/features/review/useReviewItems";
 import { AssigneeFilter } from "@/features/tasks/components/AssigneeFilter";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
@@ -16,6 +24,8 @@ import { authAtom } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
 import { z } from "zod";
 
 // 手動経路で表示する status の選択肢。AI 専用の draft/reviewing は UI から除外。
@@ -91,6 +101,12 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
+  const { items: meetingReviewItems, isError: reviewItemsError } =
+    useReviewItems({ meetingId: id });
+  const pendingCount = meetingReviewItems.filter(
+    (i) => i.status === "draft" || i.status === "reviewing",
+  ).length;
+
   const statusArr = parseStatusParam(search.status);
   // Kanban view では status は列として可視化されるため、フィルタ UI も API への
   // status 絞り込みも外す（全件取得）。URL の `?status=...` 自体は List に戻したときの
@@ -274,6 +290,175 @@ export function MeetingDetailView({
           />
         )}
       </section>
+
+      {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
+      <section aria-label="AI抽出結果" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">AI抽出結果</h2>
+          {pendingCount > 0 ? (
+            <Link
+              to="/review"
+              search={{
+                recurringMeetingId: detail.recurringMeeting.id,
+                meetingId: id,
+                from: "hub",
+              }}
+            >
+              <Button size="sm" className="gap-1">
+                レビューして確定する（{pendingCount}件）
+                <ChevronRight size={14} />
+              </Button>
+            </Link>
+          ) : meetingReviewItems.length > 0 ? (
+            <Link
+              to="/review"
+              search={{
+                recurringMeetingId: detail.recurringMeeting.id,
+                meetingId: id,
+                from: "hub",
+              }}
+            >
+              <Button size="sm" variant="outline" className="gap-1">
+                確定済み（レビュー内容を見る）
+                <ChevronRight size={14} />
+              </Button>
+            </Link>
+          ) : null}
+        </div>
+        {reviewItemsError ? (
+          <p className="text-sm text-destructive">
+            AI抽出結果の取得に失敗しました
+          </p>
+        ) : meetingReviewItems.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            AI抽出結果はまだありません
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {REVIEW_ITEM_TYPES.map((type) => {
+              const typeItems = meetingReviewItems.filter(
+                (i) => i.type === type,
+              );
+              if (typeItems.length === 0) return null;
+              return (
+                <ReviewAccordionItem key={type} type={type} items={typeItems} />
+              );
+            })}
+          </div>
+        )}
+      </section>
     </section>
+  );
+}
+
+function ResolutionBadge({
+  type,
+  status,
+  resolutionType,
+}: {
+  type: (typeof REVIEW_ITEM_TYPES)[number];
+  status: ReviewItem["status"];
+  resolutionType: ReviewItem["resolutionType"];
+}) {
+  if (status === "draft" || status === "reviewing") return null;
+  if (status === "rejected" || status === "cancelled") {
+    return (
+      <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+        却下
+      </span>
+    );
+  }
+  let label: string;
+  if (type === "ambiguity") {
+    label =
+      resolutionType === "task"
+        ? "→タスク登録済み"
+        : resolutionType === "decision_item"
+          ? "→未決事項に変換"
+          : resolutionType === "discarded"
+            ? "→破棄"
+            : "→解消済み";
+  } else if (type === "task_candidate") {
+    label = "タスク登録済み";
+  } else if (type === "open_issue") {
+    label = "決定済み";
+  } else {
+    label = "確定済み";
+  }
+  return (
+    <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+      {label}
+    </span>
+  );
+}
+
+// AI抽出結果アコーディオン（読み取り専用）
+function ReviewAccordionItem({
+  type,
+  items,
+}: {
+  type: (typeof REVIEW_ITEM_TYPES)[number];
+  items: ReviewItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const pendingCount = items.filter(
+    (i) => i.status === "draft" || i.status === "reviewing",
+  ).length;
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/40 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "text-xs font-medium px-2 py-0.5 rounded-full",
+              TYPE_BADGE_CLASS[type],
+            )}
+          >
+            {TYPE_LABELS[type]}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {items.length}件
+            {pendingCount > 0 && (
+              <span className="ml-1 text-orange-500">
+                （未確定 {pendingCount}件）
+              </span>
+            )}
+          </span>
+        </div>
+        <ChevronDown
+          size={14}
+          className={cn(
+            "text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <ul className="border-t divide-y">
+          {items.map((item) => (
+            <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm">{item.title}</p>
+                <ResolutionBadge
+                  type={type}
+                  status={item.status}
+                  resolutionType={item.resolutionType}
+                />
+              </div>
+              {item.sourceContext && (
+                <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                  {item.sourceContext}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
