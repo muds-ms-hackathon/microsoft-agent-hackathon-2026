@@ -139,11 +139,10 @@ describe("Dashboard - NextMeetingsSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("複数定例のうち heldAt が最も近い upcoming 会議の定例名が表示される", async () => {
+  it("複数定例がある場合、すべての定例名が表示される", async () => {
     vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
       mockJson([RM_1, RM_2]),
     );
-    // rm-1 は遠い未来、rm-2 は近い未来 → rm-2 が選ばれる
     vi.mocked(api["recurring-meetings"][":id"].meetings.$get)
       .mockResolvedValueOnce(
         mockJson([
@@ -168,7 +167,43 @@ describe("Dashboard - NextMeetingsSection", () => {
         ]),
       );
     render();
-    expect(await screen.findByText("月次レビュー")).toBeInTheDocument();
+    expect(await screen.findByText("週次定例")).toBeInTheDocument();
+    expect(screen.getByText("月次レビュー")).toBeInTheDocument();
+  });
+
+  it("複数定例の会議カードが heldAt の昇順（近い順）で並ぶ", async () => {
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([RM_1, RM_2]),
+    );
+    // rm-1 は遠い未来、rm-2 は近い未来 → rm-2 が先に表示される
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get)
+      .mockResolvedValueOnce(
+        mockJson([
+          {
+            id: "mtg-rm1",
+            title: "週次定例 会議",
+            heldAt: FAR_FUTURE,
+            estimatedDurationMinutes: 60,
+            recurringMeetingId: "rm-1",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        mockJson([
+          {
+            id: "mtg-rm2",
+            title: "月次レビュー 会議",
+            heldAt: NEAR_FUTURE,
+            estimatedDurationMinutes: 60,
+            recurringMeetingId: "rm-2",
+          },
+        ]),
+      );
+    render();
+    await screen.findByText("週次定例");
+    const cards = screen.getAllByRole("link", { name: /詳細/ });
+    expect(cards[0]).toHaveAttribute("href", "/recurring-meetings/rm-2");
+    expect(cards[1]).toHaveAttribute("href", "/recurring-meetings/rm-1");
   });
 
   it("定例取得が失敗したとき「定例の取得に失敗しました」が表示される", async () => {
@@ -223,7 +258,7 @@ describe("Dashboard - NextMeetingsSection", () => {
         ]),
       );
     render();
-    const link = await screen.findByRole("link", { name: /詳細/ });
-    expect(link).toHaveAttribute("href", "/recurring-meetings/rm-2");
+    const links = await screen.findAllByRole("link", { name: /詳細/ });
+    expect(links[0]).toHaveAttribute("href", "/recurring-meetings/rm-2");
   });
 });
