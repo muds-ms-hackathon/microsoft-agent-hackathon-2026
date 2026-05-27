@@ -5,6 +5,7 @@ import {
   meetingListQueryOptions,
 } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
 import { partitionMeetings } from "@/features/recurring-meetings/meetingSections";
+import { useOrgTasks } from "@/features/tasks/hooks/useOrgTasks";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
@@ -223,77 +224,70 @@ function ReviewPendingCard() {
   );
 }
 
-// ===== 未完了タスクカード（モック） =====
-// TODO: タスク API が実装されたら実データに置き換える。
+// ===== 未完了タスクカード =====
 
-type TaskItem = {
-  name: string;
-  meeting: string;
-  deadline: string;
-  // "overdue" | "this-week" | "later"
-  urgency: "overdue" | "this-week" | "later";
-};
+type TaskUrgency = "overdue" | "this-week" | "later";
 
-const MOCK_TASKS: TaskItem[] = [
+const URGENCY_STYLE: Record<TaskUrgency, { border: string; deadline: string }> =
   {
-    name: "〜の設定",
-    meeting: "〜進捗報告",
-    deadline: "3日超過",
-    urgency: "overdue",
-  },
-  {
-    name: "〜提出",
-    meeting: "〜定例会議",
-    deadline: "1日超過",
-    urgency: "overdue",
-  },
-  {
-    name: "〜の仕様確認",
-    meeting: "〜進捗報告",
-    deadline: "5/2",
-    urgency: "this-week",
-  },
-  {
-    name: "〜提出",
-    meeting: "〜定例会議",
-    deadline: "5/4",
-    urgency: "this-week",
-  },
-  {
-    name: "〜提出",
-    meeting: "〜定例会議",
-    deadline: "5/4",
-    urgency: "this-week",
-  },
-];
+    overdue: {
+      border: "border-l-destructive",
+      deadline: "text-destructive font-medium",
+    },
+    "this-week": {
+      border: "border-l-orange-400",
+      deadline: "text-orange-500 font-medium",
+    },
+    later: {
+      border: "border-l-border",
+      deadline: "text-muted-foreground",
+    },
+  };
 
-const URGENCY_STYLE: Record<
-  TaskItem["urgency"],
-  { border: string; deadline: string }
-> = {
-  overdue: {
-    border: "border-l-destructive",
-    deadline: "text-destructive font-medium",
-  },
-  "this-week": {
-    border: "border-l-orange-400",
-    deadline: "text-orange-500 font-medium",
-  },
-  later: {
-    border: "border-l-border",
-    deadline: "text-muted-foreground",
-  },
-};
+function calcUrgency(dueDate: string | null): TaskUrgency {
+  if (!dueDate) return "later";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  if (due < today) return "overdue";
+  const weekLater = new Date(today);
+  weekLater.setDate(weekLater.getDate() + 7);
+  if (due <= weekLater) return "this-week";
+  return "later";
+}
 
-function IncompleteTasksCard() {
+function formatDeadline(dueDate: string | null, urgency: TaskUrgency): string {
+  if (!dueDate) return "未設定";
+  if (urgency === "overdue") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.ceil(
+      (today.getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return `${days}日超過`;
+  }
+  const d = new Date(dueDate);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function IncompleteTasksCard({ orgId }: { orgId: string }) {
+  const {
+    data = [],
+    isLoading,
+    isError,
+  } = useOrgTasks(orgId, {
+    status: ["todo", "in_progress"],
+  });
+
   return (
     <Card className="gap-0 py-0 overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50">
         <span className="text-sm font-semibold flex-1">未完了タスク</span>
-        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
-          {MOCK_TASKS.length}
-        </span>
-        {/* TODO: タスク一覧が実装されたらリンクに変更する */}
+        {!isLoading && !isError && (
+          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+            {data.length}
+          </span>
+        )}
         <button
           type="button"
           className="text-muted-foreground hover:text-foreground transition-colors"
@@ -302,18 +296,38 @@ function IncompleteTasksCard() {
         </button>
       </div>
       <div className="px-5 py-2 overflow-y-auto max-h-96">
-        {MOCK_TASKS.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-3 py-2">
+            {(["s0", "s1", "s2"] as const).map((k) => (
+              <div
+                key={k}
+                className="h-12 rounded-md bg-muted/50 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-sm text-destructive">
+              タスクの取得に失敗しました
+            </p>
+          </div>
+        ) : data.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-sm text-muted-foreground">
               未完了のタスクはありません
             </p>
           </div>
         ) : (
-          MOCK_TASKS.slice(0, 5).map((item) => {
-            const style = URGENCY_STYLE[item.urgency];
+          data.slice(0, 5).map((task) => {
+            const urgency = calcUrgency(task.dueDate);
+            const style = URGENCY_STYLE[urgency];
+            const meetingName =
+              task.originMeeting?.title ??
+              task.recurringMeetings[0]?.name ??
+              "";
             return (
               <div
-                key={item.name}
+                key={task.id}
                 className="py-2 border-b border-border/50 last:border-b-0"
               >
                 <div
@@ -321,14 +335,14 @@ function IncompleteTasksCard() {
                 >
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-sm font-medium truncate">
-                      {item.name}
+                      {task.title}
                     </span>
                     <span className="text-xs text-muted-foreground truncate">
-                      {item.meeting}
+                      {meetingName}
                     </span>
                   </div>
                   <span className={`text-xs shrink-0 ${style.deadline}`}>
-                    {item.deadline}
+                    {formatDeadline(task.dueDate, urgency)}
                   </span>
                 </div>
               </div>
@@ -368,7 +382,7 @@ export function Dashboard() {
           {/* 下段：レビュー待ち（左）・未完了タスク（右） */}
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4">
             <ReviewPendingCard />
-            <IncompleteTasksCard />
+            <IncompleteTasksCard orgId={orgId} />
           </div>
         </div>
       )}
