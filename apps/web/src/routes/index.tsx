@@ -5,6 +5,11 @@ import {
   meetingListQueryOptions,
 } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
 import { partitionMeetings } from "@/features/recurring-meetings/meetingSections";
+import {
+  TYPE_LABELS,
+  type ReviewItemType,
+} from "@/features/review/types";
+import { useReviewItems } from "@/features/review/useReviewItems";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
@@ -171,26 +176,33 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
   );
 }
 
-// ===== レビュー待ちカード（モック） =====
-// TODO: レビュー待ちデータ取得 API が実装されたら実データに置き換える。
+// ===== レビュー待ちカード =====
 
-type ReviewRow = { label: string; count: number };
-
-const MOCK_REVIEW_ROWS: ReviewRow[] = [
-  { label: "担当者なし", count: 1 },
-  { label: "期限なし", count: 1 },
-  { label: "未決事項", count: 1 },
+const REVIEW_ITEM_TYPE_ORDER: ReviewItemType[] = [
+  "task_candidate",
+  "open_issue",
+  "ambiguity",
+  "decision",
 ];
 
-function ReviewPendingCard() {
-  const total = MOCK_REVIEW_ROWS.reduce((sum, r) => sum + r.count, 0);
+function ReviewPendingCard({ orgId }: { orgId: string }) {
+  const { items, isLoading, isError } = useReviewItems({ organizationId: orgId });
+
+  const countByType = REVIEW_ITEM_TYPE_ORDER.map((type) => ({
+    type,
+    label: TYPE_LABELS[type],
+    count: items.filter((i) => i.type === type).length,
+  })).filter((r) => r.count > 0);
+
   return (
     <Card className="gap-0 py-0 overflow-hidden h-90">
       <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
         <span className="text-sm font-semibold flex-1">レビュー待ち</span>
-        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
-          {total}
-        </span>
+        {!isLoading && !isError && (
+          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+            {items.length}
+          </span>
+        )}
         <Link
           to="/review"
           className="text-muted-foreground hover:text-foreground transition-colors"
@@ -199,21 +211,31 @@ function ReviewPendingCard() {
         </Link>
       </div>
       <div className="px-5 py-1 flex-1 min-h-0 overflow-y-auto">
-        {MOCK_REVIEW_ROWS.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-3 py-2">
+            {(["s0", "s1", "s2"] as const).map((k) => (
+              <div key={k} className="h-10 rounded-md bg-muted/50 animate-pulse" />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-sm text-destructive">取得に失敗しました</p>
+          </div>
+        ) : countByType.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-sm text-muted-foreground">
               レビュー待ちのアイテムはありません
             </p>
           </div>
         ) : (
-          MOCK_REVIEW_ROWS.map((row) => (
+          countByType.map((row) => (
             <div
-              key={row.label}
+              key={row.type}
               className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
             >
               <span className="text-sm">{row.label}</span>
-              <span className="text-sm text-destructive font-medium">
-                {row.count} 件
+              <span className="size-6 inline-flex items-center justify-center rounded-full bg-destructive/10 text-destructive text-xs font-semibold shrink-0">
+                {row.count}
               </span>
             </div>
           ))
@@ -380,7 +402,7 @@ export function Dashboard() {
 
           {/* 下段：レビュー待ち（左）・未完了タスク（右） */}
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4">
-            <ReviewPendingCard />
+            <ReviewPendingCard orgId={orgId} />
             <IncompleteTasksCard />
           </div>
         </div>
