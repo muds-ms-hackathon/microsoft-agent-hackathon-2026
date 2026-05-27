@@ -5,10 +5,7 @@ import {
   meetingListQueryOptions,
 } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
 import { partitionMeetings } from "@/features/recurring-meetings/meetingSections";
-import {
-  TYPE_LABELS,
-  type ReviewItemType,
-} from "@/features/review/types";
+import { TYPE_LABELS, type ReviewItemType } from "@/features/review/types";
 import { useReviewItems } from "@/features/review/useReviewItems";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
@@ -186,7 +183,9 @@ const REVIEW_ITEM_TYPE_ORDER: ReviewItemType[] = [
 ];
 
 function ReviewPendingCard({ orgId }: { orgId: string }) {
-  const { items, isLoading, isError } = useReviewItems({ organizationId: orgId });
+  const { items, isLoading, isError } = useReviewItems({
+    organizationId: orgId,
+  });
 
   const countByType = REVIEW_ITEM_TYPE_ORDER.map((type) => ({
     type,
@@ -214,7 +213,10 @@ function ReviewPendingCard({ orgId }: { orgId: string }) {
         {isLoading ? (
           <div className="space-y-3 py-2">
             {(["s0", "s1", "s2"] as const).map((k) => (
-              <div key={k} className="h-10 rounded-md bg-muted/50 animate-pulse" />
+              <div
+                key={k}
+                className="h-10 rounded-md bg-muted/50 animate-pulse"
+              />
             ))}
           </div>
         ) : isError ? (

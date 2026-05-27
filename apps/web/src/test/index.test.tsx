@@ -372,7 +372,9 @@ describe("Dashboard - ReviewPendingCard", () => {
     expect(await screen.findByText("タスク候補")).toBeInTheDocument();
     expect(screen.getByText("未決事項")).toBeInTheDocument();
     // 種別バッジの件数が正しい値で表示される
-    const reviewCard = screen.getByText("タスク候補").closest("[data-slot=card]");
+    const reviewCard = screen
+      .getByText("タスク候補")
+      .closest("[data-slot=card]");
     expect(reviewCard).toBeTruthy();
     expect(reviewCard?.textContent).toContain("2");
     expect(reviewCard?.textContent).toContain("1");
