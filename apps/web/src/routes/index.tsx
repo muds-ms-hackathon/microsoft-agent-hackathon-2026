@@ -185,21 +185,20 @@ const MOCK_REVIEW_ROWS: ReviewRow[] = [
 function ReviewPendingCard() {
   const total = MOCK_REVIEW_ROWS.reduce((sum, r) => sum + r.count, 0);
   return (
-    <Card className="gap-0 py-0 overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50">
+    <Card className="gap-0 py-0 overflow-hidden h-90">
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
         <span className="text-sm font-semibold flex-1">レビュー待ち</span>
         <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
           {total}
         </span>
-        {/* TODO: レビュー画面が実装されたらリンクに変更する */}
-        <button
-          type="button"
+        <Link
+          to="/review"
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowRight size={15} />
-        </button>
+        </Link>
       </div>
-      <div className="px-5 py-1">
+      <div className="px-5 py-1 flex-1 min-h-0 overflow-y-auto">
         {MOCK_REVIEW_ROWS.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-sm text-muted-foreground">
@@ -235,11 +234,11 @@ const URGENCY_STYLE: Record<TaskUrgency, { border: string; deadline: string }> =
       deadline: "text-destructive font-medium",
     },
     "this-week": {
-      border: "border-l-orange-400",
-      deadline: "text-orange-500 font-medium",
+      border: "border-l-amber-500",
+      deadline: "text-amber-600 font-medium",
     },
     later: {
-      border: "border-l-border",
+      border: "border-l-slate-200",
       deadline: "text-muted-foreground",
     },
   };
@@ -280,22 +279,22 @@ function IncompleteTasksCard() {
   });
 
   return (
-    <Card className="gap-0 py-0 overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50">
+    <Card className="gap-0 py-0 overflow-hidden h-90">
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
         <span className="text-sm font-semibold flex-1">未完了タスク</span>
         {!isLoading && !isError && (
           <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
             {data.length}
           </span>
         )}
-        <button
-          type="button"
+        <Link
+          to="/tasks"
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowRight size={15} />
-        </button>
+        </Link>
       </div>
-      <div className="px-5 py-2 overflow-y-auto max-h-96">
+      <div className="px-5 py-2 flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
           <div className="space-y-3 py-2">
             {(["s0", "s1", "s2"] as const).map((k) => (
@@ -318,7 +317,7 @@ function IncompleteTasksCard() {
             </p>
           </div>
         ) : (
-          data.slice(0, 5).map((task) => {
+          data.slice(0, 4).map((task) => {
             const urgency = calcUrgency(task.dueDate);
             const style = URGENCY_STYLE[urgency];
             const meetingName =
@@ -331,7 +330,7 @@ function IncompleteTasksCard() {
                 className="py-2 border-b border-border/50 last:border-b-0"
               >
                 <div
-                  className={`flex items-center gap-3 border-l-2 pl-3 py-2.5 ${style.border}`}
+                  className={`flex items-center gap-3 border-l-4 pl-3 py-2.5 ${style.border}`}
                 >
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-sm font-medium truncate">
