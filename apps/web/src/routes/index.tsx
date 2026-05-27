@@ -5,7 +5,7 @@ import {
   meetingListQueryOptions,
 } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
 import { partitionMeetings } from "@/features/recurring-meetings/meetingSections";
-import { useOrgTasks } from "@/features/tasks/hooks/useOrgTasks";
+import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
@@ -270,12 +270,12 @@ function formatDeadline(dueDate: string | null, urgency: TaskUrgency): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function IncompleteTasksCard({ orgId }: { orgId: string }) {
+function IncompleteTasksCard() {
   const {
     data = [],
     isLoading,
     isError,
-  } = useOrgTasks(orgId, {
+  } = useMyTasks({
     status: ["todo", "in_progress"],
   });
 
@@ -382,7 +382,7 @@ export function Dashboard() {
           {/* 下段：レビュー待ち（左）・未完了タスク（右） */}
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4">
             <ReviewPendingCard />
-            <IncompleteTasksCard orgId={orgId} />
+            <IncompleteTasksCard />
           </div>
         </div>
       )}
