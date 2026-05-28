@@ -58,6 +58,21 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
       }
     }
 
+    // 一般編集 UI からの誤用防止。draft へは decided/open/cancelled からのみ遷移可。
+    if (input.status === "draft") {
+      const current = access.item.status;
+      if (
+        current !== "decided" &&
+        current !== "open" &&
+        current !== "cancelled"
+      ) {
+        return c.json(
+          { error: "この状態からレビュー待ちに戻すことはできません" },
+          400,
+        );
+      }
+    }
+
     // status が "decided" になったら decidedBy / decidedAt を自動設定。
     // "decided" 以外のステータスへ変わったら decidedBy / decidedAt をクリア。
     const prevStatus = access.item.status;

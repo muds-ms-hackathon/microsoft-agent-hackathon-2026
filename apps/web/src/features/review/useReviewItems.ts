@@ -14,7 +14,7 @@ export type AmbiguityResolution =
 
 type ReviewItemStatus = "pending" | "all" | "decided";
 
-// ステータスを含まない基底キー。全バリアントをまとめて invalidate するときに使う。
+// "pending"/"all" など全バリアントをまとめて invalidate するために status を含まない。
 function reviewItemsBaseQueryKey(params: {
   meetingId?: string;
   recurringMeetingId?: string;
