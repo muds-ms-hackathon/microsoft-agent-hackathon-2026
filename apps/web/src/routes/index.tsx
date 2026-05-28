@@ -341,7 +341,7 @@ function IncompleteTasksCard() {
             </p>
           </div>
         ) : (
-          data.slice(0, 4).map((task) => {
+          data.map((task) => {
             const urgency = calcUrgency(task.dueDate);
             const style = URGENCY_STYLE[urgency];
             const meetingName =

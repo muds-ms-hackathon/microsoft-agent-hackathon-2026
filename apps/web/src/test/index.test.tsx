@@ -492,7 +492,7 @@ describe("Dashboard - IncompleteTasksCard", () => {
     expect(await screen.findByText("未設定")).toBeInTheDocument();
   });
 
-  it("5件以上のとき先頭4件のみ表示される", async () => {
+  it("5件以上のとき全件スクロール表示される", async () => {
     vi.mocked(api.tasks.me.$get).mockResolvedValue(
       mockJson(
         Array.from({ length: 5 }, (_, i) =>
@@ -503,7 +503,7 @@ describe("Dashboard - IncompleteTasksCard", () => {
     renderDashboard();
     await screen.findByText("タスク1");
     expect(screen.getByText("タスク4")).toBeInTheDocument();
-    expect(screen.queryByText("タスク5")).not.toBeInTheDocument();
+    expect(screen.getByText("タスク5")).toBeInTheDocument();
   });
 
   it("ヘッダーに件数バッジが表示される", async () => {
