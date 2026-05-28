@@ -59,6 +59,8 @@ export const decisionItemsRoute = new Hono<{ Variables: AuthVariables }>()
     }
 
     // 一般編集 UI からの誤用防止。draft へは decided/open/cancelled からのみ遷移可。
+    // draft/reviewing（AI処理中）からは戻せない。task と異なり in_progress/done 相当の
+    // 概念がないため、決定済み・未決・却下済みの3状態を対象にしている。
     if (input.status === "draft") {
       const current = access.item.status;
       if (

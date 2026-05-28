@@ -154,6 +154,8 @@ export function useReviewItems({
       }
 
       const updated = (await res.json()) as ReviewItem;
+      // queryKey は status: "pending" 前提。pending でなくなった項目はリストから除く。
+      // status: "all" 文脈で呼ぶと approved 項目が一瞬消えて refetch で戻るチラツキが起きる。
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
         isReviewPending(updated.status)
           ? (prev ?? []).map((i) => (i.id === id ? updated : i))
@@ -223,6 +225,7 @@ export function useReviewItems({
             ? item.status
             : "decided";
 
+      // queryKey は status: "pending" 前提。pending でなくなった項目はリストから除く。
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
         isReviewPending(reviewStatus)
           ? (prev ?? []).map((i) =>
@@ -298,6 +301,7 @@ export function useReviewItems({
     }
 
     const updated = (await res.json()) as ReviewItem;
+    // queryKey は status: "pending" 前提。pending でなくなった項目はリストから除く。
     queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
       isReviewPending(updated.status)
         ? (prev ?? []).map((i) => (i.id === id ? updated : i))
