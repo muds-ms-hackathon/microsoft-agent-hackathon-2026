@@ -14,7 +14,7 @@ export type AmbiguityResolution =
 
 type ReviewItemStatus = "pending" | "all" | "decided";
 
-const isReviewPending = (status: string) =>
+export const isReviewPending = (status: string) =>
   status === "draft" || status === "reviewing";
 
 // "pending"/"all" など全バリアントをまとめて invalidate するために status を含まない。

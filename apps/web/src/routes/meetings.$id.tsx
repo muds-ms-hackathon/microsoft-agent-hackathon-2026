@@ -12,7 +12,10 @@ import {
   TYPE_LABELS,
   type ReviewItem,
 } from "@/features/review/types";
-import { useReviewItems } from "@/features/review/useReviewItems";
+import {
+  isReviewPending,
+  useReviewItems,
+} from "@/features/review/useReviewItems";
 import { AssigneeFilter } from "@/features/tasks/components/AssigneeFilter";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
@@ -112,8 +115,8 @@ export function MeetingDetailView({
     isError: reviewItemsError,
     resetToPending,
   } = useReviewItems({ meetingId: id, status: "all" });
-  const pendingCount = meetingReviewItems.filter(
-    (i) => i.status === "draft" || i.status === "reviewing",
+  const pendingCount = meetingReviewItems.filter((i) =>
+    isReviewPending(i.status),
   ).length;
 
   const statusArr = parseStatusParam(search.status);
@@ -418,9 +421,7 @@ function ReviewAccordionItem({
 }) {
   const [open, setOpen] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
-  const pendingCount = items.filter(
-    (i) => i.status === "draft" || i.status === "reviewing",
-  ).length;
+  const pendingCount = items.filter((i) => isReviewPending(i.status)).length;
 
   const handleResetToPending = async (id: string) => {
     setResetError(null);
@@ -473,8 +474,7 @@ function ReviewAccordionItem({
           )}
           <ul className="border-t divide-y">
             {items.map((item) => {
-              const isPending =
-                item.status === "draft" || item.status === "reviewing";
+              const isPending = isReviewPending(item.status);
               const canReset =
                 !isPending && item.sourceTable !== "ambiguous_info";
               return (
