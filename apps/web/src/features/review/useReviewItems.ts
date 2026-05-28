@@ -294,11 +294,57 @@ export function useReviewItems({
     );
   };
 
+  const resetToPending = async (id: string): Promise<void> => {
+    const item = (query.data ?? []).find((i) => i.id === id);
+    if (!item) throw new Error(`resetToPending: id="${id}" が見つかりません`);
+
+    if (item.sourceTable === "decision_item") {
+      const body: Record<string, unknown> = {
+        version: item.version,
+        status: "draft",
+      };
+      if (item.type === "open_issue") body.decisionState = "open";
+
+      const res = await api["decision-items"][":id"].$patch(
+        {
+          param: { id },
+          json: body as Parameters<
+            (typeof api)["decision-items"][":id"]["$patch"]
+          >[0]["json"],
+        },
+        authHeaders(),
+      );
+      if (!res.ok) throw new Error(`更新に失敗しました (${res.status})`);
+      await queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+
+    if (item.sourceTable === "task") {
+      const res = await api.tasks[":id"].$patch(
+        {
+          param: { id },
+          json: { version: item.version, status: "draft" } as Parameters<
+            (typeof api.tasks)[":id"]["$patch"]
+          >[0]["json"],
+        },
+        authHeaders(),
+      );
+      if (!res.ok) throw new Error(`更新に失敗しました (${res.status})`);
+      await queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+
+    throw new Error(
+      `resetToPending: 未対応の sourceTable="${item.sourceTable}"`,
+    );
+  };
+
   return {
     items: query.data ?? [],
     isLoading: query.isLoading,
     isError: query.isError,
     updateItem,
     resolveAmbiguity,
+    resetToPending,
   };
 }

@@ -1,4 +1,10 @@
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import {
   REVIEW_ITEM_TYPES,
@@ -24,7 +30,7 @@ import { authAtom } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -101,7 +107,7 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
-  const { items: meetingReviewItems, isError: reviewItemsError } =
+  const { items: meetingReviewItems, isError: reviewItemsError, resetToPending } =
     useReviewItems({ meetingId: id, status: "all" });
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
@@ -341,7 +347,7 @@ export function MeetingDetailView({
               );
               if (typeItems.length === 0) return null;
               return (
-                <ReviewAccordionItem key={type} type={type} items={typeItems} />
+                <ReviewAccordionItem key={type} type={type} items={typeItems} onResetToPending={resetToPending} />
               );
             })}
           </div>
@@ -396,9 +402,11 @@ function ResolutionBadge({
 function ReviewAccordionItem({
   type,
   items,
+  onResetToPending,
 }: {
   type: (typeof REVIEW_ITEM_TYPES)[number];
   items: ReviewItem[];
+  onResetToPending?: (id: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const pendingCount = items.filter(
@@ -440,23 +448,53 @@ function ReviewAccordionItem({
       </button>
       {open && (
         <ul className="border-t divide-y">
-          {items.map((item) => (
-            <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm">{item.title}</p>
-                <ResolutionBadge
-                  type={type}
-                  status={item.status}
-                  resolutionType={item.resolutionType}
-                />
-              </div>
-              {item.sourceContext && (
-                <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                  {item.sourceContext}
-                </p>
-              )}
-            </li>
-          ))}
+          {items.map((item) => {
+            const isPending =
+              item.status === "draft" || item.status === "reviewing";
+            const canReset =
+              !isPending &&
+              onResetToPending &&
+              item.sourceTable !== "ambiguous_info";
+            return (
+              <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm">{item.title}</p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <ResolutionBadge
+                      type={type}
+                      status={item.status}
+                      resolutionType={item.resolutionType}
+                    />
+                    {canReset && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                            aria-label="メニュー"
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => onResetToPending(item.id)}
+                          >
+                            レビュー待ちに戻す
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                </div>
+                {item.sourceContext && (
+                  <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                    {item.sourceContext}
+                  </p>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
