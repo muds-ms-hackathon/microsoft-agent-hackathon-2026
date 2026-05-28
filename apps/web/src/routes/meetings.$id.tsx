@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import {
   REVIEW_ITEM_TYPES,
@@ -182,6 +182,85 @@ export function MeetingDetailView({
         </div>
       </header>
 
+      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card aria-label="会議要約" className="gap-0 py-0 overflow-hidden h-75">
+          <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+            <span className="text-sm font-semibold flex-1">会議要約</span>
+          </div>
+          <div className="px-5 py-4 flex-1 overflow-y-auto">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {detail.latestAnalysisRun?.summary ?? "要約はまだありません"}
+            </p>
+          </div>
+        </Card>
+
+        {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
+        <Card aria-label="AI抽出結果" className="gap-0 py-0 overflow-hidden h-75">
+          <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+            <span className="text-sm font-semibold flex-1">AI抽出結果</span>
+            {meetingReviewItems.length > 0 && (
+              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+                {meetingReviewItems.length}
+              </span>
+            )}
+            {pendingCount > 0 ? (
+              <Link
+                to="/review"
+                search={{
+                  recurringMeetingId: detail.recurringMeeting.id,
+                  meetingId: id,
+                  from: "hub",
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronRight size={15} />
+              </Link>
+            ) : meetingReviewItems.length > 0 ? (
+              <Link
+                to="/review"
+                search={{
+                  recurringMeetingId: detail.recurringMeeting.id,
+                  meetingId: id,
+                  from: "hub",
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronRight size={15} />
+              </Link>
+            ) : null}
+          </div>
+          <div className="px-5 py-4 flex-1 overflow-y-auto">
+            {reviewItemsError ? (
+              <p className="text-sm text-destructive">
+                AI抽出結果の取得に失敗しました
+              </p>
+            ) : meetingReviewItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                AI抽出結果はまだありません
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {REVIEW_ITEM_TYPES.map((type) => {
+                  const typeItems = meetingReviewItems.filter(
+                    (i) => i.type === type,
+                  );
+                  if (typeItems.length === 0) return null;
+                  return (
+                    <ReviewAccordionItem
+                      key={type}
+                      type={type}
+                      items={typeItems}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* 下段: タスク（フルwidth） */}
       <section aria-label="タスク" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">タスク</h2>
@@ -288,63 +367,6 @@ export function MeetingDetailView({
             ariaLabel="会議由来のタスク一覧"
             now={now}
           />
-        )}
-      </section>
-
-      {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
-      <section aria-label="AI抽出結果" className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">AI抽出結果</h2>
-          {pendingCount > 0 ? (
-            <Link
-              to="/review"
-              search={{
-                recurringMeetingId: detail.recurringMeeting.id,
-                meetingId: id,
-                from: "hub",
-              }}
-            >
-              <Button size="sm" className="gap-1">
-                レビューして確定する（{pendingCount}件）
-                <ChevronRight size={14} />
-              </Button>
-            </Link>
-          ) : meetingReviewItems.length > 0 ? (
-            <Link
-              to="/review"
-              search={{
-                recurringMeetingId: detail.recurringMeeting.id,
-                meetingId: id,
-                from: "hub",
-              }}
-            >
-              <Button size="sm" variant="outline" className="gap-1">
-                確定済み（レビュー内容を見る）
-                <ChevronRight size={14} />
-              </Button>
-            </Link>
-          ) : null}
-        </div>
-        {reviewItemsError ? (
-          <p className="text-sm text-destructive">
-            AI抽出結果の取得に失敗しました
-          </p>
-        ) : meetingReviewItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            AI抽出結果はまだありません
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {REVIEW_ITEM_TYPES.map((type) => {
-              const typeItems = meetingReviewItems.filter(
-                (i) => i.type === type,
-              );
-              if (typeItems.length === 0) return null;
-              return (
-                <ReviewAccordionItem key={type} type={type} items={typeItems} />
-              );
-            })}
-          </div>
         )}
       </section>
     </section>
