@@ -313,6 +313,7 @@ function IncompleteTasksCard() {
         )}
         <Link
           to="/tasks"
+          search={{ status: "todo,in_progress" }}
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowRight size={15} />
