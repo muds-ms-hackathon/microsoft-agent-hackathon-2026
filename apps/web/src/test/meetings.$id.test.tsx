@@ -309,7 +309,7 @@ describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
         makeReviewItem({
           sourceTable: "ambiguous_info",
           type: "ambiguity",
-          status: "resolved",
+          status: "decided",
         }),
       ]),
     );
