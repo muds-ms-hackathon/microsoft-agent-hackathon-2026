@@ -539,6 +539,111 @@ describe("useReviewItems — updateItem", () => {
   });
 });
 
+describe("useReviewItems — resetToPending", () => {
+  it("decision_item の レビュー待ちに戻す で PATCH に status:draft が含まれる", async () => {
+    const item = makeItem({
+      id: "di-reset",
+      sourceTable: "decision_item",
+      type: "decision",
+      status: "decided",
+      version: 3,
+    });
+    vi.mocked(api["decision-items"][":id"].$patch).mockResolvedValue(
+      mockJson({ ...item, status: "draft" as const }),
+    );
+    const { result } = renderHook(
+      () => useReviewItems({ meetingId: "mtg-reset" }),
+      {
+        wrapper: makeWrapper(
+          ["meetings", "mtg-reset", "review-items", "pending"],
+          [item],
+        ),
+      },
+    );
+    await act(async () => {
+      await result.current.resetToPending("di-reset");
+    });
+    expect(vi.mocked(api["decision-items"][":id"].$patch)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ status: "draft" }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("open_issue の レビュー待ちに戻す で PATCH に status:draft と decisionState:open が含まれる", async () => {
+    const item = makeItem({
+      id: "oi-reset",
+      sourceTable: "decision_item",
+      type: "open_issue",
+      status: "open",
+      version: 2,
+    });
+    vi.mocked(api["decision-items"][":id"].$patch).mockResolvedValue(
+      mockJson({ ...item, status: "draft" as const }),
+    );
+    const { result } = renderHook(
+      () => useReviewItems({ meetingId: "mtg-oi-reset" }),
+      {
+        wrapper: makeWrapper(
+          ["meetings", "mtg-oi-reset", "review-items", "pending"],
+          [item],
+        ),
+      },
+    );
+    await act(async () => {
+      await result.current.resetToPending("oi-reset");
+    });
+    expect(vi.mocked(api["decision-items"][":id"].$patch)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          status: "draft",
+          decisionState: "open",
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("task_candidate の レビュー待ちに戻す で PATCH に status:draft が含まれる", async () => {
+    const item = makeItem({
+      id: "t-reset",
+      sourceTable: "task",
+      type: "task_candidate",
+      status: "decided",
+      version: 1,
+    });
+    vi.mocked(api.tasks[":id"].$patch).mockResolvedValue(
+      mockJson({
+        id: "t-reset",
+        title: item.title,
+        status: "draft",
+        assignees: [],
+        dueDate: null,
+        version: 2,
+      }),
+    );
+    const { result } = renderHook(
+      () => useReviewItems({ meetingId: "mtg-t-reset" }),
+      {
+        wrapper: makeWrapper(
+          ["meetings", "mtg-t-reset", "review-items", "pending"],
+          [item],
+        ),
+      },
+    );
+    await act(async () => {
+      await result.current.resetToPending("t-reset");
+    });
+    expect(vi.mocked(api.tasks[":id"].$patch)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ status: "draft" }),
+      }),
+      expect.anything(),
+    );
+  });
+});
+
 describe("useReviewItems — resolveAmbiguity", () => {
   const ambigItem = makeItem({
     id: "amb-1",
