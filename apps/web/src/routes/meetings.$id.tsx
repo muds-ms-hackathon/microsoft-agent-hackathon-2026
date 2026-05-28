@@ -102,7 +102,7 @@ export function MeetingDetailView({
 }) {
   const detailQuery = useMeetingDetail(id);
   const { items: meetingReviewItems, isError: reviewItemsError } =
-    useReviewItems({ meetingId: id });
+    useReviewItems({ meetingId: id, status: "all" });
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;

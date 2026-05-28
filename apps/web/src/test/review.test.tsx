@@ -451,7 +451,7 @@ describe("useReviewItems — updateItem", () => {
 
     const { result } = renderHook(
       () => useReviewItems({ meetingId: "mtg-di" }),
-      { wrapper: makeWrapper(["meetings", "mtg-di", "review-items"], [item]) },
+      { wrapper: makeWrapper(["meetings", "mtg-di", "review-items", "pending"], [item]) },
     );
 
     await act(async () => {
@@ -466,7 +466,7 @@ describe("useReviewItems — updateItem", () => {
     );
   });
 
-  it("open_issue 承認で PATCH に decisionState:confirmed が含まれる", async () => {
+  it("open_issue 承認で PATCH に status:open と decisionState:confirmed が含まれる", async () => {
     const item = makeItem({
       id: "di-2",
       sourceTable: "decision_item",
@@ -474,12 +474,12 @@ describe("useReviewItems — updateItem", () => {
       version: 1,
     });
     vi.mocked(api["decision-items"][":id"].$patch).mockResolvedValue(
-      mockJson({ ...item, status: "decided" as const }),
+      mockJson({ ...item, status: "open" as const }),
     );
 
     const { result } = renderHook(
       () => useReviewItems({ meetingId: "mtg-oi" }),
-      { wrapper: makeWrapper(["meetings", "mtg-oi", "review-items"], [item]) },
+      { wrapper: makeWrapper(["meetings", "mtg-oi", "review-items", "pending"], [item]) },
     );
 
     await act(async () => {
@@ -489,7 +489,7 @@ describe("useReviewItems — updateItem", () => {
     expect(vi.mocked(api["decision-items"][":id"].$patch)).toHaveBeenCalledWith(
       expect.objectContaining({
         json: expect.objectContaining({
-          status: "decided",
+          status: "open",
           decisionState: "confirmed",
         }),
       }),
@@ -519,7 +519,7 @@ describe("useReviewItems — updateItem", () => {
     const { result } = renderHook(
       () => useReviewItems({ meetingId: "mtg-task" }),
       {
-        wrapper: makeWrapper(["meetings", "mtg-task", "review-items"], [item]),
+        wrapper: makeWrapper(["meetings", "mtg-task", "review-items", "pending"], [item]),
       },
     );
 
@@ -546,7 +546,7 @@ describe("useReviewItems — resolveAmbiguity", () => {
     type: "ambiguity",
     version: 0,
   });
-  const ambigKey = ["meetings", "mtg-amb", "review-items"] as const;
+  const ambigKey = ["meetings", "mtg-amb", "review-items", "pending"] as const;
 
   it("resolution:task で PATCH に resolutionType:task が含まれる", async () => {
     vi.mocked(api["ambiguous-infos"][":id"].$patch).mockResolvedValue(

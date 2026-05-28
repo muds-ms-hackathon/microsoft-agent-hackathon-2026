@@ -12,25 +12,31 @@ export type AmbiguityResolution =
   | { resolution: "decision_item" }
   | { resolution: "rejected" };
 
+type ReviewItemStatus = "pending" | "all" | "decided";
+
 export function reviewItemsQueryKey(params: {
   meetingId?: string;
   recurringMeetingId?: string;
   organizationId?: string;
+  status?: ReviewItemStatus;
 }) {
+  const status = params.status ?? "pending";
   if (params.meetingId) {
-    return ["meetings", params.meetingId, "review-items"] as const;
+    return ["meetings", params.meetingId, "review-items", status] as const;
   }
   if (params.recurringMeetingId) {
     return [
       "recurring-meetings",
       params.recurringMeetingId,
       "review-items",
+      status,
     ] as const;
   }
   return [
     "organizations",
     params.organizationId ?? "_none",
     "review-items",
+    status,
   ] as const;
 }
 
@@ -38,17 +44,21 @@ export function useReviewItems({
   meetingId,
   recurringMeetingId,
   organizationId,
+  status,
 }: {
   meetingId?: string;
   recurringMeetingId?: string;
   organizationId?: string;
+  status?: ReviewItemStatus;
 }) {
   const queryClient = useQueryClient();
   const queryKey = reviewItemsQueryKey({
     meetingId,
     recurringMeetingId,
     organizationId,
+    status,
   });
+  const statusQuery = status && status !== "pending" ? { status } : {};
 
   const query = useQuery<ReviewItem[]>({
     queryKey,
@@ -56,17 +66,17 @@ export function useReviewItems({
       let res: Response;
       if (meetingId) {
         res = await api.meetings[":id"]["review-items"].$get(
-          { param: { id: meetingId }, query: {} },
+          { param: { id: meetingId }, query: statusQuery },
           authHeaders(),
         );
       } else if (recurringMeetingId) {
         res = await api["recurring-meetings"][":id"]["review-items"].$get(
-          { param: { id: recurringMeetingId }, query: {} },
+          { param: { id: recurringMeetingId }, query: statusQuery },
           authHeaders(),
         );
       } else {
         res = await api.organizations[":id"]["review-items"].$get(
-          { param: { id: organizationId ?? "" }, query: {} },
+          { param: { id: organizationId ?? "" }, query: statusQuery },
           authHeaders(),
         );
       }
@@ -87,12 +97,14 @@ export function useReviewItems({
     if (item?.sourceTable === "decision_item") {
       const body: Record<string, unknown> = { version: item.version };
       if (updates.status !== undefined) {
-        // DecisionItem は "rejected" を持たず "cancelled" が対応する
-        body.status =
-          updates.status === "rejected" ? "cancelled" : updates.status;
-        // open_issue 承認時は AI の次回持ち越しを防ぐため confirmed に昇格する
-        if (updates.status === "decided" && item.type === "open_issue") {
+        if (updates.status === "rejected") {
+          body.status = "cancelled";
+        } else if (updates.status === "decided" && item.type === "open_issue") {
+          // 未決事項の承認は "open"（未決確定）に対応する
+          body.status = "open";
           body.decisionState = "confirmed";
+        } else {
+          body.status = updates.status;
         }
       }
       if (updates.title !== undefined) body.title = updates.title;
@@ -127,8 +139,12 @@ export function useReviewItems({
       }
 
       const updated = (await res.json()) as ReviewItem;
+      const isPending =
+        updated.status === "draft" || updated.status === "reviewing";
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-        (prev ?? []).map((i) => (i.id === id ? updated : i)),
+        isPending
+          ? (prev ?? []).map((i) => (i.id === id ? updated : i))
+          : (prev ?? []).filter((i) => i.id !== id),
       );
       return;
     }
@@ -193,19 +209,23 @@ export function useReviewItems({
             ? item.status
             : "decided";
 
+      const isTaskPending =
+        reviewStatus === "draft" || reviewStatus === "reviewing";
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-        (prev ?? []).map((i) =>
-          i.id === id
-            ? {
-                ...i,
-                title: task.title,
-                assignees: task.assignees,
-                deadline: task.dueDate,
-                version: task.version,
-                status: reviewStatus,
-              }
-            : i,
-        ),
+        isTaskPending
+          ? (prev ?? []).map((i) =>
+              i.id === id
+                ? {
+                    ...i,
+                    title: task.title,
+                    assignees: task.assignees,
+                    deadline: task.dueDate,
+                    version: task.version,
+                    status: reviewStatus,
+                  }
+                : i,
+            )
+          : (prev ?? []).filter((i) => i.id !== id),
       );
       return;
     }
@@ -265,8 +285,12 @@ export function useReviewItems({
     }
 
     const updated = (await res.json()) as ReviewItem;
+    const isAmbigPending =
+      updated.status === "draft" || updated.status === "reviewing";
     queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-      (prev ?? []).map((i) => (i.id === id ? updated : i)),
+      isAmbigPending
+        ? (prev ?? []).map((i) => (i.id === id ? updated : i))
+        : (prev ?? []).filter((i) => i.id !== id),
     );
   };
 
