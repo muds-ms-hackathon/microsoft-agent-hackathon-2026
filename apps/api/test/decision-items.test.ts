@@ -339,6 +339,32 @@ describe("PATCH /decision-items/:id", () => {
     expect(res.status).toBe(200);
   });
 
+  it("status=draft のとき現在が draft なら 400", async () => {
+    mockDecisionItemFindUnique.mockResolvedValue(
+      mockDecisionItemRaw({ status: "draft" }) as never,
+    );
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/decision-items/di-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("status=draft のとき現在が reviewing なら 400", async () => {
+    mockDecisionItemFindUnique.mockResolvedValue(
+      mockDecisionItemRaw({ status: "reviewing" }) as never,
+    );
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/decision-items/di-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("全フィールド未指定の更新は 400", async () => {
     const res = await app.request("/decision-items/di-1", {
       method: "PATCH",

@@ -554,6 +554,34 @@ describe("PATCH /tasks/:id", () => {
     expect(res.status).toBe(200);
   });
 
+  it("status=draft のとき現在が in_progress なら 400", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      ...sampleTask,
+      status: "in_progress",
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("status=draft のとき現在が done なら 400", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      ...sampleTask,
+      status: "done",
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("全フィールド未指定の更新は 400", async () => {
     const res = await app.request("/tasks/task-1", {
       method: "PATCH",
