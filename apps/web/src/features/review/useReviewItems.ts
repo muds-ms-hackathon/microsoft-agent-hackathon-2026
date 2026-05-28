@@ -141,7 +141,7 @@ export function useReviewItems({
       );
 
       if (res.status === 409) {
-        await queryClient.invalidateQueries({ queryKey });
+        await queryClient.invalidateQueries({ queryKey: baseQueryKey });
         throw new Error(
           "他のユーザーが先に更新しました。最新の状態を取得しました。",
         );
@@ -158,6 +158,7 @@ export function useReviewItems({
           ? (prev ?? []).map((i) => (i.id === id ? updated : i))
           : (prev ?? []).filter((i) => i.id !== id),
       );
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       return;
     }
 
@@ -191,7 +192,7 @@ export function useReviewItems({
       );
 
       if (res.status === 409) {
-        await queryClient.invalidateQueries({ queryKey });
+        await queryClient.invalidateQueries({ queryKey: baseQueryKey });
         throw new Error(
           "他のユーザーが先に更新しました。最新の状態を取得しました。",
         );
@@ -239,6 +240,7 @@ export function useReviewItems({
             )
           : (prev ?? []).filter((i) => i.id !== id),
       );
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       return;
     }
 
@@ -287,7 +289,7 @@ export function useReviewItems({
     );
 
     if (res.status === 409) {
-      await queryClient.invalidateQueries({ queryKey });
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       throw new Error(
         "他のユーザーが先に更新しました。最新の状態を取得しました。",
       );
@@ -304,6 +306,7 @@ export function useReviewItems({
         ? (prev ?? []).map((i) => (i.id === id ? updated : i))
         : (prev ?? []).filter((i) => i.id !== id),
     );
+    await queryClient.invalidateQueries({ queryKey: baseQueryKey });
   };
 
   const resetToPending = async (id: string): Promise<void> => {
