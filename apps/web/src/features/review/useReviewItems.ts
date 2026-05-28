@@ -274,6 +274,7 @@ export function useReviewItems({
     items: query.data ?? [],
     isLoading: query.isLoading,
     isError: query.isError,
+    refetch: query.refetch,
     updateItem,
     resolveAmbiguity,
   };

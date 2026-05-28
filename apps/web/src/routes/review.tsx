@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { RetryButton } from "@/components/ui/RetryButton";
 import { AddReviewItemDialog } from "@/features/review/components/AddReviewItemDialog";
 import { ReviewItemCard } from "@/features/review/components/ReviewItemCard";
 import {
@@ -57,6 +58,8 @@ export function ReviewView({
   currentOrgId = null,
   items,
   isLoading = false,
+  isError = false,
+  refetch,
   onUpdate,
   onResolveAmbiguity,
   rmName = null,
@@ -67,6 +70,8 @@ export function ReviewView({
   currentOrgId?: string | null;
   items: ReviewItem[];
   isLoading?: boolean;
+  isError?: boolean;
+  refetch?: () => void;
   onUpdate: (
     id: string,
     updates: Partial<Omit<ReviewItem, "id">>,
@@ -218,6 +223,13 @@ export function ReviewView({
         <div className="flex items-center justify-center rounded-xl border border-dashed py-20">
           <p className="text-muted-foreground">読み込み中...</p>
         </div>
+      ) : isError ? (
+        <span className="flex items-center gap-1">
+          <p className="text-sm text-destructive">
+            レビューアイテムの取得に失敗しました
+          </p>
+          {refetch && <RetryButton onClick={refetch} />}
+        </span>
       ) : isCompleted ? (
         // レビュー完了状態
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 gap-4">
@@ -259,15 +271,16 @@ function ReviewPage() {
   const currentOrgId = useAtomValue(currentOrganizationIdAtom);
   const fromHub = search.from === "hub";
 
-  const { items, isLoading, updateItem, resolveAmbiguity } = useReviewItems({
-    meetingId: search.meetingId,
-    recurringMeetingId: search.recurringMeetingId,
-    // 定例・会議いずれも未指定（全表示）の場合は組織全体から取得する
-    organizationId:
-      !search.meetingId && !search.recurringMeetingId && currentOrgId
-        ? currentOrgId
-        : undefined,
-  });
+  const { items, isLoading, isError, refetch, updateItem, resolveAmbiguity } =
+    useReviewItems({
+      meetingId: search.meetingId,
+      recurringMeetingId: search.recurringMeetingId,
+      // 定例・会議いずれも未指定（全表示）の場合は組織全体から取得する
+      organizationId:
+        !search.meetingId && !search.recurringMeetingId && currentOrgId
+          ? currentOrgId
+          : undefined,
+    });
 
   const rmDetailQuery = useRecurringMeetingDetail(
     search.recurringMeetingId ?? "",
@@ -285,6 +298,8 @@ function ReviewPage() {
       currentOrgId={currentOrgId}
       items={items}
       isLoading={isLoading}
+      isError={isError}
+      refetch={refetch}
       onUpdate={updateItem}
       onResolveAmbiguity={resolveAmbiguity}
       rmName={rmName}

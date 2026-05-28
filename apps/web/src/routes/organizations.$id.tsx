@@ -1,3 +1,4 @@
+import { RetryButton } from "@/components/ui/RetryButton";
 import { DeleteMemberDialog } from "@/features/organizations/components/DeleteMemberDialog";
 import { DeleteOrganizationDialog } from "@/features/organizations/components/DeleteOrganizationDialog";
 import { EditOrganizationDialog } from "@/features/organizations/components/EditOrganizationDialog";
@@ -122,9 +123,12 @@ export function OrganizationDetailView({
         {membersQuery.isError ? (
           // members だけ取得失敗したケース。空配列にフォールバックすると
           // 「メンバーが 0 人」に見えてしまうため、明示的にエラー表示する。
-          <p className="text-destructive text-sm">
-            メンバーの取得に失敗しました
-          </p>
+          <span className="flex items-center gap-1">
+            <p className="text-sm text-destructive">
+              メンバーの取得に失敗しました
+            </p>
+            <RetryButton onClick={() => membersQuery.refetch()} />
+          </span>
         ) : (
           <ul aria-label="メンバー一覧" className="divide-y rounded-md border">
             {members.map((m) => (

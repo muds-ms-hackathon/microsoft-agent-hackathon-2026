@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { RetryButton } from "@/components/ui/RetryButton";
 import { CreateMeetingDialog } from "@/features/recurring-meetings/components/CreateMeetingDialog";
 import { MeetingCard } from "@/features/recurring-meetings/components/MeetingCard";
 import { useRecurringMeetingDetail } from "@/features/recurring-meetings/hooks/useRecurringMeetingDetail";
@@ -215,7 +216,10 @@ export function RecurringMeetingDetailView({
 
       {meetingsQuery.isError ? (
         // 会議取得だけ失敗したケース。定例ヘッダは見せ続けたいので分離して表示。
-        <p className="text-destructive text-sm">会議一覧の取得に失敗しました</p>
+        <span className="flex items-center gap-1">
+          <p className="text-sm text-destructive">会議一覧の取得に失敗しました</p>
+          <RetryButton onClick={() => meetingsQuery.refetch()} />
+        </span>
       ) : (
         <>
           <section aria-label="今後の会議" className="space-y-3">
@@ -342,7 +346,10 @@ export function RecurringMeetingDetailView({
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
         ) : tasksQuery.isError ? (
-          <p className="text-destructive text-sm">タスクの取得に失敗しました</p>
+          <span className="flex items-center gap-1">
+            <p className="text-sm text-destructive">タスクの取得に失敗しました</p>
+            <RetryButton onClick={() => tasksQuery.refetch()} />
+          </span>
         ) : (tasksQuery.data ?? []).length === 0 ? (
           <p className="text-muted-foreground">
             このプロジェクトのタスクはまだありません

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { RetryButton } from "@/components/ui/RetryButton";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import {
   REVIEW_ITEM_TYPES,
@@ -101,8 +102,11 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
-  const { items: meetingReviewItems, isError: reviewItemsError } =
-    useReviewItems({ meetingId: id });
+  const {
+    items: meetingReviewItems,
+    isError: reviewItemsError,
+    refetch: refetchReviewItems,
+  } = useReviewItems({ meetingId: id });
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;
@@ -270,7 +274,10 @@ export function MeetingDetailView({
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
         ) : tasksQuery.isError ? (
-          <p className="text-destructive text-sm">タスクの取得に失敗しました</p>
+          <span className="flex items-center gap-1">
+            <p className="text-sm text-destructive">タスクの取得に失敗しました</p>
+            <RetryButton onClick={() => tasksQuery.refetch()} />
+          </span>
         ) : (tasksQuery.data ?? []).length === 0 ? (
           <p className="text-muted-foreground">
             この会議から発生したタスクはまだありません
@@ -326,9 +333,12 @@ export function MeetingDetailView({
           ) : null}
         </div>
         {reviewItemsError ? (
-          <p className="text-sm text-destructive">
-            AI抽出結果の取得に失敗しました
-          </p>
+          <span className="flex items-center gap-1">
+            <p className="text-sm text-destructive">
+              AI抽出結果の取得に失敗しました
+            </p>
+            <RetryButton onClick={refetchReviewItems} />
+          </span>
         ) : meetingReviewItems.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             AI抽出結果はまだありません
