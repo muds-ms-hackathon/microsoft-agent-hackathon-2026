@@ -137,7 +137,6 @@ function makeTask(overrides: Partial<TaskListItem> = {}): TaskListItem {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.useRealTimers();
 });
 
 function render() {

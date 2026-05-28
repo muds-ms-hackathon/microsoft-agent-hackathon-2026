@@ -345,9 +345,9 @@ function IncompleteTasksCard() {
             const urgency = calcUrgency(task.dueDate);
             const style = URGENCY_STYLE[urgency];
             const meetingName =
-              task.originMeeting?.title ??
               task.recurringMeetings[0]?.name ??
-              "";
+              task.originMeeting?.title ??
+              null;
             return (
               <div
                 key={task.id}
@@ -360,9 +360,11 @@ function IncompleteTasksCard() {
                     <span className="text-sm font-medium truncate">
                       {task.title}
                     </span>
-                    <span className="text-xs text-muted-foreground truncate">
-                      {meetingName}
-                    </span>
+                    {meetingName && (
+                      <span className="text-xs text-muted-foreground truncate">
+                        {meetingName}
+                      </span>
+                    )}
                   </div>
                   <span className={`text-xs shrink-0 ${style.deadline}`}>
                     {formatDeadline(task.dueDate, urgency)}
