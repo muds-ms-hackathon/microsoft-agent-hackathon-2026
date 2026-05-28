@@ -14,6 +14,29 @@ export type AmbiguityResolution =
 
 type ReviewItemStatus = "pending" | "all" | "decided";
 
+// ステータスを含まない基底キー。全バリアントをまとめて invalidate するときに使う。
+function reviewItemsBaseQueryKey(params: {
+  meetingId?: string;
+  recurringMeetingId?: string;
+  organizationId?: string;
+}) {
+  if (params.meetingId) {
+    return ["meetings", params.meetingId, "review-items"] as const;
+  }
+  if (params.recurringMeetingId) {
+    return [
+      "recurring-meetings",
+      params.recurringMeetingId,
+      "review-items",
+    ] as const;
+  }
+  return [
+    "organizations",
+    params.organizationId ?? "_none",
+    "review-items",
+  ] as const;
+}
+
 export function reviewItemsQueryKey(params: {
   meetingId?: string;
   recurringMeetingId?: string;
@@ -21,23 +44,7 @@ export function reviewItemsQueryKey(params: {
   status?: ReviewItemStatus;
 }) {
   const status = params.status ?? "pending";
-  if (params.meetingId) {
-    return ["meetings", params.meetingId, "review-items", status] as const;
-  }
-  if (params.recurringMeetingId) {
-    return [
-      "recurring-meetings",
-      params.recurringMeetingId,
-      "review-items",
-      status,
-    ] as const;
-  }
-  return [
-    "organizations",
-    params.organizationId ?? "_none",
-    "review-items",
-    status,
-  ] as const;
+  return [...reviewItemsBaseQueryKey(params), status] as const;
 }
 
 export function useReviewItems({
@@ -52,6 +59,11 @@ export function useReviewItems({
   status?: ReviewItemStatus;
 }) {
   const queryClient = useQueryClient();
+  const baseQueryKey = reviewItemsBaseQueryKey({
+    meetingId,
+    recurringMeetingId,
+    organizationId,
+  });
   const queryKey = reviewItemsQueryKey({
     meetingId,
     recurringMeetingId,
@@ -315,7 +327,7 @@ export function useReviewItems({
         authHeaders(),
       );
       if (!res.ok) throw new Error(`更新に失敗しました (${res.status})`);
-      await queryClient.invalidateQueries({ queryKey });
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       return;
     }
 
@@ -330,7 +342,7 @@ export function useReviewItems({
         authHeaders(),
       );
       if (!res.ok) throw new Error(`更新に失敗しました (${res.status})`);
-      await queryClient.invalidateQueries({ queryKey });
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       return;
     }
 
