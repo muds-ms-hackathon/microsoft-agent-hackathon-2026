@@ -472,52 +472,52 @@ function ReviewAccordionItem({
             </p>
           )}
           <ul className="border-t divide-y">
-          {items.map((item) => {
-            const isPending =
-              item.status === "draft" || item.status === "reviewing";
-            const canReset =
-              !isPending && item.sourceTable !== "ambiguous_info";
-            return (
-              <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm">{item.title}</p>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <ResolutionBadge
-                      type={type}
-                      status={item.status}
-                      resolutionType={item.resolutionType}
-                    />
-                    {canReset && onResetToPending && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="p-0.5 rounded hover:bg-muted text-muted-foreground"
-                            aria-label="メニュー"
-                          >
-                            <MoreHorizontal size={14} />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="text-xs"
-                            onClick={() => handleResetToPending(item.id)}
-                          >
-                            レビュー待ちに戻す
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+            {items.map((item) => {
+              const isPending =
+                item.status === "draft" || item.status === "reviewing";
+              const canReset =
+                !isPending && item.sourceTable !== "ambiguous_info";
+              return (
+                <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm">{item.title}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <ResolutionBadge
+                        type={type}
+                        status={item.status}
+                        resolutionType={item.resolutionType}
+                      />
+                      {canReset && onResetToPending && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                              aria-label="メニュー"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={() => handleResetToPending(item.id)}
+                            >
+                              レビュー待ちに戻す
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
-                </div>
-                {item.sourceContext && (
-                  <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                    {item.sourceContext}
-                  </p>
-                )}
-              </li>
-            );
-          })}
+                  {item.sourceContext && (
+                    <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                      {item.sourceContext}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}
