@@ -107,8 +107,11 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
-  const { items: meetingReviewItems, isError: reviewItemsError, resetToPending } =
-    useReviewItems({ meetingId: id, status: "all" });
+  const {
+    items: meetingReviewItems,
+    isError: reviewItemsError,
+    resetToPending,
+  } = useReviewItems({ meetingId: id, status: "all" });
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;
@@ -347,7 +350,12 @@ export function MeetingDetailView({
               );
               if (typeItems.length === 0) return null;
               return (
-                <ReviewAccordionItem key={type} type={type} items={typeItems} onResetToPending={resetToPending} />
+                <ReviewAccordionItem
+                  key={type}
+                  type={type}
+                  items={typeItems}
+                  onResetToPending={resetToPending}
+                />
               );
             })}
           </div>

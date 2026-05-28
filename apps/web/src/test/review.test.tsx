@@ -451,7 +451,12 @@ describe("useReviewItems — updateItem", () => {
 
     const { result } = renderHook(
       () => useReviewItems({ meetingId: "mtg-di" }),
-      { wrapper: makeWrapper(["meetings", "mtg-di", "review-items", "pending"], [item]) },
+      {
+        wrapper: makeWrapper(
+          ["meetings", "mtg-di", "review-items", "pending"],
+          [item],
+        ),
+      },
     );
 
     await act(async () => {
@@ -479,7 +484,12 @@ describe("useReviewItems — updateItem", () => {
 
     const { result } = renderHook(
       () => useReviewItems({ meetingId: "mtg-oi" }),
-      { wrapper: makeWrapper(["meetings", "mtg-oi", "review-items", "pending"], [item]) },
+      {
+        wrapper: makeWrapper(
+          ["meetings", "mtg-oi", "review-items", "pending"],
+          [item],
+        ),
+      },
     );
 
     await act(async () => {
@@ -519,7 +529,10 @@ describe("useReviewItems — updateItem", () => {
     const { result } = renderHook(
       () => useReviewItems({ meetingId: "mtg-task" }),
       {
-        wrapper: makeWrapper(["meetings", "mtg-task", "review-items", "pending"], [item]),
+        wrapper: makeWrapper(
+          ["meetings", "mtg-task", "review-items", "pending"],
+          [item],
+        ),
       },
     );
 

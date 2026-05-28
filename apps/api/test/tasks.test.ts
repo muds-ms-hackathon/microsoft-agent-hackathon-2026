@@ -545,13 +545,13 @@ describe("PATCH /tasks/:id", () => {
     expect(res.status).toBe(200);
   });
 
-  it("status=draft は 400（AI 専用なので手動 PATCH で受け付けない）", async () => {
+  it("status=draft は 200（レビュー待ちに戻す操作で使用）", async () => {
     const res = await app.request("/tasks/task-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ version: 0, status: "draft" }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 
   it("全フィールド未指定の更新は 400", async () => {

@@ -286,7 +286,9 @@ describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
     // アコーディオンを開く
     const accordion = await screen.findByRole("button", { name: /決定事項/ });
     await userEvent.click(accordion);
-    expect(screen.getByRole("button", { name: "メニュー" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "メニュー" }),
+    ).toBeInTheDocument();
   });
 
   it("レビュー待ち（draft）アイテムには ⋯ メニューボタンが表示されない", async () => {
@@ -336,9 +338,7 @@ describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
       screen.getByRole("menuitem", { name: "レビュー待ちに戻す" }),
     );
 
-    expect(
-      vi.mocked(api["decision-items"][":id"].$patch),
-    ).toHaveBeenCalledWith(
+    expect(vi.mocked(api["decision-items"][":id"].$patch)).toHaveBeenCalledWith(
       expect.objectContaining({
         param: { id: "di-1" },
         json: expect.objectContaining({ status: "draft" }),
