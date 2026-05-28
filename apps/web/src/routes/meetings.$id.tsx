@@ -275,7 +275,9 @@ export function MeetingDetailView({
           <p className="text-muted-foreground">タスクを読み込み中...</p>
         ) : tasksQuery.isError ? (
           <span className="flex items-center gap-1">
-            <p className="text-sm text-destructive">タスクの取得に失敗しました</p>
+            <p className="text-sm text-destructive">
+              タスクの取得に失敗しました
+            </p>
             <RetryButton onClick={() => tasksQuery.refetch()} />
           </span>
         ) : (tasksQuery.data ?? []).length === 0 ? (

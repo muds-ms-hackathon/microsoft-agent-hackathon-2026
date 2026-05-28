@@ -10,6 +10,7 @@ vi.mock("@/lib/api", () => ({
       ":id": {
         $get: vi.fn(),
         tasks: { $get: vi.fn() },
+        "review-items": { $get: vi.fn() },
       },
     },
     organizations: {
@@ -91,6 +92,9 @@ const sampleTask = {
 beforeEach(() => {
   vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detail));
   vi.mocked(api.meetings[":id"].tasks.$get).mockResolvedValue(mockJson([]));
+  vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+    mockJson([]),
+  );
   // AssigneeFilter のメンバー取得はデフォルトで空配列。個別テストで上書きしない想定。
   vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
     mockJson([]),
@@ -172,6 +176,28 @@ describe("MeetingDetailView", () => {
     expect(
       await screen.findByText("会議の取得に失敗しました"),
     ).toBeInTheDocument();
+  });
+
+  it("タスク取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
+    vi.mocked(api.meetings[":id"].tasks.$get).mockRejectedValue(
+      new Error("network"),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("タスクの取得に失敗しました"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
+  });
+
+  it("AI抽出結果取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockRejectedValue(
+      new Error("network"),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("AI抽出結果の取得に失敗しました"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
   });
 
   it("「タスクを追加」ボタンが押せる（CreateTaskDialog 起動）", async () => {
