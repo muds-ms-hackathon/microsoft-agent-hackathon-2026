@@ -183,7 +183,7 @@ const REVIEW_ITEM_TYPE_ORDER: ReviewItemType[] = [
 ];
 
 function ReviewPendingCard({ orgId }: { orgId: string }) {
-  const { items, isLoading, isError } = useReviewItems({
+  const { items, isLoading, isError, refetch } = useReviewItems({
     organizationId: orgId,
   });
 
@@ -220,8 +220,15 @@ function ReviewPendingCard({ orgId }: { orgId: string }) {
             ))}
           </div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex flex-col items-center justify-center gap-2 py-8">
             <p className="text-sm text-destructive">取得に失敗しました</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              再試行
+            </button>
           </div>
         ) : countByType.length === 0 ? (
           <div className="flex items-center justify-center py-8">
@@ -298,6 +305,7 @@ function IncompleteTasksCard() {
     data = [],
     isLoading,
     isError,
+    refetch,
   } = useMyTasks({
     status: ["todo", "in_progress"],
   });
@@ -330,10 +338,17 @@ function IncompleteTasksCard() {
             ))}
           </div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex flex-col items-center justify-center gap-2 py-8">
             <p className="text-sm text-destructive">
               タスクの取得に失敗しました
             </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              再試行
+            </button>
           </div>
         ) : data.length === 0 ? (
           <div className="flex items-center justify-center py-8">
