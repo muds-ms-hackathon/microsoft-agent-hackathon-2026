@@ -14,6 +14,9 @@ export type AmbiguityResolution =
 
 type ReviewItemStatus = "pending" | "all" | "decided";
 
+const isReviewPending = (status: string) =>
+  status === "draft" || status === "reviewing";
+
 // "pending"/"all" など全バリアントをまとめて invalidate するために status を含まない。
 function reviewItemsBaseQueryKey(params: {
   meetingId?: string;
@@ -151,10 +154,8 @@ export function useReviewItems({
       }
 
       const updated = (await res.json()) as ReviewItem;
-      const isPending =
-        updated.status === "draft" || updated.status === "reviewing";
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-        isPending
+        isReviewPending(updated.status)
           ? (prev ?? []).map((i) => (i.id === id ? updated : i))
           : (prev ?? []).filter((i) => i.id !== id),
       );
@@ -218,14 +219,12 @@ export function useReviewItems({
       const reviewStatus: ReviewItem["status"] =
         task.status === "rejected"
           ? "rejected"
-          : task.status === "draft" || task.status === "reviewing"
+          : isReviewPending(task.status)
             ? item.status
             : "decided";
 
-      const isTaskPending =
-        reviewStatus === "draft" || reviewStatus === "reviewing";
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-        isTaskPending
+        isReviewPending(reviewStatus)
           ? (prev ?? []).map((i) =>
               i.id === id
                 ? {
@@ -299,10 +298,8 @@ export function useReviewItems({
     }
 
     const updated = (await res.json()) as ReviewItem;
-    const isAmbigPending =
-      updated.status === "draft" || updated.status === "reviewing";
     queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-      isAmbigPending
+      isReviewPending(updated.status)
         ? (prev ?? []).map((i) => (i.id === id ? updated : i))
         : (prev ?? []).filter((i) => i.id !== id),
     );
@@ -314,18 +311,16 @@ export function useReviewItems({
     if (!item) throw new Error(`resetToPending: id="${id}" が見つかりません`);
 
     if (item.sourceTable === "decision_item") {
-      const body: Record<string, unknown> = {
-        version: item.version,
-        status: "draft",
-      };
-      if (item.type === "open_issue") body.decisionState = "open";
-
       const res = await api["decision-items"][":id"].$patch(
         {
           param: { id },
-          json: body as Parameters<
-            (typeof api)["decision-items"][":id"]["$patch"]
-          >[0]["json"],
+          json: {
+            version: item.version,
+            status: "draft" as const,
+            ...(item.type === "open_issue" && {
+              decisionState: "open" as const,
+            }),
+          },
         },
         authHeaders(),
       );
@@ -338,9 +333,7 @@ export function useReviewItems({
       const res = await api.tasks[":id"].$patch(
         {
           param: { id },
-          json: { version: item.version, status: "draft" } as Parameters<
-            (typeof api.tasks)[":id"]["$patch"]
-          >[0]["json"],
+          json: { version: item.version, status: "draft" as const },
         },
         authHeaders(),
       );

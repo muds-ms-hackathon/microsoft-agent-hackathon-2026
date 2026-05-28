@@ -417,9 +417,19 @@ function ReviewAccordionItem({
   onResetToPending?: (id: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const pendingCount = items.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;
+
+  const handleResetToPending = async (id: string) => {
+    setResetError(null);
+    try {
+      await onResetToPending?.(id);
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : "更新に失敗しました");
+    }
+  };
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -455,14 +465,18 @@ function ReviewAccordionItem({
         />
       </button>
       {open && (
-        <ul className="border-t divide-y">
+        <>
+          {resetError && (
+            <p className="px-4 py-2 text-xs text-destructive border-t">
+              {resetError}
+            </p>
+          )}
+          <ul className="border-t divide-y">
           {items.map((item) => {
             const isPending =
               item.status === "draft" || item.status === "reviewing";
             const canReset =
-              !isPending &&
-              onResetToPending &&
-              item.sourceTable !== "ambiguous_info";
+              !isPending && item.sourceTable !== "ambiguous_info";
             return (
               <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
                 <div className="flex items-start justify-between gap-2">
@@ -473,7 +487,7 @@ function ReviewAccordionItem({
                       status={item.status}
                       resolutionType={item.resolutionType}
                     />
-                    {canReset && (
+                    {canReset && onResetToPending && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
@@ -486,7 +500,8 @@ function ReviewAccordionItem({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => onResetToPending(item.id)}
+                            className="text-xs"
+                            onClick={() => handleResetToPending(item.id)}
                           >
                             レビュー待ちに戻す
                           </DropdownMenuItem>
@@ -503,7 +518,8 @@ function ReviewAccordionItem({
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </>
       )}
     </div>
   );
