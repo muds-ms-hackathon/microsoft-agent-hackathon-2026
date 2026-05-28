@@ -274,12 +274,12 @@ export function MeetingDetailView({
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
         ) : tasksQuery.isError ? (
-          <span className="flex items-center gap-1">
+          <div className="flex items-center gap-1">
             <p className="text-sm text-destructive">
               タスクの取得に失敗しました
             </p>
             <RetryButton onClick={() => tasksQuery.refetch()} />
-          </span>
+          </div>
         ) : (tasksQuery.data ?? []).length === 0 ? (
           <p className="text-muted-foreground">
             この会議から発生したタスクはまだありません
@@ -335,12 +335,12 @@ export function MeetingDetailView({
           ) : null}
         </div>
         {reviewItemsError ? (
-          <span className="flex items-center gap-1">
+          <div className="flex items-center gap-1">
             <p className="text-sm text-destructive">
               AI抽出結果の取得に失敗しました
             </p>
             <RetryButton onClick={refetchReviewItems} />
-          </span>
+          </div>
         ) : meetingReviewItems.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             AI抽出結果はまだありません

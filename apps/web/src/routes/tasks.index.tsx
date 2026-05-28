@@ -256,10 +256,10 @@ export function MyTasksView({
       {isLoading ? (
         <p>読み込み中...</p>
       ) : isError ? (
-        <span className="flex items-center gap-1">
+        <div className="flex items-center gap-1">
           <p className="text-sm text-destructive">タスクの取得に失敗しました</p>
           <RetryButton onClick={() => refetch()} />
-        </span>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-start gap-3">
           <p className="text-muted-foreground">担当中のタスクはありません</p>

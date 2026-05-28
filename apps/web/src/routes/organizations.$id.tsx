@@ -123,12 +123,12 @@ export function OrganizationDetailView({
         {membersQuery.isError ? (
           // members だけ取得失敗したケース。空配列にフォールバックすると
           // 「メンバーが 0 人」に見えてしまうため、明示的にエラー表示する。
-          <span className="flex items-center gap-1">
+          <div className="flex items-center gap-1">
             <p className="text-sm text-destructive">
               メンバーの取得に失敗しました
             </p>
             <RetryButton onClick={() => membersQuery.refetch()} />
-          </span>
+          </div>
         ) : (
           <ul aria-label="メンバー一覧" className="divide-y rounded-md border">
             {members.map((m) => (
