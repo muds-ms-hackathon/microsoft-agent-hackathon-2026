@@ -12,9 +12,8 @@ flowchart LR
     AUTH["FakeAuth\nOIDC Provider"]
     DB[(PostgreSQL)]
     SB[Azure Service Bus]
-    WP[Azure Web PubSub]
     OAI[Azure OpenAI]
-    AIS[Azure AI Search]
+    AIS["Azure AI Search\n（RAG・将来連携）"]
 
     FE <-->|REST| API
     FE -->|OIDC| AUTH
@@ -22,17 +21,18 @@ flowchart LR
     API -->|ジョブ投入| SB
     SB -->|Consumer| AI
     AI --> OAI
-    AI --> AIS
-    AI --> DB
-    AI -->|処理完了通知| WP
-    WP -->|WebSocket| FE
+    AI -.->|将来連携| AIS
+    AI -->|解析結果を保存| API
+    FE -->|status をポーリング| API
 ```
+
+> 解析の完了通知はプッシュ（WebSocket / Web PubSub）ではなく、Frontend が `GET /meetings/:id` で `analysisRun.status` をポーリングして検知する方式です。AI Service は解析結果を App Server の内部 API 経由で保存します。Azure AI Search（RAG）は現状インターフェースのみで、実連携は将来対応です。
 
 ## Prerequisites
 
 | ツール | バージョン | インストール |
 |--------|-----------|------------|
-| Node.js | 20+ | https://nodejs.org |
+| Node.js | 22+ | https://nodejs.org |
 | pnpm | 9+ | `npm install -g pnpm` |
 | Python | 3.12+ | https://www.python.org |
 | uv | 最新 | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
@@ -70,7 +70,7 @@ docker compose exec api wget -qO- http://fake-auth:3007/.well-known/jwks.json
 
 > 手順 3 が成功することで、api コンテナの OIDC ミドルウェア（`apps/api/src/middleware/auth.ts`）が token の `iss` クレーム（`http://fake-auth:3007`）と JWKS 取得経路の双方を満たせる構成になっていることを確認できます。
 >
-> 認証ミドルウェアを適用した API エンドポイントによる end-to-end 動作確認は、ミドルウェアを実ルートに適用する別 Issue で対応します（現時点では `apps/api/src/app.ts` のどのルートにも未適用）。
+> 認証ミドルウェアは各 API ルート（meetings / organizations / tasks / decision-items / ambiguous-infos / me / topic-requests / recurring-meetings）に適用済みです。これらのエンドポイントは有効な Bearer トークンが必須です。
 
 ### `make dev-native` で OIDC を使う場合の追加設定
 
@@ -96,7 +96,7 @@ docker compose exec api wget -qO- http://fake-auth:3007/.well-known/jwks.json
 |---------|-----|
 | Frontend (Vite + React) | http://localhost:5173 |
 | Backend (Hono API) | http://localhost:3001 |
-| AI Service (FastAPI + WebSocket) | http://localhost:8001 |
+| AI Service (FastAPI) | http://localhost:8001 |
 | AI Service docs | http://localhost:8001/docs |
 | **FakeAuth (OIDC Provider)** | http://localhost:3007 |
 
