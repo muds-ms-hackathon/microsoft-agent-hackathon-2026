@@ -945,6 +945,28 @@ describe("GET /meetings/:id/review-items", () => {
     expect(mockAmbiguousInfoFindMany).toHaveBeenCalledTimes(1);
   });
 
+  it("task_candidate レスポンスに taskStatus が含まれる", async () => {
+    setupAccess();
+    const inProgressTask = {
+      ...sampleReviewTask,
+      status: "in_progress",
+    };
+    // biome-ignore lint/suspicious/noExplicitAny: TaskWithReview は TaskWithList と include 形が異なるため
+    mockTaskFindMany.mockResolvedValue([inProgressTask] as any);
+
+    const res = await app.request(
+      "/meetings/mtg-1/review-items?type=task_candidate",
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      sourceTable: string;
+      taskStatus?: string;
+    }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].sourceTable).toBe("task");
+    expect(body[0].taskStatus).toBe("in_progress");
+  });
+
   it("?type=decision → confirmed/tentative 制約が where に入り task・ambiguity は呼ばれない", async () => {
     setupAccess();
     mockDecisionItemFindMany.mockResolvedValue([sampleDecisionItem]);

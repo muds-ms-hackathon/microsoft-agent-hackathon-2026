@@ -475,10 +475,11 @@ function ReviewAccordionItem({
           <ul className="border-t divide-y">
             {items.map((item) => {
               const isPending = isReviewPending(item.status);
-              // TODO: task の in_progress/done は API が 400 を返すが UI はボタンを出す。
-              // ReviewItem に元の task.status を持たせて除外するか、API ガードを緩めるか要検討。
               const canReset =
-                !isPending && item.sourceTable !== "ambiguous_info";
+                !isPending &&
+                item.sourceTable !== "ambiguous_info" &&
+                item.taskStatus !== "in_progress" &&
+                item.taskStatus !== "done";
               return (
                 <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
                   <div className="flex items-start justify-between gap-2">

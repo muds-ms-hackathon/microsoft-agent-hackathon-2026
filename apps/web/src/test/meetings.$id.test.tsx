@@ -321,6 +321,63 @@ describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("task_candidate で taskStatus=in_progress のとき ⋯ メニューボタンが表示されない", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "in_progress" as ReviewItem["status"],
+          taskStatus: "in_progress",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.queryByRole("button", { name: "メニュー" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("task_candidate で taskStatus=done のとき ⋯ メニューボタンが表示されない", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "done" as ReviewItem["status"],
+          taskStatus: "done",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.queryByRole("button", { name: "メニュー" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("task_candidate で taskStatus=todo のとき ⋯ メニューボタンが表示される", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "todo" as ReviewItem["status"],
+          taskStatus: "todo",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.getByRole("button", { name: "メニュー" }),
+    ).toBeInTheDocument();
+  });
+
   it("「レビュー待ちに戻す」クリックで decision-items PATCH が呼ばれる", async () => {
     const item = makeReviewItem({ id: "di-1", status: "decided", version: 2 });
     vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
