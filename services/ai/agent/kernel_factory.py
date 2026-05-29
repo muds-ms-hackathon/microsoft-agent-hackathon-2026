@@ -8,11 +8,15 @@
 import json
 import logging
 import os
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import PrivateAttr
+from semantic_kernel import Kernel
 from semantic_kernel.connectors.ai.chat_completion_client_base import (
     ChatCompletionClientBase,
+)
+from semantic_kernel.connectors.ai.function_choice_behavior import (
+    FunctionChoiceBehavior,
 )
 from semantic_kernel.connectors.ai.prompt_execution_settings import (
     PromptExecutionSettings,
@@ -20,8 +24,16 @@ from semantic_kernel.connectors.ai.prompt_execution_settings import (
 from semantic_kernel.contents import ChatHistory, ChatMessageContent
 from semantic_kernel.contents.function_call_content import FunctionCallContent
 from semantic_kernel.contents.utils.author_role import AuthorRole
+from semantic_kernel.filters import FilterTypes
+
+if TYPE_CHECKING:
+    from agent.plugins import MeetingContextPlugin
+    from agent.recorder import ToolCallRecorder
 
 logger = logging.getLogger(__name__)
+
+# エージェントに公開するプラグイン名。ツールの完全修飾名は "{PLUGIN_NAME}-{関数名}"。
+PLUGIN_NAME = "meeting_context"
 
 # 既存 AzureOpenAIClient と同じ環境変数を流用する（llm/client.py 参照）。
 _AZURE_ENV_KEYS = (
@@ -57,6 +69,27 @@ def build_azure_chat_completion(
         endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
         deployment_name=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
     )
+
+
+def build_auto_function_settings() -> PromptExecutionSettings:
+    """ツールの自動呼び出しを有効にした実行設定を生成する。"""
+    settings = PromptExecutionSettings()
+    settings.function_choice_behavior = FunctionChoiceBehavior.Auto()
+    return settings
+
+
+def build_meeting_kernel(
+    chat_service: ChatCompletionClientBase,
+    plugin: "MeetingContextPlugin",
+    recorder: "ToolCallRecorder | None" = None,
+) -> Kernel:
+    """サービス・文脈プラグイン・記録フィルタを束ねた Kernel を構築する。"""
+    kernel = Kernel()
+    kernel.add_service(chat_service)
+    kernel.add_plugin(plugin, plugin_name=PLUGIN_NAME)
+    if recorder is not None:
+        kernel.add_filter(FilterTypes.AUTO_FUNCTION_INVOCATION, recorder.as_filter())
+    return kernel
 
 
 def planned_tool_call(plugin_name: str, function_name: str, **arguments: Any) -> dict:
