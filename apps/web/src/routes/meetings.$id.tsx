@@ -200,12 +200,13 @@ export function MeetingDetailView({
           {detail.estimatedDurationMinutes !== null && (
             <span>{detail.estimatedDurationMinutes} 分</span>
           )}
-          {detail.members.length > 0 && (
+          {detail.memberCount > 0 && (
             <AvatarStack
               users={detail.members.map<AvatarUser>((m) => ({
                 id: m.user.id,
                 displayName: m.user.displayName || m.user.name,
               }))}
+              extraCount={detail.memberCount - detail.members.length}
             />
           )}
         </div>

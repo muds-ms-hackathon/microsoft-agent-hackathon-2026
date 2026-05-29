@@ -78,6 +78,7 @@ type MeetingDetail = Prisma.MeetingGetPayload<{
     recurringMeeting: {
       include: {
         organization: { select: { id: true; name: true } };
+        _count: { select: { members: true } };
         members: {
           include: {
             user: { select: { id: true; name: true; displayName: true } };
@@ -255,6 +256,7 @@ describe("GET /meetings/:id", () => {
       name: "週次定例",
       organizationId: "org-1",
       organization: { id: "org-1", name: "ACME" },
+      _count: { members: 0 },
       members: [],
     },
     analysisRuns: [],
@@ -290,6 +292,7 @@ describe("GET /meetings/:id", () => {
       ...detailMeeting,
       recurringMeeting: {
         ...detailMeeting.recurringMeeting,
+        _count: { members: 5 },
         members: [
           {
             userId: "u-1",
@@ -314,12 +317,14 @@ describe("GET /meetings/:id", () => {
     const res = await app.request("/meetings/mtg-1");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
+      memberCount: number;
       members: Array<{
         userId: string;
         role: string;
         user: { id: string; name: string; displayName: string };
       }>;
     };
+    expect(body.memberCount).toBe(5);
     expect(body.members).toHaveLength(2);
     expect(body.members[0]).toEqual({
       userId: "u-1",

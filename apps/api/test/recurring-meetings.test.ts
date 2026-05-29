@@ -362,6 +362,7 @@ describe("GET /organizations/:id/meetings", () => {
         _count: { select: { members: true } },
         members: {
           take: 4,
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
           include: {
             user: { select: { id: true, name: true, displayName: true } },
           },

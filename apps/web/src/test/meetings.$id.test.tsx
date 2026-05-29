@@ -57,6 +57,7 @@ const detail: MeetingDetail = {
   recurringMeeting: { id: "rmtg-1", name: "週次定例" },
   organization: { id: "org-1", name: "ACME" },
   latestAnalysisRun: null,
+  memberCount: 0,
   members: [],
 };
 
@@ -321,6 +322,7 @@ describe("MeetingDetailView - 参加者アバター", () => {
     vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
       mockJson({
         ...detail,
+        memberCount: 2,
         members: [
           {
             userId: "u-1",
