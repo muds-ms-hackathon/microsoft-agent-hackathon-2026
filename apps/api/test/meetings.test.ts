@@ -285,6 +285,54 @@ describe("GET /meetings/:id", () => {
     expect(body.latestAnalysisRun).toBeNull();
   });
 
+  it("members がある場合 レスポンスに整形して含む", async () => {
+    mockFindUnique.mockResolvedValue({
+      ...detailMeeting,
+      recurringMeeting: {
+        ...detailMeeting.recurringMeeting,
+        members: [
+          {
+            userId: "u-1",
+            role: "owner",
+            user: { id: "u-1", name: "Alice", displayName: "Alice" },
+          },
+          {
+            userId: "u-2",
+            role: "member",
+            user: { id: "u-2", name: "Bob", displayName: "Bob" },
+          },
+        ],
+      },
+    } as MeetingDetail);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+
+    const res = await app.request("/meetings/mtg-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      members: Array<{
+        userId: string;
+        role: string;
+        user: { id: string; name: string; displayName: string };
+      }>;
+    };
+    expect(body.members).toHaveLength(2);
+    expect(body.members[0]).toEqual({
+      userId: "u-1",
+      role: "owner",
+      user: { id: "u-1", name: "Alice", displayName: "Alice" },
+    });
+    expect(body.members[1]).toEqual({
+      userId: "u-2",
+      role: "member",
+      user: { id: "u-2", name: "Bob", displayName: "Bob" },
+    });
+  });
+
   it("解析ランがある場合 latestAnalysisRun を含む", async () => {
     const run = {
       id: "run-1",
