@@ -76,6 +76,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           include: {
             organization: { select: { id: true, name: true } },
             members: {
+              take: 4,
               include: {
                 user: { select: { id: true, name: true, displayName: true } },
               },
