@@ -147,6 +147,7 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(
       await screen.findByText("メンバーの取得に失敗しました"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
     expect(
       screen.queryByRole("list", { name: "メンバー一覧" }),
     ).not.toBeInTheDocument();

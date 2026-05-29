@@ -6,9 +6,7 @@ def prepare_prev_open_issues_for_call2(previous_report_json: dict) -> list:
     resolved_aiは人間未確認のため持ち越しを継続する。
     """
     open_issues = previous_report_json.get("open_issues", [])
-    return [
-        o for o in open_issues if o.get("status") != "resolved_human"
-    ]
+    return [o for o in open_issues if o.get("status") != "resolved_human"]
 
 
 def prepare_prev_tasks_for_call3(previous_report_json: dict) -> list:
@@ -16,9 +14,7 @@ def prepare_prev_tasks_for_call3(previous_report_json: dict) -> list:
     各タスクにn番号を付与してから返す。
     """
     tasks = previous_report_json.get("tasks", [])
-    incomplete = [
-        t for t in tasks if t.get("status") not in {"done", "rejected"}
-    ]
+    incomplete = [t for t in tasks if t.get("status") not in {"done", "rejected"}]
     for i, t in enumerate(incomplete, 1):
         t["n"] = i
     return incomplete
@@ -34,9 +30,7 @@ def fmt_change_summary(
     """Call 6に渡す「前回からの変化サマリー」テキストを生成する。"""
     parts = []
     if completed_tasks:
-        titles = "、".join(
-            t.get("title", "") for t in completed_tasks[:3]
-        )
+        titles = "、".join(t.get("title", "") for t in completed_tasks[:3])
         suffix = (
             f"（他{len(completed_tasks) - 3}件）" if len(completed_tasks) > 3 else ""
         )
@@ -44,13 +38,17 @@ def fmt_change_summary(
     if carried_over_tasks:
         parts.append(f"⏩ 持ち越しタスク: {len(carried_over_tasks)}件")
     if resolved_issues:
-        topics = "、".join(o.get("topic", "") for o in resolved_issues[:3])
+        # 旧DB形式（topic）との後方互換のためフォールバックを保持
+        topics = "、".join(
+            o.get("title") or o.get("topic", "") for o in resolved_issues[:3]
+        )
         parts.append(f"✅ 解決した未決事項: {topics}")
     if carried_over_issues:
         parts.append(f"⏩ 持ち越し未決事項: {len(carried_over_issues)}件")
     if high_recurrence_issues:
+        # 旧DB形式（topic）との後方互換のためフォールバックを保持
         topics = "、".join(
-            o.get("topic", "") for o in high_recurrence_issues
+            o.get("title") or o.get("topic", "") for o in high_recurrence_issues
         )
         parts.append(f"⚠️ 3回以上継続している未決事項: {topics}")
     return "\n".join(parts) if parts else "(前回との変化なし)"
@@ -61,15 +59,11 @@ def prepare_change_summary_for_call6(previous_report_json: dict) -> str:
     tasks = previous_report_json.get("tasks", [])
     open_issues = previous_report_json.get("open_issues", [])
 
-    completed_tasks = [
-        t for t in tasks if t.get("status") in {"done", "rejected"}
-    ]
+    completed_tasks = [t for t in tasks if t.get("status") in {"done", "rejected"}]
     carried_over_tasks = [
         t for t in tasks if t.get("status") not in {"done", "rejected"}
     ]
-    resolved_issues = [
-        o for o in open_issues if o.get("status") == "resolved_human"
-    ]
+    resolved_issues = [o for o in open_issues if o.get("status") == "resolved_human"]
     carried_over_issues = [
         o for o in open_issues if o.get("status") != "resolved_human"
     ]

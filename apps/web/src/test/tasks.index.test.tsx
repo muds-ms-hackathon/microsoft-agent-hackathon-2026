@@ -220,6 +220,19 @@ describe("MyTasksView", () => {
 
     expect(screen.getByText("読み込み中...")).toBeInTheDocument();
   });
+
+  it("取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
+    vi.mocked(api.tasks.me.$get).mockRejectedValue(new Error("Network Error"));
+
+    renderWithQuery(<MyTasksView search={{}} onSearchChange={() => {}} />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("タスクの取得に失敗しました"),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
+  });
 });
 
 describe("MyTasksView - TaskRow 詳細", () => {

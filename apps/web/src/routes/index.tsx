@@ -5,11 +5,18 @@ import {
   meetingListQueryOptions,
 } from "@/features/recurring-meetings/hooks/useRecurringMeetingMeetings";
 import { partitionMeetings } from "@/features/recurring-meetings/meetingSections";
+import { TYPE_LABELS, type ReviewItemType } from "@/features/review/types";
+import { useReviewItems } from "@/features/review/useReviewItems";
+import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
-import { ChevronRight } from "lucide-react";
+import {
+  AvatarStack,
+  type AvatarUser,
+} from "@/features/tasks/components/AvatarStack";
+import { ArrowRight, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -48,30 +55,34 @@ function NextMeetingCard({
   recurringMeetingId,
   recurringMeetingName,
   next,
+  members,
+  memberCount,
 }: {
   recurringMeetingId: string;
   recurringMeetingName: string;
   next: MeetingListItem;
+  members: AvatarUser[];
+  memberCount: number;
 }) {
   return (
-    <Card>
+    <Card className="w-64 shrink-0 snap-start">
       <CardHeader className="pb-2">
-        <CardTitle>次回会議</CardTitle>
+        <CardTitle className="text-sm font-medium truncate">
+          {recurringMeetingName}
+        </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-muted-foreground truncate">
-          {recurringMeetingName}
-        </p>
         <p className="text-xs text-muted-foreground tabular-nums">
           {formatMeetingTime(next.heldAt, next.estimatedDurationMinutes)}
         </p>
-        {/* TODO: 参加者一覧 API が実装されたらアバターを表示する */}
         <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1">
-            <div className="size-5 rounded-full bg-muted-foreground/20" />
-            <div className="size-5 rounded-full bg-muted-foreground/20" />
-            <div className="size-5 rounded-full bg-muted-foreground/20" />
-          </div>
+          {memberCount > 0 && (
+            <AvatarStack
+              users={members}
+              size="sm"
+              extraCount={memberCount - members.length}
+            />
+          )}
           <Link
             to="/recurring-meetings/$id"
             params={{ id: recurringMeetingId }}
@@ -87,13 +98,14 @@ function NextMeetingCard({
 }
 
 // ===== 次回会議セクション =====
-// 全定例の会議を並列取得し、最も直近の upcoming 会議を1件だけ表示する。
-// TODO: 表示件数（直近N件・当日・今週など）は別 Issue で検討・対応する。
+// 定例ごとに最も直近の upcoming 会議を1件取得し、日付順で横スクロール表示する。
 
 type Candidate = {
   recurringMeetingId: string;
   recurringMeetingName: string;
   next: MeetingListItem;
+  members: AvatarUser[];
+  memberCount: number;
 };
 
 function NextMeetingsSection({ orgId }: { orgId: string }) {
@@ -103,7 +115,6 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
     isError: isRmError,
   } = useOrganizationMeetings(orgId);
 
-  // 全定例の会議を並列取得
   const meetingQueries = useQueries({
     queries: recurringMeetings.map((rm) => meetingListQueryOptions(rm.id)),
   });
@@ -124,7 +135,6 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
     return <p className="text-sm text-destructive">定例の取得に失敗しました</p>;
   }
 
-  // 全定例から最も直近の upcoming 会議を1件選ぶ
   const candidates: Candidate[] = [];
   for (const [i, rm] of recurringMeetings.entries()) {
     const meetings = meetingQueries[i]?.data ?? [];
@@ -134,16 +144,20 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
         recurringMeetingId: rm.id,
         recurringMeetingName: rm.name,
         next,
+        members: rm.members.map((m) => ({
+          id: m.user.id,
+          displayName: m.user.displayName || m.user.name,
+        })),
+        memberCount: rm._count.members,
       });
     }
   }
+  candidates.sort(
+    (a, b) =>
+      new Date(a.next.heldAt).getTime() - new Date(b.next.heldAt).getTime(),
+  );
 
-  const nearest = candidates.reduce<Candidate | null>((min, c) => {
-    if (!min) return c;
-    return new Date(c.next.heldAt) < new Date(min.next.heldAt) ? c : min;
-  }, null);
-
-  if (!nearest) {
+  if (candidates.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -159,190 +173,242 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
   }
 
   return (
-    <NextMeetingCard
-      recurringMeetingId={nearest.recurringMeetingId}
-      recurringMeetingName={nearest.recurringMeetingName}
-      next={nearest.next}
-    />
+    <div className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-muted-foreground">次回会議</h2>
+      <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
+        {candidates.map((c) => (
+          <NextMeetingCard
+            key={c.recurringMeetingId}
+            recurringMeetingId={c.recurringMeetingId}
+            recurringMeetingName={c.recurringMeetingName}
+            next={c.next}
+            members={c.members}
+            memberCount={c.memberCount}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
-// ===== レビュー待ちカード（モック） =====
-// TODO: レビュー待ちデータ取得 API が実装されたら実データに置き換える。
+// ===== レビュー待ちカード =====
 
-type ReviewRow = { label: string; count: number };
-
-const MOCK_REVIEW_ROWS: ReviewRow[] = [
-  { label: "担当者なし", count: 1 },
-  { label: "期限なし", count: 1 },
-  { label: "未決事項", count: 1 },
+const REVIEW_ITEM_TYPE_ORDER: ReviewItemType[] = [
+  "task_candidate",
+  "open_issue",
+  "ambiguity",
+  "decision",
 ];
 
-function ReviewPendingCard() {
+function ReviewPendingCard({ orgId }: { orgId: string }) {
+  const { items, isLoading, isError, refetch } = useReviewItems({
+    organizationId: orgId,
+  });
+
+  const countByType = REVIEW_ITEM_TYPE_ORDER.map((type) => ({
+    type,
+    label: TYPE_LABELS[type],
+    count: items.filter((i) => i.type === type).length,
+  })).filter((r) => r.count > 0);
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>レビュー待ち</CardTitle>
-          <span className="text-sm text-muted-foreground font-normal">
-            {MOCK_REVIEW_ROWS.reduce((sum, r) => sum + r.count, 0)} 件
+    <Card className="gap-0 py-0 overflow-hidden h-90">
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+        <span className="text-sm font-semibold flex-1">レビュー待ち</span>
+        {!isLoading && !isError && (
+          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+            {items.length}
           </span>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-0">
-        {MOCK_REVIEW_ROWS.length === 0 ? (
+        )}
+        <Link
+          to="/review"
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowRight size={15} />
+        </Link>
+      </div>
+      <div className="px-5 py-1 flex-1 min-h-0 overflow-y-auto">
+        {isLoading ? (
+          <div className="space-y-3 py-2">
+            {(["s0", "s1", "s2"] as const).map((k) => (
+              <div
+                key={k}
+                className="h-10 rounded-md bg-muted/50 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8">
+            <p className="text-sm text-destructive">取得に失敗しました</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              再試行
+            </button>
+          </div>
+        ) : countByType.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-sm text-muted-foreground">
               レビュー待ちのアイテムはありません
             </p>
           </div>
         ) : (
-          MOCK_REVIEW_ROWS.map((row) => (
+          countByType.map((row) => (
             <div
-              key={row.label}
-              className="flex items-center justify-between py-3 border-b border-border/80"
+              key={row.type}
+              className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
             >
               <span className="text-sm">{row.label}</span>
-              <span className="flex items-center gap-1 text-sm text-destructive font-medium">
-                {row.count} 件
-                <ChevronRight size={14} />
+              <span className="size-6 inline-flex items-center justify-center rounded-full bg-destructive/10 text-destructive text-xs font-semibold shrink-0">
+                {row.count}
               </span>
             </div>
           ))
         )}
-        {/* TODO: レビュー画面が実装されたらリンクに変更する */}
-        <div className="flex justify-end pt-3">
-          <button
-            type="button"
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            レビューする
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }
 
-// ===== 未完了タスクカード（モック） =====
-// TODO: タスク API が実装されたら実データに置き換える。
+// ===== 未完了タスクカード =====
 
-type TaskItem = {
-  name: string;
-  meeting: string;
-  deadline: string;
-  // "overdue" | "this-week" | "later"
-  urgency: "overdue" | "this-week" | "later";
-};
+type TaskUrgency = "overdue" | "this-week" | "later";
 
-const MOCK_TASKS: TaskItem[] = [
+const URGENCY_STYLE: Record<TaskUrgency, { border: string; deadline: string }> =
   {
-    name: "〜の設定",
-    meeting: "〜進捗報告",
-    deadline: "3日超過",
-    urgency: "overdue",
-  },
-  {
-    name: "〜提出",
-    meeting: "〜定例会議",
-    deadline: "1日超過",
-    urgency: "overdue",
-  },
-  {
-    name: "〜の仕様確認",
-    meeting: "〜進捗報告",
-    deadline: "5/2",
-    urgency: "this-week",
-  },
-  {
-    name: "〜提出",
-    meeting: "〜定例会議",
-    deadline: "5/4",
-    urgency: "this-week",
-  },
-  {
-    name: "〜提出",
-    meeting: "〜定例会議",
-    deadline: "5/4",
-    urgency: "this-week",
-  },
-];
+    overdue: {
+      border: "border-l-destructive",
+      deadline: "text-destructive font-medium",
+    },
+    "this-week": {
+      border: "border-l-amber-500",
+      deadline: "text-amber-600 font-medium",
+    },
+    later: {
+      border: "border-l-slate-200",
+      deadline: "text-muted-foreground",
+    },
+  };
 
-const URGENCY_STYLE: Record<
-  TaskItem["urgency"],
-  { border: string; deadline: string }
-> = {
-  overdue: {
-    border: "border-l-destructive",
-    deadline: "text-destructive font-medium",
-  },
-  "this-week": {
-    border: "border-l-orange-400",
-    deadline: "text-orange-500 font-medium",
-  },
-  later: {
-    border: "border-l-border",
-    deadline: "text-muted-foreground",
-  },
-};
+function calcUrgency(dueDate: string | null): TaskUrgency {
+  if (!dueDate) return "later";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  if (due < today) return "overdue";
+  const weekLater = new Date(today);
+  weekLater.setDate(weekLater.getDate() + 7);
+  if (due <= weekLater) return "this-week";
+  return "later";
+}
+
+function formatDeadline(dueDate: string | null, urgency: TaskUrgency): string {
+  if (!dueDate) return "未設定";
+  if (urgency === "overdue") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.ceil(
+      (today.getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return `${days}日超過`;
+  }
+  const d = new Date(dueDate);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 function IncompleteTasksCard() {
+  const {
+    data = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useMyTasks({
+    status: ["todo", "in_progress"],
+  });
+
   return (
-    <Card className="flex flex-col h-[470px]">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>未完了タスク</CardTitle>
-          <span className="text-sm text-muted-foreground font-normal">
-            {MOCK_TASKS.length} 件
+    <Card className="gap-0 py-0 overflow-hidden h-90">
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+        <span className="text-sm font-semibold flex-1">未完了タスク</span>
+        {!isLoading && !isError && (
+          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+            {data.length}
           </span>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col flex-1 overflow-hidden pb-3">
-        <div className="flex flex-col flex-1 overflow-y-auto divide-y divide-border/80">
-          {MOCK_TASKS.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                未完了のタスクはありません
-              </p>
-            </div>
-          ) : (
-            MOCK_TASKS.slice(0, 5).map((item, i) => {
-              const style = URGENCY_STYLE[item.urgency];
-              return (
-                // biome-ignore lint/suspicious/noArrayIndexKey: モックデータのため index で代替
-                <div key={i} className="py-2">
-                  <div
-                    className={`flex items-center gap-3 border-l-2 pl-3 py-2 rounded-r-md hover:bg-muted/40 transition-colors ${style.border}`}
-                  >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-sm font-medium truncate">
-                        {item.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground truncate">
-                        {item.meeting}
-                      </span>
-                    </div>
-                    <span className={`text-xs shrink-0 ${style.deadline}`}>
-                      {item.deadline}
+        )}
+        <Link
+          to="/tasks"
+          search={{ status: "todo,in_progress" }}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowRight size={15} />
+        </Link>
+      </div>
+      <div className="px-5 py-2 flex-1 min-h-0 overflow-y-auto">
+        {isLoading ? (
+          <div className="space-y-3 py-2">
+            {(["s0", "s1", "s2"] as const).map((k) => (
+              <div
+                key={k}
+                className="h-12 rounded-md bg-muted/50 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8">
+            <p className="text-sm text-destructive">
+              タスクの取得に失敗しました
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              再試行
+            </button>
+          </div>
+        ) : data.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-sm text-muted-foreground">
+              未完了のタスクはありません
+            </p>
+          </div>
+        ) : (
+          data.map((task) => {
+            const urgency = calcUrgency(task.dueDate);
+            const style = URGENCY_STYLE[urgency];
+            const meetingName =
+              task.recurringMeetings[0]?.name ??
+              task.originMeeting?.title ??
+              null;
+            return (
+              <div
+                key={task.id}
+                className="py-2 border-b border-border/50 last:border-b-0"
+              >
+                <div
+                  className={`flex items-center gap-3 border-l-4 pl-3 py-2.5 ${style.border}`}
+                >
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-sm font-medium truncate">
+                      {task.title}
                     </span>
+                    {meetingName && (
+                      <span className="text-xs text-muted-foreground truncate">
+                        {meetingName}
+                      </span>
+                    )}
                   </div>
+                  <span className={`text-xs shrink-0 ${style.deadline}`}>
+                    {formatDeadline(task.dueDate, urgency)}
+                  </span>
                 </div>
-              );
-            })
-          )}
-        </div>
-        {/* TODO: タスク一覧画面が実装されたらリンクに変更する */}
-        <div className="flex justify-end pt-2">
-          <button
-            type="button"
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            全て見る
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      </CardContent>
+              </div>
+            );
+          })
+        )}
+      </div>
     </Card>
   );
 }
@@ -368,15 +434,15 @@ export function Dashboard() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
-          {/* 左列：次回会議 + レビュー待ち */}
-          <div className="flex flex-col gap-4">
-            <NextMeetingsSection orgId={orgId} />
-            <ReviewPendingCard />
-          </div>
+        <div className="flex flex-col gap-4">
+          {/* 上段：次回会議（横スクロール） */}
+          <NextMeetingsSection orgId={orgId} />
 
-          {/* 右列：未完了タスク */}
-          <IncompleteTasksCard />
+          {/* 下段：レビュー待ち（左）・未完了タスク（右） */}
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4">
+            <ReviewPendingCard orgId={orgId} />
+            <IncompleteTasksCard />
+          </div>
         </div>
       )}
     </section>

@@ -47,3 +47,33 @@ class AnalysisRunResult(BaseModel):
     completed_at: Optional[str] = None
     failed_at: Optional[str] = None
     error_message: Optional[str] = None
+
+
+# schema.prisma: enum TaskPriority { required optional }
+# ⚠️ この値を変更する場合は schema.prisma の TaskPriority enum も合わせて更新すること
+VALID_PRIORITY: frozenset[str] = frozenset({"required", "optional"})
+
+# schema.prisma: enum AmbiguitySeverity { high medium low }
+# ⚠️ この値を変更する場合は schema.prisma の AmbiguitySeverity enum も
+# 合わせて更新すること
+VALID_SEVERITY: frozenset[str] = frozenset({"high", "medium", "low"})
+
+# schema.prisma: enum AmbiguityType {
+#   missing_speaker transcription_error_low transcription_error_high
+#   no_assignee no_deadline_mentioned no_deadline_absolute
+#   unclear_decision insufficient_basis unclear_scope }
+# ⚠️ この値を変更する場合は schema.prisma の AmbiguityType enum も
+# 合わせて更新すること
+VALID_AMBIGUITY_TYPE: frozenset[str] = frozenset(
+    {
+        "missing_speaker",
+        "transcription_error_low",
+        "transcription_error_high",
+        "no_assignee",
+        "no_deadline_mentioned",
+        "no_deadline_absolute",
+        "unclear_decision",
+        "insufficient_basis",
+        "unclear_scope",
+    }
+)
