@@ -308,9 +308,7 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
       mockJson({ ...detailPast, latestAnalysisRun: null }),
     );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
-    expect(
-      await screen.findByText("要約はまだありません"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("要約はまだありません")).toBeInTheDocument();
   });
 });
 
@@ -320,8 +318,16 @@ describe("MeetingDetailView - 参加者アバター", () => {
       mockJson({
         ...detail,
         members: [
-          { userId: "u-1", role: "owner", user: { id: "u-1", name: "Alice", displayName: "Alice" } },
-          { userId: "u-2", role: "member", user: { id: "u-2", name: "Bob", displayName: "Bob" } },
+          {
+            userId: "u-1",
+            role: "owner",
+            user: { id: "u-1", name: "Alice", displayName: "Alice" },
+          },
+          {
+            userId: "u-2",
+            role: "member",
+            user: { id: "u-2", name: "Bob", displayName: "Bob" },
+          },
         ],
       }),
     );

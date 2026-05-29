@@ -107,7 +107,11 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       members: recurringMeeting.members.map((m) => ({
         userId: m.userId,
         role: m.role,
-        user: { id: m.user.id, name: m.user.name, displayName: m.user.displayName },
+        user: {
+          id: m.user.id,
+          name: m.user.name,
+          displayName: m.user.displayName,
+        },
       })),
       latestAnalysisRun: latestRun
         ? {

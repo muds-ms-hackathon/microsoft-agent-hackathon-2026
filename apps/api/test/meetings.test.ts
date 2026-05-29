@@ -72,11 +72,18 @@ import type { TaskWithList } from "../src/lib/task-serialization.js";
 type MeetingWithRecurringOrgId = Prisma.MeetingGetPayload<{
   include: { recurringMeeting: { select: { organizationId: true } } };
 }>;
-// GET /meetings/:id ハンドラ用: recurringMeeting に organization (id/name) と analysisRuns を含む
+// GET /meetings/:id ハンドラ用: recurringMeeting に organization・members と analysisRuns を含む
 type MeetingDetail = Prisma.MeetingGetPayload<{
   include: {
     recurringMeeting: {
-      include: { organization: { select: { id: true; name: true } } };
+      include: {
+        organization: { select: { id: true; name: true } };
+        members: {
+          include: {
+            user: { select: { id: true; name: true; displayName: true } };
+          };
+        };
+      };
     };
     analysisRuns: { orderBy: { createdAt: "desc" }; take: 1 };
   };
@@ -248,6 +255,7 @@ describe("GET /meetings/:id", () => {
       name: "週次定例",
       organizationId: "org-1",
       organization: { id: "org-1", name: "ACME" },
+      members: [],
     },
     analysisRuns: [],
   } satisfies Partial<MeetingDetail>;

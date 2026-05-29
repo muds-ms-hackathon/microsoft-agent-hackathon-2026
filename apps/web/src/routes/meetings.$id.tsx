@@ -112,9 +112,6 @@ export function MeetingDetailView({
     : false;
   const { items: meetingReviewItems, isError: reviewItemsError } =
     useReviewItems({ meetingId: isPastMeeting ? id : undefined });
-  const pendingCount = meetingReviewItems.filter(
-    (i) => i.status === "draft" || i.status === "reviewing",
-  ).length;
 
   const statusArr = parseStatusParam(search.status);
   // Kanban view では status は列として可視化されるため、フィルタ UI も API への
@@ -202,7 +199,10 @@ export function MeetingDetailView({
       {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（過去の会議のみ） */}
       {new Date(detail.heldAt) <= (now ?? new Date()) && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card aria-label="会議要約" className="gap-0 py-0 overflow-hidden h-75">
+          <Card
+            aria-label="会議要約"
+            className="gap-0 py-0 overflow-hidden h-75"
+          >
             <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
               <span className="text-sm font-semibold flex-1">会議要約</span>
             </div>
@@ -214,7 +214,10 @@ export function MeetingDetailView({
           </Card>
 
           {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
-          <Card aria-label="AI抽出結果" className="gap-0 py-0 overflow-hidden h-75">
+          <Card
+            aria-label="AI抽出結果"
+            className="gap-0 py-0 overflow-hidden h-75"
+          >
             <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
               <span className="text-sm font-semibold flex-1">AI抽出結果</span>
               {meetingReviewItems.length > 0 && (

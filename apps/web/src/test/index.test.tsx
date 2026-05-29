@@ -77,8 +77,18 @@ const NEAR_FUTURE = "2099-01-01T10:00:00.000Z";
 const FAR_FUTURE = "2099-06-01T10:00:00.000Z";
 const PAST = "2000-01-01T10:00:00.000Z";
 
-const RM_1 = { id: "rm-1", name: "週次定例", _count: { members: 0 }, members: [] };
-const RM_2 = { id: "rm-2", name: "月次レビュー", _count: { members: 0 }, members: [] };
+const RM_1 = {
+  id: "rm-1",
+  name: "週次定例",
+  _count: { members: 0 },
+  members: [],
+};
+const RM_2 = {
+  id: "rm-2",
+  name: "月次レビュー",
+  _count: { members: 0 },
+  members: [],
+};
 
 function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
   return {
@@ -295,7 +305,11 @@ describe("Dashboard - NextMeetingsSection", () => {
     const rmWithMembers = {
       ...RM_1,
       members: [
-        { userId: "u-1", role: "owner", user: { id: "u-1", name: "Alice", displayName: "Alice" } },
+        {
+          userId: "u-1",
+          role: "owner",
+          user: { id: "u-1", name: "Alice", displayName: "Alice" },
+        },
       ],
     };
     vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(

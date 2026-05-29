@@ -290,7 +290,9 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         _count: { select: { members: true } },
         members: {
           take: 4,
-          include: { user: { select: { id: true, name: true, displayName: true } } },
+          include: {
+            user: { select: { id: true, name: true, displayName: true } },
+          },
         },
       },
     });
