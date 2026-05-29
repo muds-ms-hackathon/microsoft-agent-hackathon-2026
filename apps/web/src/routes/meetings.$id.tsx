@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import {
@@ -7,6 +8,10 @@ import {
   type ReviewItem,
 } from "@/features/review/types";
 import { useReviewItems } from "@/features/review/useReviewItems";
+import {
+  AvatarStack,
+  type AvatarUser,
+} from "@/features/tasks/components/AvatarStack";
 import { AssigneeFilter } from "@/features/tasks/components/AssigneeFilter";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
@@ -17,19 +22,14 @@ import {
   type TaskView,
 } from "@/features/tasks/components/ViewToggle";
 import { useMeetingTasks } from "@/features/tasks/hooks/useMeetingTasks";
-import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import { taskStatusLabels } from "@/features/tasks/labels";
+import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import type { TaskListFilters, TaskStatus } from "@/features/tasks/types";
 import { authAtom } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import {
-  AvatarStack,
-  type AvatarUser,
-} from "@/features/tasks/components/AvatarStack";
-import { useState } from "react";
 import { z } from "zod";
 
 // 手動経路で表示する status の選択肢。AI 専用の draft/reviewing は UI から除外。
@@ -105,8 +105,13 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
+
+  // 過去の会議のみレビューアイテムを取得する。未来の会議は meetingId を渡さず無効化。
+  const isPastMeeting = detailQuery.data
+    ? new Date(detailQuery.data.heldAt) <= (now ?? new Date())
+    : false;
   const { items: meetingReviewItems, isError: reviewItemsError } =
-    useReviewItems({ meetingId: id });
+    useReviewItems({ meetingId: isPastMeeting ? id : undefined });
   const pendingCount = meetingReviewItems.filter(
     (i) => i.status === "draft" || i.status === "reviewing",
   ).length;
@@ -183,9 +188,9 @@ export function MeetingDetailView({
           {detail.estimatedDurationMinutes !== null && (
             <span>{detail.estimatedDurationMinutes} 分</span>
           )}
-          {(detail.members?.length ?? 0) > 0 && (
+          {detail.members.length > 0 && (
             <AvatarStack
-              users={(detail.members ?? []).map<AvatarUser>((m) => ({
+              users={detail.members.map<AvatarUser>((m) => ({
                 id: m.user.id,
                 displayName: m.user.displayName || m.user.name,
               }))}
@@ -197,80 +202,68 @@ export function MeetingDetailView({
       {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（過去の会議のみ） */}
       {new Date(detail.heldAt) <= (now ?? new Date()) && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card aria-label="会議要約" className="gap-0 py-0 overflow-hidden h-75">
-          <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
-            <span className="text-sm font-semibold flex-1">会議要約</span>
-          </div>
-          <div className="px-5 py-4 flex-1 overflow-y-auto">
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {detail.latestAnalysisRun?.summary ?? "要約はまだありません"}
-            </p>
-          </div>
-        </Card>
+          <Card aria-label="会議要約" className="gap-0 py-0 overflow-hidden h-75">
+            <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+              <span className="text-sm font-semibold flex-1">会議要約</span>
+            </div>
+            <div className="px-5 py-4 flex-1 overflow-y-auto">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {detail.latestAnalysisRun?.summary ?? "要約はまだありません"}
+              </p>
+            </div>
+          </Card>
 
-        {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
-        <Card aria-label="AI抽出結果" className="gap-0 py-0 overflow-hidden h-75">
-          <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
-            <span className="text-sm font-semibold flex-1">AI抽出結果</span>
-            {meetingReviewItems.length > 0 && (
-              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
-                {meetingReviewItems.length}
-              </span>
-            )}
-            {pendingCount > 0 ? (
-              <Link
-                to="/review"
-                search={{
-                  recurringMeetingId: detail.recurringMeeting.id,
-                  meetingId: id,
-                  from: "hub",
-                }}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ChevronRight size={15} />
-              </Link>
-            ) : meetingReviewItems.length > 0 ? (
-              <Link
-                to="/review"
-                search={{
-                  recurringMeetingId: detail.recurringMeeting.id,
-                  meetingId: id,
-                  from: "hub",
-                }}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ChevronRight size={15} />
-              </Link>
-            ) : null}
-          </div>
-          <div className="px-5 py-4 flex-1 overflow-y-auto">
-            {reviewItemsError ? (
-              <p className="text-sm text-destructive">
-                AI抽出結果の取得に失敗しました
-              </p>
-            ) : meetingReviewItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                AI抽出結果はまだありません
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {REVIEW_ITEM_TYPES.map((type) => {
-                  const typeItems = meetingReviewItems.filter(
-                    (i) => i.type === type,
-                  );
-                  if (typeItems.length === 0) return null;
-                  return (
-                    <ReviewAccordionItem
-                      key={type}
-                      type={type}
-                      items={typeItems}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </Card>
+          {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
+          <Card aria-label="AI抽出結果" className="gap-0 py-0 overflow-hidden h-75">
+            <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+              <span className="text-sm font-semibold flex-1">AI抽出結果</span>
+              {meetingReviewItems.length > 0 && (
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+                  {meetingReviewItems.length}
+                </span>
+              )}
+              {meetingReviewItems.length > 0 && (
+                <Link
+                  to="/review"
+                  search={{
+                    recurringMeetingId: detail.recurringMeeting.id,
+                    meetingId: id,
+                    from: "hub",
+                  }}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronRight size={15} />
+                </Link>
+              )}
+            </div>
+            <div className="px-5 py-4 flex-1 overflow-y-auto">
+              {reviewItemsError ? (
+                <p className="text-sm text-destructive">
+                  AI抽出結果の取得に失敗しました
+                </p>
+              ) : meetingReviewItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  AI抽出結果はまだありません
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {REVIEW_ITEM_TYPES.map((type) => {
+                    const typeItems = meetingReviewItems.filter(
+                      (i) => i.type === type,
+                    );
+                    if (typeItems.length === 0) return null;
+                    return (
+                      <ReviewAccordionItem
+                        key={type}
+                        type={type}
+                        items={typeItems}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       )}
 

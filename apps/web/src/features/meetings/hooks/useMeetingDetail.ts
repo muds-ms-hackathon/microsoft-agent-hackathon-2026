@@ -24,7 +24,7 @@ export type MeetingDetail = {
     alertLevel: string | null;
     completedAt: string | null;
   } | null;
-  members?: {
+  members: {
     userId: string;
     role: string;
     user: { id: string; name: string; displayName: string };

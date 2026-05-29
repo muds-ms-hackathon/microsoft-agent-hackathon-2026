@@ -281,14 +281,15 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const guard = await requireOrgMembership(c, id);
     if (!guard.ok) return guard.res;
 
-    // _count.members はバッジ表示用、members は先頭5件をアバター表示用に含める。
+    // _count.members はバッジ表示用、members は先頭4件をアバター表示用に含める。
+    // AvatarStack のデフォルト max=4 と合わせる。
     const meetings = await prisma.recurringMeeting.findMany({
       where: { organizationId: id },
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { members: true } },
         members: {
-          take: 5,
+          take: 4,
           include: { user: { select: { id: true, name: true, displayName: true } } },
         },
       },
