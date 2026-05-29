@@ -85,7 +85,7 @@ export type TaskListItem = TaskEditableFields &
 
 // 詳細 API のレスポンス。assignees に email が含まれる以外は一覧と同形。
 export type Task = Omit<TaskListItem, "assignees"> & {
-  assignees: Array<AssigneeUser & { email: string }>;
+  assignees: Array<AssigneeUser & { email: string | null }>;
 };
 
 // 一覧 API の共通フィルタ。
