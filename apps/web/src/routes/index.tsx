@@ -74,7 +74,7 @@ function NextMeetingCard({
           {formatMeetingTime(next.heldAt, next.estimatedDurationMinutes)}
         </p>
         <div className="flex items-center justify-between mt-1">
-          <AvatarStack users={members} size="sm" />
+          {members.length > 0 && <AvatarStack users={members} size="sm" />}
           <Link
             to="/recurring-meetings/$id"
             params={{ id: recurringMeetingId }}

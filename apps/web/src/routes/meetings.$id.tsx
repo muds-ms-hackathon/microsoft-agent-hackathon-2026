@@ -195,7 +195,7 @@ export function MeetingDetailView({
       </header>
 
       {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（過去の会議のみ） */}
-      {new Date(detail.heldAt) <= new Date() && (
+      {new Date(detail.heldAt) <= (now ?? new Date()) && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card aria-label="会議要約" className="gap-0 py-0 overflow-hidden h-75">
           <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">

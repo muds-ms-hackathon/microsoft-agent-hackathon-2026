@@ -10,6 +10,7 @@ vi.mock("@/lib/api", () => ({
       ":id": {
         $get: vi.fn(),
         tasks: { $get: vi.fn() },
+        "review-items": { $get: vi.fn() },
       },
     },
     organizations: {
@@ -91,6 +92,9 @@ const sampleTask = {
 beforeEach(() => {
   vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detail));
   vi.mocked(api.meetings[":id"].tasks.$get).mockResolvedValue(mockJson([]));
+  vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+    mockJson([]),
+  );
   // AssigneeFilter のメンバー取得はデフォルトで空配列。個別テストで上書きしない想定。
   vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
     mockJson([]),
@@ -243,5 +247,106 @@ describe("MeetingDetailView", () => {
     expect(
       (call[0] as { query: { assigneeId?: string } }).query.assigneeId,
     ).toBe("user-42");
+  });
+});
+
+// NOW より前の heldAt を持つ過去の会議
+const detailPast: MeetingDetail = {
+  ...detail,
+  heldAt: "2026-05-16T01:00:00.000Z",
+};
+
+describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
+  it("過去の会議では「会議要約」カードが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByLabelText("会議要約")).toBeInTheDocument();
+  });
+
+  it("過去の会議では「AI抽出結果」カードが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByLabelText("AI抽出結果")).toBeInTheDocument();
+  });
+
+  it("未来の会議では「会議要約」カードが表示されない", async () => {
+    // detail.heldAt (2026-05-17T01:00:00Z) > NOW (2026-05-17T00:00:00Z)
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(screen.queryByLabelText("会議要約")).not.toBeInTheDocument();
+  });
+
+  it("未来の会議では「AI抽出結果」カードが表示されない", async () => {
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(screen.queryByLabelText("AI抽出結果")).not.toBeInTheDocument();
+  });
+
+  it("latestAnalysisRun.summary があればサマリーテキストが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...detailPast,
+        latestAnalysisRun: {
+          id: "run-1",
+          status: "completed",
+          summary: "今回の会議では予算について合意しました。",
+          alertLevel: null,
+          completedAt: "2026-05-16T02:00:00.000Z",
+        },
+      }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("今回の会議では予算について合意しました。"),
+    ).toBeInTheDocument();
+  });
+
+  it("latestAnalysisRun が null のとき「要約はまだありません」が表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({ ...detailPast, latestAnalysisRun: null }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("要約はまだありません"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("MeetingDetailView - 参加者アバター", () => {
+  it("members があればアバターグループが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...detail,
+        members: [
+          { userId: "u-1", role: "owner", user: { id: "u-1", name: "Alice", displayName: "Alice" } },
+          { userId: "u-2", role: "member", user: { id: "u-2", name: "Bob", displayName: "Bob" } },
+        ],
+      }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(
+      screen.getByRole("group", { name: /担当者: Alice, Bob/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("members が空のときアバターグループが表示されない", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({ ...detail, members: [] }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(
+      screen.queryByRole("group", { name: /担当者:/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("members が未定義のときアバターグループが表示されない", async () => {
+    // latestAnalysisRun なし・members なしの既存 detail を使う
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(
+      screen.queryByRole("group", { name: /担当者:/ }),
+    ).not.toBeInTheDocument();
   });
 });
