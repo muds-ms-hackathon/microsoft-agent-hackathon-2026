@@ -23,7 +23,7 @@ from pipeline.postprocess import (
     remove_emoji,
 )
 from pipeline.validation import validate_outputs
-from schemas.analysis import AnalysisJobInput, SpeakerInfo
+from schemas.analysis import AnalysisJobInput, SpeakerInfo, UserTopicRequest
 
 # ──────────────────────── FakeLLMClient用フィクスチャ ─────────────────────────
 
@@ -196,6 +196,36 @@ async def test_analyze_meeting_completed():
     assert "total_minutes" in report["estimation"]
     assert isinstance(report.get("estimation_note"), str)
     assert "想定所要時間" in report["estimation_note"]
+
+
+@pytest.mark.asyncio
+async def test_analyze_meeting_passes_user_topic_requests_to_call6():
+    """job.user_topic_requests が Call 6（推奨アジェンダ生成）プロンプトに渡る。"""
+    job = _make_job()
+    job.user_topic_requests = [
+        UserTopicRequest(
+            title="予算の再検討",
+            body="前回保留分を詰める",
+            priority="required",
+            requested_by_name="田中",
+        )
+    ]
+
+    captured_prompts: list[str] = []
+
+    class _RecordingClient(FakeLLMClient):
+        async def call(self, prompt: str, temperature: float = 0.1) -> str:
+            captured_prompts.append(prompt)
+            return await super().call(prompt, temperature)
+
+    client = _RecordingClient(_make_fake_responses())
+    result = await analyze_meeting(job, client)
+
+    assert result.status == "completed"
+    # Call 6 のプロンプト（"推奨アジェンダ" を含む）にユーザー議題が注入されている
+    call6_prompts = [p for p in captured_prompts if "推奨アジェンダ" in p]
+    assert call6_prompts, "Call 6 のプロンプトが見つからない"
+    assert "予算の再検討" in call6_prompts[0]
 
 
 @pytest.mark.asyncio

@@ -327,6 +327,7 @@ async def analyze_meeting(
             estimation_note=estimation_note,
             suggested_participants=suggested_participants,
             change_summary=change_summary,
+            user_topic_requests=job.user_topic_requests,
         )
         raw6, parsed6 = await run_llm_call(llm_client, "call6", prompt6)
         raw_outputs["call6"] = raw6
