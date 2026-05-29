@@ -249,6 +249,49 @@ async def test_analyze_meeting_parse_error_returns_failed():
     assert "JSONパースエラー" in result.error_message
 
 
+# ──────────────────────── エージェント統合（chat_service 注入） ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_analyze_meeting_with_agent_chat_service():
+    """chat_service を渡すと、エージェントが文脈ツールを自律的に呼び履歴が残る。
+
+    抽出（Call1〜6）は従来どおり FakeLLMClient で動き、出力スキーマは退行しない。
+    """
+    from agent.kernel_factory import FakeChatCompletion, planned_tool_call
+
+    job = _make_job()
+    client = FakeLLMClient(_make_fake_responses())
+    chat = FakeChatCompletion(
+        tool_call_turns=[
+            [
+                planned_tool_call("meeting_context", "estimate_next_meeting_duration"),
+                planned_tool_call("meeting_context", "search_related_past_meetings"),
+            ]
+        ],
+        final_message="文脈収集を完了しました",
+    )
+
+    result = await analyze_meeting(job, client, chat_service=chat)
+
+    assert result.status == "completed"
+    report = result.report_json
+    assert report is not None
+    # 既存スキーマは維持される
+    assert "estimation" in report
+    assert "total_minutes" in report["estimation"]
+    assert isinstance(report.get("estimation_note"), str)
+    # エージェントのツール呼び出し履歴が記録される（受け入れ基準①）
+    assert "agent" in report
+    assert len(report["agent"]["tool_calls"]) >= 1
+    assert (
+        report["agent"]["tool_call_counts"][
+            "meeting_context-estimate_next_meeting_duration"
+        ]
+        == 1
+    )
+
+
 # ──────────────────────── 個別モジュールのユニットテスト ─────────────────────
 
 

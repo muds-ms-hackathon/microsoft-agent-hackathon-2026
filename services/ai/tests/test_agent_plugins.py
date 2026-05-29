@@ -9,17 +9,17 @@ from pipeline.estimation import calc_alert_level, calc_estimation, fmt_estimatio
 from rag.search import build_mock_rag_retrieval, build_suggested_participants_context
 
 
-def _make_plugin(**overrides) -> MeetingContextPlugin:
-    base = dict(
+def _make_plugin(
+    previous_report_json: dict | None = None,
+) -> MeetingContextPlugin:
+    return MeetingContextPlugin(
         keywords=["予算", "スケジュール"],
-        previous_report_json=None,
+        previous_report_json=previous_report_json,
         recurring_meeting_id="rec-1",
         tasks=[{"title": "資料作成", "priority": "required"}],
         open_issues=[{"title": "予算確定", "recurrence_count": 2}],
         decisions=[{"title": "方針A", "decision_state": "tentative"}],
     )
-    base.update(overrides)
-    return MeetingContextPlugin(**base)
 
 
 def test_estimate_tool_matches_calc_estimation():
