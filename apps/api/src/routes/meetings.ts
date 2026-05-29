@@ -20,7 +20,6 @@ import {
 import {
   buildReviewItemStatusFilter,
   buildReviewItemTypeFilter,
-  reviewItemCreateSchema,
   reviewItemQuerySchema,
 } from "../lib/schemas/review-item.js";
 import {
@@ -289,64 +288,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         orderBy: { updatedAt: "desc" },
       });
       return c.json(infos);
-    },
-  )
-  // TODO: 動作確認用のため削除する
-  .post(
-    "/:id/review-items",
-    zValidator("json", reviewItemCreateSchema),
-    async (c) => {
-      const id = c.req.param("id");
-      const input = c.req.valid("json");
-
-      const access = await requireMeetingAccess(c, id);
-      if (!access.ok) return access.response;
-
-      const { organizationId } = access.meeting.recurringMeeting;
-
-      if (input.type === "task_candidate") {
-        const task = await prisma.task.create({
-          data: {
-            organizationId,
-            title: input.title,
-            body: input.body,
-            sourceContext: input.sourceContext,
-            status: "draft",
-            originMeetingId: id,
-          },
-          select: { id: true, title: true, status: true },
-        });
-        return c.json(task, 201);
-      }
-
-      if (input.type === "ambiguity") {
-        const item = await prisma.ambiguousInfo.create({
-          data: {
-            meetingId: id,
-            body: input.title,
-            sourceContext: input.sourceContext,
-            status: "draft",
-          },
-          select: { id: true, body: true, status: true },
-        });
-        return c.json(item, 201);
-      }
-
-      // decision / open_issue → DecisionItem
-      const decisionState =
-        input.type === "decision" ? ("confirmed" as const) : ("open" as const);
-      const item = await prisma.decisionItem.create({
-        data: {
-          meetingId: id,
-          title: input.title,
-          body: input.body,
-          sourceContext: input.sourceContext,
-          status: "draft",
-          decisionState,
-        },
-        select: { id: true, title: true, status: true, decisionState: true },
-      });
-      return c.json(item, 201);
     },
   )
   .patch("/:id", zValidator("json", meetingUpdateSchema), async (c) => {

@@ -110,38 +110,12 @@ export const ambiguousInfoPatchSchema = z
     },
   );
 
-// TODO: POST /meetings/:id/review-items は動作確認用のため削除する
-// ambiguity は AmbiguousInfo.body に title を格納するため body フィールドを持たない。
-const baseCreateFields = {
-  title: z.string().min(1),
-  sourceContext: z.string().optional(),
-};
-export const reviewItemCreateSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("decision"),
-    ...baseCreateFields,
-    body: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("open_issue"),
-    ...baseCreateFields,
-    body: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("task_candidate"),
-    ...baseCreateFields,
-    body: z.string().optional(),
-  }),
-  z.object({ type: z.literal("ambiguity"), ...baseCreateFields }).strict(),
-]);
-
 export type ReviewItemQuery = z.infer<typeof reviewItemQuerySchema>;
 export type RecurringMeetingReviewItemQuery = z.infer<
   typeof recurringMeetingReviewItemQuerySchema
 >;
 export type DecisionItemPatchInput = z.infer<typeof decisionItemPatchSchema>;
 export type AmbiguousInfoPatchInput = z.infer<typeof ambiguousInfoPatchSchema>;
-export type ReviewItemCreateInput = z.infer<typeof reviewItemCreateSchema>;
 
 export function buildReviewItemTypeFilter(typeFilter: ReviewItemQuery["type"]) {
   const includeDecision =
