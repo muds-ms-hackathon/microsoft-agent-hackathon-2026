@@ -21,9 +21,7 @@ def calc_estimation(
 
     # 新規未決事項の議論（5分/件）、再発未決事項（8分/件）
     new_issues = [o for o in open_issues if o.get("recurrence_count", 1) == 1]
-    recurring_issues = [
-        o for o in open_issues if o.get("recurrence_count", 1) >= 2
-    ]
+    recurring_issues = [o for o in open_issues if o.get("recurrence_count", 1) >= 2]
     if new_issues:
         breakdown["open_issue_new"] = {
             "count": len(new_issues),
@@ -44,9 +42,7 @@ def calc_estimation(
         }
 
     # 仮決定の再確認（5分/件）
-    tentative = [
-        d for d in decisions if d.get("decision_state") == "tentative"
-    ]
+    tentative = [d for d in decisions if d.get("decision_state") == "tentative"]
     if tentative:
         breakdown["tentative_reconfirm"] = {
             "count": len(tentative),

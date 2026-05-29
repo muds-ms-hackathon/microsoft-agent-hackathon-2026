@@ -6,17 +6,17 @@ vi.mock("@/lib/api", () => ({
   api: {
     organizations: {
       ":id": {
-        meetings: {
-          $get: vi.fn(),
-        },
+        meetings: { $get: vi.fn() },
+        "review-items": { $get: vi.fn() },
       },
     },
     "recurring-meetings": {
       ":id": {
-        meetings: {
-          $get: vi.fn(),
-        },
+        meetings: { $get: vi.fn() },
       },
+    },
+    tasks: {
+      me: { $get: vi.fn() },
     },
   },
   authHeaders: () => ({ headers: {} }),
@@ -59,6 +59,8 @@ vi.mock("jotai", async () => {
 });
 
 import { api } from "@/lib/api";
+import type { ReviewItem } from "@/features/review/types";
+import type { TaskListItem } from "@/features/tasks/types";
 import { useAtomValue } from "jotai";
 import { Dashboard } from "../routes/index";
 
@@ -75,14 +77,84 @@ const NEAR_FUTURE = "2099-01-01T10:00:00.000Z";
 const FAR_FUTURE = "2099-06-01T10:00:00.000Z";
 const PAST = "2000-01-01T10:00:00.000Z";
 
-const RM_1 = { id: "rm-1", name: "週次定例", _count: { members: 0 } };
-const RM_2 = { id: "rm-2", name: "月次レビュー", _count: { members: 0 } };
+const RM_1 = {
+  id: "rm-1",
+  name: "週次定例",
+  _count: { members: 0 },
+  members: [],
+};
+const RM_2 = {
+  id: "rm-2",
+  name: "月次レビュー",
+  _count: { members: 0 },
+  members: [],
+};
+
+function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
+  return {
+    id: "item-1",
+    sourceTable: "task",
+    type: "task_candidate",
+    title: "テストタスク",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "draft",
+    assignees: [],
+    deadline: null,
+    severity: null,
+    resolutionType: null,
+    recurringMeetingId: "rmtg-1",
+    recurringMeetingName: "週次定例",
+    meetingId: "mtg-1",
+    version: 0,
+    ...overrides,
+  };
+}
+
+function makeTask(overrides: Partial<TaskListItem> = {}): TaskListItem {
+  return {
+    id: "task-1",
+    organizationId: "org-1",
+    originMeetingId: null,
+    decisionItemId: null,
+    title: "テストタスク",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "todo",
+    priority: null,
+    dueDateRaw: null,
+    dueDateEstimated: null,
+    assigneeRaw: null,
+    blockingItemId: null,
+    carriedOverCount: null,
+    ambiguityFlags: null,
+    progressNote: null,
+    dueDate: null,
+    startDate: null,
+    followUpDate: null,
+    version: 0,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    organization: { id: "org-1", name: "ACME" },
+    originMeeting: null,
+    assignees: [],
+    recurringMeetings: [],
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 function render() {
+  // 既存テストが新しいエンドポイントで undefined を返して落ちないようデフォルトを設定する
+  vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+    mockJson([]),
+  );
+  vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
   return renderWithQuery(<Dashboard />);
 }
 
@@ -139,11 +211,10 @@ describe("Dashboard - NextMeetingsSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("複数定例のうち heldAt が最も近い upcoming 会議の定例名が表示される", async () => {
+  it("複数定例がある場合、すべての定例名が表示される", async () => {
     vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
       mockJson([RM_1, RM_2]),
     );
-    // rm-1 は遠い未来、rm-2 は近い未来 → rm-2 が選ばれる
     vi.mocked(api["recurring-meetings"][":id"].meetings.$get)
       .mockResolvedValueOnce(
         mockJson([
@@ -168,7 +239,43 @@ describe("Dashboard - NextMeetingsSection", () => {
         ]),
       );
     render();
-    expect(await screen.findByText("月次レビュー")).toBeInTheDocument();
+    expect(await screen.findByText("週次定例")).toBeInTheDocument();
+    expect(screen.getByText("月次レビュー")).toBeInTheDocument();
+  });
+
+  it("複数定例の会議カードが heldAt の昇順（近い順）で並ぶ", async () => {
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([RM_1, RM_2]),
+    );
+    // rm-1 は遠い未来、rm-2 は近い未来 → rm-2 が先に表示される
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get)
+      .mockResolvedValueOnce(
+        mockJson([
+          {
+            id: "mtg-rm1",
+            title: "週次定例 会議",
+            heldAt: FAR_FUTURE,
+            estimatedDurationMinutes: 60,
+            recurringMeetingId: "rm-1",
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        mockJson([
+          {
+            id: "mtg-rm2",
+            title: "月次レビュー 会議",
+            heldAt: NEAR_FUTURE,
+            estimatedDurationMinutes: 60,
+            recurringMeetingId: "rm-2",
+          },
+        ]),
+      );
+    render();
+    await screen.findByText("週次定例");
+    const cards = screen.getAllByRole("link", { name: /詳細/ });
+    expect(cards[0]).toHaveAttribute("href", "/recurring-meetings/rm-2");
+    expect(cards[1]).toHaveAttribute("href", "/recurring-meetings/rm-1");
   });
 
   it("定例取得が失敗したとき「定例の取得に失敗しました」が表示される", async () => {
@@ -192,6 +299,61 @@ describe("Dashboard - NextMeetingsSection", () => {
     expect(
       await screen.findByText("定例の取得に失敗しました"),
     ).toBeInTheDocument();
+  });
+
+  it("members があるとき AvatarStack が表示される", async () => {
+    const rmWithMembers = {
+      ...RM_1,
+      _count: { members: 1 },
+      members: [
+        {
+          userId: "u-1",
+          role: "owner",
+          user: { id: "u-1", name: "Alice", displayName: "Alice" },
+        },
+      ],
+    };
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([rmWithMembers]),
+    );
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "mtg-1",
+          title: "週次定例 会議",
+          heldAt: NEAR_FUTURE,
+          estimatedDurationMinutes: 60,
+          recurringMeetingId: "rm-1",
+        },
+      ]),
+    );
+    render();
+    await screen.findByText("週次定例");
+    expect(
+      screen.getByRole("group", { name: /担当者: Alice/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("members が空のとき AvatarStack が表示されない", async () => {
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([RM_1]),
+    );
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "mtg-1",
+          title: "週次定例 会議",
+          heldAt: NEAR_FUTURE,
+          estimatedDurationMinutes: 60,
+          recurringMeetingId: "rm-1",
+        },
+      ]),
+    );
+    render();
+    await screen.findByText("週次定例");
+    expect(
+      screen.queryByRole("group", { name: /担当者:/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("「詳細」リンクが最も直近の定例の id のページに向いている", async () => {
@@ -223,7 +385,203 @@ describe("Dashboard - NextMeetingsSection", () => {
         ]),
       );
     render();
-    const link = await screen.findByRole("link", { name: /詳細/ });
-    expect(link).toHaveAttribute("href", "/recurring-meetings/rm-2");
+    const links = await screen.findAllByRole("link", { name: /詳細/ });
+    expect(links[0]).toHaveAttribute("href", "/recurring-meetings/rm-2");
+  });
+});
+
+// ===== ReviewPendingCard =====
+// render() はデフォルトモックを上書きするため、このブロックでは renderWithQuery を直接使う。
+
+describe("Dashboard - ReviewPendingCard", () => {
+  beforeEach(() => {
+    vi.mocked(useAtomValue).mockReturnValue("org-1");
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+  });
+
+  function renderDashboard() {
+    return renderWithQuery(<Dashboard />);
+  }
+
+  it("アイテムが空のとき「レビュー待ちのアイテムはありません」が表示される", async () => {
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderDashboard();
+    expect(
+      await screen.findByText("レビュー待ちのアイテムはありません"),
+    ).toBeInTheDocument();
+  });
+
+  it("取得失敗時に「取得に失敗しました」が表示される", async () => {
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockRejectedValue(
+      new Error("network"),
+    );
+    renderDashboard();
+    expect(await screen.findByText("取得に失敗しました")).toBeInTheDocument();
+  });
+
+  it("種別ごとに件数が集計されて表示される", async () => {
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({ id: "r1", type: "task_candidate" }),
+        makeReviewItem({ id: "r2", type: "task_candidate" }),
+        makeReviewItem({ id: "r3", type: "open_issue" }),
+      ]),
+    );
+    renderDashboard();
+    expect(await screen.findByText("タスク候補")).toBeInTheDocument();
+    expect(screen.getByText("未決事項")).toBeInTheDocument();
+    // 種別バッジの件数が正しい値で表示される
+    const reviewCard = screen
+      .getByText("タスク候補")
+      .closest("[data-slot=card]");
+    expect(reviewCard).toBeTruthy();
+    expect(reviewCard?.textContent).toContain("2");
+    expect(reviewCard?.textContent).toContain("1");
+  });
+
+  it("件数が0の種別は表示されない", async () => {
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([makeReviewItem({ id: "r1", type: "open_issue" })]),
+    );
+    renderDashboard();
+    await screen.findByText("未決事項");
+    expect(screen.queryByText("タスク候補")).not.toBeInTheDocument();
+    expect(screen.queryByText("曖昧箇所")).not.toBeInTheDocument();
+  });
+
+  it("ヘッダーに総件数バッジが表示される", async () => {
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({ id: "r1", type: "task_candidate" }),
+        makeReviewItem({ id: "r2", type: "open_issue" }),
+        makeReviewItem({ id: "r3", type: "open_issue" }),
+      ]),
+    );
+    renderDashboard();
+    // データ取得完了後にバッジが描画される
+    expect(await screen.findByText("タスク候補")).toBeInTheDocument();
+    const header = screen.getByText("レビュー待ち").closest("div");
+    expect(header?.textContent).toContain("3");
+  });
+
+  it("/review へのリンクが存在する", async () => {
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([]),
+    );
+    renderDashboard();
+    await screen.findByText("レビュー待ち");
+    const reviewLinks = screen
+      .getAllByRole("link")
+      .filter((l) => l.getAttribute("href") === "/review");
+    expect(reviewLinks.length).toBeGreaterThan(0);
+  });
+});
+
+// ===== IncompleteTasksCard =====
+// render() はデフォルトモックを上書きするため、このブロックでは renderWithQuery を直接使う。
+
+describe("Dashboard - IncompleteTasksCard", () => {
+  beforeEach(() => {
+    vi.mocked(useAtomValue).mockReturnValue("org-1");
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([]),
+    );
+  });
+
+  function renderDashboard() {
+    return renderWithQuery(<Dashboard />);
+  }
+
+  it("タスクが空のとき「未完了のタスクはありません」が表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+    renderDashboard();
+    expect(
+      await screen.findByText("未完了のタスクはありません"),
+    ).toBeInTheDocument();
+  });
+
+  it("取得失敗時に「タスクの取得に失敗しました」が表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockRejectedValue(new Error("network"));
+    renderDashboard();
+    expect(
+      await screen.findByText("タスクの取得に失敗しました"),
+    ).toBeInTheDocument();
+  });
+
+  it("タスクのタイトルと所属定例名が表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([
+        makeTask({
+          id: "t1",
+          title: "議事録を作成する",
+          recurringMeetings: [{ id: "rm-1", name: "週次定例" }],
+        }),
+      ]),
+    );
+    renderDashboard();
+    expect(await screen.findByText("議事録を作成する")).toBeInTheDocument();
+    expect(screen.getByText("週次定例")).toBeInTheDocument();
+  });
+
+  it("期限切れのタスクは「超過」テキストが表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      // PAST は確実に過去のため overdue 判定される
+      mockJson([makeTask({ id: "t1", dueDate: PAST })]),
+    );
+    renderDashboard();
+    expect(await screen.findByText(/超過/)).toBeInTheDocument();
+  });
+
+  it("期限ありのタスクは「月/日」形式で表示される", async () => {
+    // タイムゾーン依存を避けるため月中旬の正午UTCを使う
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([makeTask({ id: "t1", dueDate: "2099-06-15T12:00:00.000Z" })]),
+    );
+    renderDashboard();
+    expect(await screen.findByText("6/15")).toBeInTheDocument();
+  });
+
+  it("期限なしのタスクは「未設定」と表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([makeTask({ id: "t1", dueDate: null })]),
+    );
+    renderDashboard();
+    expect(await screen.findByText("未設定")).toBeInTheDocument();
+  });
+
+  it("5件以上のとき全件スクロール表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson(
+        Array.from({ length: 5 }, (_, i) =>
+          makeTask({ id: `t${i}`, title: `タスク${i + 1}` }),
+        ),
+      ),
+    );
+    renderDashboard();
+    await screen.findByText("タスク1");
+    expect(screen.getByText("タスク4")).toBeInTheDocument();
+    expect(screen.getByText("タスク5")).toBeInTheDocument();
+  });
+
+  it("ヘッダーに件数バッジが表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([
+        makeTask({ id: "t1", title: "タスクA" }),
+        makeTask({ id: "t2", title: "タスクB" }),
+      ]),
+    );
+    renderDashboard();
+    // データ取得完了後にバッジが描画される
+    await screen.findByText("タスクA");
+    const header = screen.getByText("未完了タスク").closest("div");
+    expect(header?.textContent).toContain("2");
   });
 });

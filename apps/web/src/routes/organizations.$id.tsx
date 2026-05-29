@@ -1,3 +1,4 @@
+import { SectionError } from "@/components/ui/SectionError";
 import { DeleteMemberDialog } from "@/features/organizations/components/DeleteMemberDialog";
 import { DeleteOrganizationDialog } from "@/features/organizations/components/DeleteOrganizationDialog";
 import { EditOrganizationDialog } from "@/features/organizations/components/EditOrganizationDialog";
@@ -122,9 +123,10 @@ export function OrganizationDetailView({
         {membersQuery.isError ? (
           // members だけ取得失敗したケース。空配列にフォールバックすると
           // 「メンバーが 0 人」に見えてしまうため、明示的にエラー表示する。
-          <p className="text-destructive text-sm">
-            メンバーの取得に失敗しました
-          </p>
+          <SectionError
+            message="メンバーの取得に失敗しました"
+            onRetry={() => membersQuery.refetch()}
+          />
         ) : (
           <ul aria-label="メンバー一覧" className="divide-y rounded-md border">
             {members.map((m) => (

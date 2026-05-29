@@ -1,4 +1,5 @@
 """プロンプト構築関数群。各Callに渡すプロンプトを組み立てる。"""
+
 from string import Template
 
 
@@ -30,10 +31,10 @@ def fmt_open_issues(open_issues: list[dict]) -> str:
         return "(なし)"
     lines = []
     for i, issue in enumerate(open_issues, 1):
-        topic = issue.get("topic", "")
+        title = issue.get("title", "")
         reason = issue.get("reason", "")
         status = issue.get("status", "open")
-        lines.append(f"{i}. [{status}] {topic}（理由: {reason}）")
+        lines.append(f"{i}. [{status}] {title}（理由: {reason}）")
     return "\n".join(lines)
 
 
@@ -48,17 +49,17 @@ def fmt_context_all(
     if decisions:
         parts.append("【決定事項】")
         for i, d in enumerate(decisions, 1):
-            topic = d.get("topic", "")
+            title = d.get("title", "")
             state = d.get("decision_state", "")
-            content = d.get("content", "")
-            parts.append(f"  D{i}. [{state}] {topic}: {content}")
+            body = d.get("body", "")
+            parts.append(f"  D{i}. [{state}] {title}: {body}")
 
     if open_issues:
         parts.append("【未決事項】")
         for i, o in enumerate(open_issues, 1):
-            topic = o.get("topic", "")
+            title = o.get("title", "")
             reason = o.get("reason", "")
-            parts.append(f"  OI{i}. {topic}（{reason}）")
+            parts.append(f"  OI{i}. {title}（{reason}）")
 
     if tasks:
         parts.append("【タスク】")
@@ -87,12 +88,11 @@ def fmt_prev_open_issues(prev_open_issues: list[dict]) -> str:
         return "(なし)"
     lines = []
     for i, issue in enumerate(prev_open_issues, 1):
-        topic = issue.get("topic", "")
+        # 旧DB形式（topic）との後方互換のためフォールバックを保持
+        title = issue.get("title") or issue.get("topic", "")
         reason = issue.get("reason", "")
         rc = issue.get("recurrence_count", 1)
-        lines.append(
-            f"{i}. {topic}（理由: {reason}、継続回数: {rc}回）"
-        )
+        lines.append(f"{i}. {title}（理由: {reason}、継続回数: {rc}回）")
     return "\n".join(lines)
 
 
@@ -119,11 +119,11 @@ def fmt_decisions_for_call6(decisions: list[dict]) -> str:
         return "(なし)"
     lines = []
     for d in decisions:
-        topic = d.get("topic", "")
+        title = d.get("title", "")
         state = d.get("decision_state", "")
-        content = d.get("content", "")
+        body = d.get("body", "")
         item_id = d.get("id", "")
-        lines.append(f"- [{item_id}][{state}] {topic}: {content}")
+        lines.append(f"- [{item_id}][{state}] {title}: {body}")
     return "\n".join(lines)
 
 
@@ -133,14 +133,12 @@ def fmt_open_issues_for_call6(open_issues: list[dict]) -> str:
         return "(なし)"
     lines = []
     for o in open_issues:
-        topic = o.get("topic", "")
+        title = o.get("title", "")
         reason = o.get("reason", "")
         status = o.get("status", "open")
         item_id = o.get("id", "")
         rc = o.get("recurrence_count", 1)
-        lines.append(
-            f"- [{item_id}][{status}] {topic}（{reason}、{rc}回目）"
-        )
+        lines.append(f"- [{item_id}][{status}] {title}（{reason}、{rc}回目）")
     return "\n".join(lines)
 
 

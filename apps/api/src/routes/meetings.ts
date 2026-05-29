@@ -4,10 +4,34 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { sendToServiceBus } from "../lib/service-bus.js";
 import {
+  buildDecisionItemListWhere,
+  decisionItemListQuerySchema,
+} from "../lib/schemas/decision-item.js";
+import {
+  buildAmbiguousInfoListWhere,
+  ambiguousInfoListQuerySchema,
+} from "../lib/schemas/ambiguous-info.js";
+import {
+  ambiguousInfoReviewInclude,
+  decisionItemReviewInclude,
+  serializeReviewItems,
+  taskReviewInclude,
+} from "../lib/review-item-serialization.js";
+import {
+  buildReviewItemStatusFilter,
+  buildReviewItemTypeFilter,
+  reviewItemCreateSchema,
+  reviewItemQuerySchema,
+} from "../lib/schemas/review-item.js";
+import {
   buildTaskListWhere,
   taskListQuerySchema,
 } from "../lib/schemas/task.js";
 import { topicRequestCreateSchema } from "../lib/schemas/topic-request.js";
+import {
+  decisionItemListInclude,
+  decisionItemListOrderBy,
+} from "../lib/decision-item-serialization.js";
 import {
   serializeTask,
   taskListInclude,
@@ -38,7 +62,8 @@ const meetingUpdateSchema = z
 // 旧 GET / と POST /meetings は認証なしで叩ける状態だったため撤去した。
 // Meeting 作成は POST /recurring-meetings/:id/meetings に一本化されている。
 export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
-  .get("/:id", auth, async (c) => {
+  .use("*", auth)
+  .get("/:id", async (c) => {
     const id = c.req.param("id");
     // 認可検証は共通ヘルパーで実施。GET /:id は追加情報が必要なため、
     // 認可確定後に detail include 付きで再フェッチする。
@@ -51,6 +76,14 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         recurringMeeting: {
           include: {
             organization: { select: { id: true, name: true } },
+            _count: { select: { members: true } },
+            members: {
+              take: 4,
+              orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+              include: {
+                user: { select: { id: true, name: true, displayName: true } },
+              },
+            },
           },
         },
         // 解析ラン最新 1 件をポーリング用に含める
@@ -75,6 +108,16 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         name: recurringMeeting.name,
       },
       organization: recurringMeeting.organization,
+      memberCount: recurringMeeting._count.members,
+      members: recurringMeeting.members.map((m) => ({
+        userId: m.userId,
+        role: m.role,
+        user: {
+          id: m.user.id,
+          name: m.user.name,
+          displayName: m.user.displayName,
+        },
+      })),
       latestAnalysisRun: latestRun
         ? {
             id: latestRun.id,
@@ -85,14 +128,32 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
             completedAt: latestRun.completedAt,
             failedAt: latestRun.failedAt,
             errorMessage: latestRun.errorMessage,
+            recommendedAgenda: latestRun.recommendedAgenda,
           }
         : null,
     });
   })
+  .get("/:id/tasks", zValidator("query", taskListQuerySchema), async (c) => {
+    const id = c.req.param("id");
+    const filters = c.req.valid("query");
+
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議を発生源とするタスクのみ。
+    const tasks = await prisma.task.findMany({
+      where: {
+        ...buildTaskListWhere(filters),
+        originMeetingId: id,
+      },
+      orderBy: taskListOrderBy,
+      include: taskListInclude,
+    });
+    return c.json(tasks.map(serializeTask));
+  })
   .get(
-    "/:id/tasks",
-    auth,
-    zValidator("query", taskListQuerySchema),
+    "/:id/review-items",
+    zValidator("query", reviewItemQuerySchema),
     async (c) => {
       const id = c.req.param("id");
       const filters = c.req.valid("query");
@@ -100,19 +161,58 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       const access = await requireMeetingAccess(c, id);
       if (!access.ok) return access.response;
 
-      // 当該会議を発生源とするタスクのみ。
-      const tasks = await prisma.task.findMany({
-        where: {
-          ...buildTaskListWhere(filters),
-          originMeetingId: id,
-        },
-        orderBy: taskListOrderBy,
-        include: taskListInclude,
-      });
-      return c.json(tasks.map(serializeTask));
+      const {
+        includeDecision,
+        includeTasks,
+        includeAmbiguousInfos,
+        decisionItemTypeWhere,
+      } = buildReviewItemTypeFilter(filters.type);
+      const {
+        decisionItemStatusWhere,
+        taskStatusWhere,
+        ambiguousInfoStatusWhere,
+      } = buildReviewItemStatusFilter(filters.status);
+
+      const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
+        includeDecision
+          ? prisma.decisionItem.findMany({
+              where: {
+                meetingId: id,
+                ...decisionItemTypeWhere,
+                ...decisionItemStatusWhere,
+              },
+              orderBy: { createdAt: "asc" },
+              include: decisionItemReviewInclude,
+            })
+          : [],
+        includeTasks
+          ? prisma.task.findMany({
+              where: {
+                originMeetingId: id,
+                ...taskStatusWhere,
+              },
+              orderBy: { createdAt: "asc" },
+              include: taskReviewInclude,
+            })
+          : [],
+        includeAmbiguousInfos
+          ? prisma.ambiguousInfo.findMany({
+              where: {
+                meetingId: id,
+                ...ambiguousInfoStatusWhere,
+              },
+              orderBy: { createdAt: "asc" },
+              include: ambiguousInfoReviewInclude,
+            })
+          : [],
+      ]);
+
+      return c.json(
+        serializeReviewItems({ decisionItems, tasks, ambiguousInfos }),
+      );
     },
   )
-  .get("/:id/topic-requests", auth, async (c) => {
+  .get("/:id/topic-requests", async (c) => {
     const id = c.req.param("id");
     const access = await requireMeetingAccess(c, id);
     if (!access.ok) return access.response;
@@ -127,7 +227,6 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
   })
   .post(
     "/:id/topic-requests",
-    auth,
     zValidator("json", topicRequestCreateSchema),
     async (c) => {
       const id = c.req.param("id");
@@ -149,7 +248,108 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(created, 201);
     },
   )
-  .patch("/:id", auth, zValidator("json", meetingUpdateSchema), async (c) => {
+  .get(
+    "/:id/decision-items",
+    zValidator("query", decisionItemListQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const filters = c.req.valid("query");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const items = await prisma.decisionItem.findMany({
+        where: { ...buildDecisionItemListWhere(filters), meetingId: id },
+        orderBy: decisionItemListOrderBy,
+        include: decisionItemListInclude,
+      });
+      return c.json(
+        items.map(({ assignees, ...rest }) => ({
+          ...rest,
+          assignees: assignees.map((a) => a.user),
+        })),
+      );
+    },
+  )
+  .get(
+    "/:id/ambiguous-infos",
+    zValidator("query", ambiguousInfoListQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const filters = c.req.valid("query");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const infos = await prisma.ambiguousInfo.findMany({
+        where: {
+          ...buildAmbiguousInfoListWhere(filters),
+          meetingId: id,
+        },
+        orderBy: { updatedAt: "desc" },
+      });
+      return c.json(infos);
+    },
+  )
+  // TODO: 動作確認用のため削除する
+  .post(
+    "/:id/review-items",
+    zValidator("json", reviewItemCreateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const { organizationId } = access.meeting.recurringMeeting;
+
+      if (input.type === "task_candidate") {
+        const task = await prisma.task.create({
+          data: {
+            organizationId,
+            title: input.title,
+            body: input.body,
+            sourceContext: input.sourceContext,
+            status: "draft",
+            originMeetingId: id,
+          },
+          select: { id: true, title: true, status: true },
+        });
+        return c.json(task, 201);
+      }
+
+      if (input.type === "ambiguity") {
+        const item = await prisma.ambiguousInfo.create({
+          data: {
+            meetingId: id,
+            body: input.title,
+            sourceContext: input.sourceContext,
+            status: "draft",
+          },
+          select: { id: true, body: true, status: true },
+        });
+        return c.json(item, 201);
+      }
+
+      // decision / open_issue → DecisionItem
+      const decisionState =
+        input.type === "decision" ? ("confirmed" as const) : ("open" as const);
+      const item = await prisma.decisionItem.create({
+        data: {
+          meetingId: id,
+          title: input.title,
+          body: input.body,
+          sourceContext: input.sourceContext,
+          status: "draft",
+          decisionState,
+        },
+        select: { id: true, title: true, status: true, decisionState: true },
+      });
+      return c.json(item, 201);
+    },
+  )
+  .patch("/:id", zValidator("json", meetingUpdateSchema), async (c) => {
     const id = c.req.param("id");
     const data = c.req.valid("json");
 
@@ -173,7 +373,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(updated);
   })
-  .post("/:id/analyze", auth, async (c) => {
+  .post("/:id/analyze", async (c) => {
     const id = c.req.param("id");
 
     const access = await requireMeetingAccess(c, id);

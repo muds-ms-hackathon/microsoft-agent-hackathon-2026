@@ -6,7 +6,7 @@ vi.mock("../src/lib/prisma.js", () => ({
     meetingAnalysisRun: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     topicRequest: {
       findMany: vi.fn(),
@@ -20,7 +20,7 @@ import { prisma } from "../src/lib/prisma.js";
 
 const mockRunFindUnique = vi.mocked(prisma.meetingAnalysisRun.findUnique);
 const mockRunFindFirst = vi.mocked(prisma.meetingAnalysisRun.findFirst);
-const mockRunUpdate = vi.mocked(prisma.meetingAnalysisRun.update);
+const mockRunUpdateMany = vi.mocked(prisma.meetingAnalysisRun.updateMany);
 const mockTopicRequestFindMany = vi.mocked(prisma.topicRequest.findMany);
 
 const SECRET = "test-secret";
@@ -260,6 +260,41 @@ describe("GET /internal/analysis-runs/:id/input", () => {
   });
 });
 
+describe("GET /internal/analysis-runs/:id/status", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.INTERNAL_API_SECRET = SECRET;
+  });
+
+  it("存在する解析ランの status を返す", async () => {
+    mockRunFindUnique.mockResolvedValue(
+      baseRun as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>,
+    );
+
+    const res = await app.request("/internal/analysis-runs/run-1/status", {
+      headers: AUTH_HEADER,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; status: string };
+    expect(body.id).toBe("run-1");
+    expect(body.status).toBe("queued");
+  });
+
+  it("存在しない解析ランは 404", async () => {
+    mockRunFindUnique.mockResolvedValue(null);
+
+    const res = await app.request("/internal/analysis-runs/missing/status", {
+      headers: AUTH_HEADER,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("認証ヘッダなしは 401", async () => {
+    const res = await app.request("/internal/analysis-runs/run-1/status");
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("PATCH /internal/analysis-runs/:id/result", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -271,13 +306,16 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
   } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>;
 
   it("completed ステータスで解析結果を保存できる", async () => {
-    mockRunFindUnique.mockResolvedValue(existingRun);
-    mockRunUpdate.mockResolvedValue({
+    const updatedRun = {
       ...existingRun,
       status: "completed",
       summary: "解析サマリー",
       alertLevel: "low",
-    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
+    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>;
+    mockRunFindUnique
+      .mockResolvedValueOnce(existingRun) // 1回目：404チェック
+      .mockResolvedValueOnce(updatedRun); // 2回目：更新後の再取得
+    mockRunUpdateMany.mockResolvedValue({ count: 1 });
 
     const res = await app.request("/internal/analysis-runs/run-1/result", {
       method: "PATCH",
@@ -291,9 +329,9 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
       }),
     });
     expect(res.status).toBe(200);
-    expect(mockRunUpdate).toHaveBeenCalledWith(
+    expect(mockRunUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "run-1" },
+        where: { id: "run-1", status: { notIn: ["completed", "failed"] } },
         data: expect.objectContaining({
           status: "completed",
           summary: "解析サマリー",
@@ -306,12 +344,15 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
   });
 
   it("failed ステータスでエラー情報を保存できる", async () => {
-    mockRunFindUnique.mockResolvedValue(existingRun);
-    mockRunUpdate.mockResolvedValue({
+    const updatedRun = {
       ...existingRun,
       status: "failed",
       errorMessage: "解析エラー",
-    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>);
+    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>;
+    mockRunFindUnique
+      .mockResolvedValueOnce(existingRun)
+      .mockResolvedValueOnce(updatedRun);
+    mockRunUpdateMany.mockResolvedValue({ count: 1 });
 
     const res = await app.request("/internal/analysis-runs/run-1/result", {
       method: "PATCH",
@@ -324,7 +365,7 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
       }),
     });
     expect(res.status).toBe(200);
-    expect(mockRunUpdate).toHaveBeenCalledWith(
+    expect(mockRunUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: "failed",
@@ -336,6 +377,71 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
     );
   });
 
+  it("すでに completed 状態のrunは更新せずに現状を返す", async () => {
+    const completedRun = {
+      ...existingRun,
+      status: "completed",
+      summary: "既存サマリー",
+      alertLevel: "high",
+    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>;
+    mockRunFindUnique
+      .mockResolvedValueOnce(completedRun) // 1回目：404チェック
+      .mockResolvedValueOnce(completedRun); // 2回目：再取得（更新なし）
+    mockRunUpdateMany.mockResolvedValue({ count: 0 });
+
+    const res = await app.request("/internal/analysis-runs/run-1/result", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
+      body: JSON.stringify({ status: "failed", error_message: "再配送エラー" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      status: string;
+      summary: string;
+      errorMessage: null;
+    };
+    expect(body.status).toBe("completed");
+    expect(body.summary).toBe("既存サマリー");
+    expect(body.errorMessage).toBeNull(); // リクエストの値で上書きされていない
+    expect(mockRunUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "run-1", status: { notIn: ["completed", "failed"] } },
+      }),
+    );
+  });
+
+  it("すでに failed 状態のrunは更新せずに現状を返す", async () => {
+    const failedRun = {
+      ...existingRun,
+      status: "failed",
+      errorMessage: "元のエラー",
+    } as Prisma.MeetingAnalysisRunGetPayload<Record<string, never>>;
+    mockRunFindUnique
+      .mockResolvedValueOnce(failedRun)
+      .mockResolvedValueOnce(failedRun);
+    mockRunUpdateMany.mockResolvedValue({ count: 0 });
+
+    const res = await app.request("/internal/analysis-runs/run-1/result", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...AUTH_HEADER },
+      body: JSON.stringify({ status: "completed", summary: "上書き試み" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      status: string;
+      summary: null;
+      errorMessage: string;
+    };
+    expect(body.status).toBe("failed");
+    expect(body.errorMessage).toBe("元のエラー");
+    expect(body.summary).toBeNull(); // リクエストの値で上書きされていない
+    expect(mockRunUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "run-1", status: { notIn: ["completed", "failed"] } },
+      }),
+    );
+  });
+
   it("不正な status は 400", async () => {
     const res = await app.request("/internal/analysis-runs/run-1/result", {
       method: "PATCH",
@@ -343,7 +449,7 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
       body: JSON.stringify({ status: "queued" }),
     });
     expect(res.status).toBe(400);
-    expect(mockRunUpdate).not.toHaveBeenCalled();
+    expect(mockRunUpdateMany).not.toHaveBeenCalled();
   });
 
   it("存在しない解析ランは 404", async () => {
@@ -354,7 +460,7 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
       body: JSON.stringify({ status: "completed" }),
     });
     expect(res.status).toBe(404);
-    expect(mockRunUpdate).not.toHaveBeenCalled();
+    expect(mockRunUpdateMany).not.toHaveBeenCalled();
   });
 
   it("認証ヘッダなしは 401", async () => {
@@ -364,6 +470,6 @@ describe("PATCH /internal/analysis-runs/:id/result", () => {
       body: JSON.stringify({ status: "completed" }),
     });
     expect(res.status).toBe(401);
-    expect(mockRunUpdate).not.toHaveBeenCalled();
+    expect(mockRunUpdateMany).not.toHaveBeenCalled();
   });
 });

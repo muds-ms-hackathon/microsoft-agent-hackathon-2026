@@ -1,4 +1,5 @@
 """メイン会議解析パイプライン（Call 1〜6）。"""
+
 import hashlib
 import json
 import logging
@@ -76,9 +77,9 @@ def _calc_input_hash(job: AnalysisJobInput) -> str:
         "transcript": job.transcript,
         "meeting_date": job.meeting_date,
     }
-    return hashlib.sha256(
-        json.dumps(payload, ensure_ascii=False).encode()
-    ).hexdigest()[:16]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()[
+        :16
+    ]
 
 
 def _assemble(
@@ -99,12 +100,8 @@ def _assemble(
     alert_level = calc_alert_level(estimation)
 
     # 次回持ち越し対象を handover セクションにまとめる
-    handover_open_issues = [
-        o for o in open_issues if o.get("status") == "open"
-    ]
-    handover_tasks = [
-        t for t in tasks if t.get("status") not in {"done", "rejected"}
-    ]
+    handover_open_issues = [o for o in open_issues if o.get("status") == "open"]
+    handover_tasks = [t for t in tasks if t.get("status") not in {"done", "rejected"}]
 
     return {
         "meta": {
@@ -178,9 +175,7 @@ async def analyze_meeting(
         logger.info("[call1] キーワード抽出完了: %d件", len(keywords))
 
         # ── RAG検索① ──────────────────────────────────────────
-        rag_retrieval = build_mock_rag_retrieval(
-            job.recurring_meeting_id, keywords
-        )
+        rag_retrieval = build_mock_rag_retrieval(job.recurring_meeting_id, keywords)
         rag_context = rag_retrieval["rag_context_for_prompt"]
 
         # ── Call 2: 決定事項・未決事項抽出 ───────────────────────
@@ -314,16 +309,12 @@ async def analyze_meeting(
         rag_retrieval["used_in_calls"] = list(
             rag_retrieval.get("used_in_calls", [])
         ) + ["call6"]
-        suggested_participants = build_suggested_participants_context(
-            rag_retrieval
-        )
+        suggested_participants = build_suggested_participants_context(rag_retrieval)
 
         # ── Call 6: サマリー・推奨アジェンダ生成 ─────────────────
         change_summary: str | None = None
         if job.previous_report_json:
-            change_summary = prepare_change_summary_for_call6(
-                job.previous_report_json
-            )
+            change_summary = prepare_change_summary_for_call6(job.previous_report_json)
 
         prompt6 = build_call6_prompt(
             prompts,
@@ -450,18 +441,19 @@ def _fmt_estimation_note(estimation: dict) -> str:
     return "\n".join(lines)
 
 
-def _inherit_recurrence_counts(
-    new_issues: list[dict], prev_issues: list[dict]
-) -> None:
+def _inherit_recurrence_counts(new_issues: list[dict], prev_issues: list[dict]) -> None:
     """前回の未決事項と一致するものに recurrence_count を引き継ぐ。"""
     from .postprocess import normalize_for_similarity
 
     for ni in new_issues:
-        norm_new = normalize_for_similarity(ni.get("topic", ""))
+        norm_new = normalize_for_similarity(ni.get("title", ""))
         for pi in prev_issues:
-            norm_prev = normalize_for_similarity(pi.get("topic", ""))
-            if norm_new and norm_prev and (
-                norm_new in norm_prev or norm_prev in norm_new
+            # 旧DB形式（topic）との後方互換のためフォールバックを保持
+            norm_prev = normalize_for_similarity(pi.get("title") or pi.get("topic", ""))
+            if (
+                norm_new
+                and norm_prev
+                and (norm_new in norm_prev or norm_prev in norm_new)
             ):
                 prev_count = pi.get("recurrence_count", 1)
                 ni["recurrence_count"] = prev_count + 1
@@ -470,9 +462,7 @@ def _inherit_recurrence_counts(
             ni.setdefault("recurrence_count", 1)
 
 
-def _inherit_carried_over_counts(
-    new_tasks: list[dict], prev_tasks: list[dict]
-) -> None:
+def _inherit_carried_over_counts(new_tasks: list[dict], prev_tasks: list[dict]) -> None:
     """前回のタスクと一致するものに carried_over_count を引き継ぐ。"""
     from .postprocess import normalize_for_similarity
 
@@ -480,8 +470,10 @@ def _inherit_carried_over_counts(
         norm_new = normalize_for_similarity(nt.get("title", ""))
         for pt in prev_tasks:
             norm_prev = normalize_for_similarity(pt.get("title", ""))
-            if norm_new and norm_prev and (
-                norm_new in norm_prev or norm_prev in norm_new
+            if (
+                norm_new
+                and norm_prev
+                and (norm_new in norm_prev or norm_prev in norm_new)
             ):
                 prev_count = pt.get("carried_over_count", 0)
                 nt["carried_over_count"] = prev_count + 1
