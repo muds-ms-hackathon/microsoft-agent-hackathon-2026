@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { SectionError } from "@/components/ui/SectionError";
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -260,9 +259,10 @@ export function MeetingDetailView({
             </div>
             <div className="px-5 py-4 flex-1 overflow-y-auto">
               {reviewItemsError ? (
-                <p className="text-sm text-destructive">
-                  AI抽出結果の取得に失敗しました
-                </p>
+                <SectionError
+                  message="AI抽出結果の取得に失敗しました"
+                  onRetry={refetchReviewItems}
+                />
               ) : meetingReviewItems.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   AI抽出結果はまだありません
@@ -400,69 +400,6 @@ export function MeetingDetailView({
             ariaLabel="会議由来のタスク一覧"
             now={now}
           />
-        )}
-      </section>
-      
-      {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
-      <section aria-label="AI抽出結果" className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">AI抽出結果</h2>
-          {pendingCount > 0 ? (
-            <Link
-              to="/review"
-              search={{
-                recurringMeetingId: detail.recurringMeeting.id,
-                meetingId: id,
-                from: "hub",
-              }}
-            >
-              <Button size="sm" className="gap-1">
-                レビューして確定する（{pendingCount}件）
-                <ChevronRight size={14} />
-              </Button>
-            </Link>
-          ) : meetingReviewItems.length > 0 ? (
-            <Link
-              to="/review"
-              search={{
-                recurringMeetingId: detail.recurringMeeting.id,
-                meetingId: id,
-                from: "hub",
-              }}
-            >
-              <Button size="sm" variant="outline" className="gap-1">
-                確定済み（レビュー内容を見る）
-                <ChevronRight size={14} />
-              </Button>
-            </Link>
-          ) : null}
-        </div>
-        {reviewItemsError ? (
-          <SectionError
-            message="AI抽出結果の取得に失敗しました"
-            onRetry={refetchReviewItems}
-          />
-        ) : meetingReviewItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            AI抽出結果はまだありません
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {REVIEW_ITEM_TYPES.map((type) => {
-              const typeItems = meetingReviewItems.filter(
-                (i) => i.type === type,
-              );
-              if (typeItems.length === 0) return null;
-              return (
-                <ReviewAccordionItem
-                  key={type}
-                  type={type}
-                  items={typeItems}
-                  onResetToPending={resetToPending}
-                />
-              );
-            })}
-          </div>
         )}
       </section>
     </section>

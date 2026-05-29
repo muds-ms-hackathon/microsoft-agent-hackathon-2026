@@ -197,6 +197,8 @@ describe("MeetingDetailView", () => {
   });
 
   it("AI抽出結果取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
+    // review-items は過去の会議のみ取得されるため detailPast を使う
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
     vi.mocked(api.meetings[":id"]["review-items"].$get).mockRejectedValue(
       new Error("network"),
     );
