@@ -21,6 +21,7 @@ vi.mock("../src/lib/prisma.js", () => ({
     },
     meetingAnalysisRun: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -114,6 +115,7 @@ const mockAnalysisRunCreate = vi.mocked(prisma.meetingAnalysisRun.create);
 const mockSendToServiceBus = vi.mocked(sendToServiceBus);
 const mockAnalysisRunUpdate = vi.mocked(prisma.meetingAnalysisRun.update);
 const mockAnalysisRunFindFirst = vi.mocked(prisma.meetingAnalysisRun.findFirst);
+const mockAnalysisRunFindMany = vi.mocked(prisma.meetingAnalysisRun.findMany);
 const mockDecisionItemFindMany = vi.mocked(prisma.decisionItem.findMany);
 const mockAmbiguousInfoFindMany = vi.mocked(prisma.ambiguousInfo.findMany);
 
@@ -231,6 +233,79 @@ describe("GET /meetings/:id/tasks", () => {
     const res = await app.request("/meetings/mtg-1/tasks");
     expect(res.status).toBe(404);
     expect(mockTaskFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /meetings/:id/agenda-history", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const meetingWithRecurring = {
+    id: "mtg-1",
+    title: "第3回",
+    heldAt: new Date("2026-05-17T10:00:00Z"),
+    recurringMeetingId: "rmtg-1",
+    recurringMeeting: { organizationId: "org-1" },
+  } satisfies Partial<MeetingWithRecurringOrgId>;
+
+  const grantAccess = () => {
+    mockFindUnique.mockResolvedValue(
+      meetingWithRecurring as MeetingWithRecurringOrgId,
+    );
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+  };
+
+  it("completed かつ recommendedAgenda を持つランを新しい順に返す", async () => {
+    grantAccess();
+    // recommendedAgenda が null のランは履歴から除外されることも検証する。
+    mockAnalysisRunFindMany.mockResolvedValue([
+      {
+        id: "run-2",
+        recommendedAgenda: [{ title: "新しい議題" }],
+        createdAt: new Date("2026-05-17T11:00:00Z"),
+        completedAt: new Date("2026-05-17T11:05:00Z"),
+        // biome-ignore lint/suspicious/noExplicitAny: select 部分型のためテストでキャスト
+      } as any,
+      {
+        id: "run-1",
+        recommendedAgenda: null,
+        createdAt: new Date("2026-05-17T09:00:00Z"),
+        completedAt: new Date("2026-05-17T09:05:00Z"),
+        // biome-ignore lint/suspicious/noExplicitAny: select 部分型のためテストでキャスト
+      } as any,
+    ]);
+
+    const res = await app.request("/meetings/mtg-1/agenda-history");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ id: string }>;
+    expect(body.map((x) => x.id)).toEqual(["run-2"]);
+    expect(mockAnalysisRunFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { meetingId: "mtg-1", status: "completed" },
+        orderBy: { createdAt: "desc" },
+      }),
+    );
+  });
+
+  it("会議不存在は 404", async () => {
+    mockFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/missing/agenda-history");
+    expect(res.status).toBe(404);
+    expect(mockAnalysisRunFindMany).not.toHaveBeenCalled();
+  });
+
+  it("組織非所属は 404", async () => {
+    mockFindUnique.mockResolvedValue(
+      meetingWithRecurring as MeetingWithRecurringOrgId,
+    );
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/mtg-1/agenda-history");
+    expect(res.status).toBe(404);
+    expect(mockAnalysisRunFindMany).not.toHaveBeenCalled();
   });
 });
 

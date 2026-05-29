@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import { AgendaHistorySection } from "@/features/meetings/components/AgendaHistorySection";
 import { RecommendedAgendaSection } from "@/features/meetings/components/RecommendedAgendaSection";
 import { TopicRequestSection } from "@/features/topic-requests/components/TopicRequestSection";
 import {
@@ -297,6 +298,11 @@ export function MeetingDetailView({
         <RecommendedAgendaSection
           agenda={detail.latestAnalysisRun?.recommendedAgenda ?? null}
         />
+      )}
+
+      {/* アジェンダ生成履歴（過去に複数回生成された場合のみ表示）。過去の会議のみ。 */}
+      {isPastMeeting && (
+        <AgendaHistorySection meetingId={id} enabled={isPastMeeting} />
       )}
 
       {/* 下段: タスク（フルwidth） */}

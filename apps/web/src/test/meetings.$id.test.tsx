@@ -14,6 +14,7 @@ vi.mock("@/lib/api", () => ({
         $get: vi.fn(),
         tasks: { $get: vi.fn() },
         "review-items": { $get: vi.fn() },
+        "agenda-history": { $get: vi.fn() },
       },
     },
     organizations: {
@@ -103,6 +104,9 @@ beforeEach(() => {
   vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detail));
   vi.mocked(api.meetings[":id"].tasks.$get).mockResolvedValue(mockJson([]));
   vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+    mockJson([]),
+  );
+  vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
     mockJson([]),
   );
   // AssigneeFilter のメンバー取得はデフォルトで空配列。個別テストで上書きしない想定。
@@ -415,6 +419,56 @@ describe("MeetingDetailView - 次回会議の推奨アジェンダ", () => {
       "1. 前回タスクの確認（約5分）\n   理由: 継続",
     );
     expect(await screen.findByText("コピーしました")).toBeInTheDocument();
+  });
+});
+
+describe("MeetingDetailView - アジェンダ生成履歴", () => {
+  it("履歴が2件以上あれば履歴カードが表示され、展開すると各版が出る", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "run-2",
+          recommendedAgenda: [{ title: "最新版の議題" }],
+          createdAt: "2026-05-16T11:00:00.000Z",
+          completedAt: "2026-05-16T11:05:00.000Z",
+        },
+        {
+          id: "run-1",
+          recommendedAgenda: [{ title: "旧版の議題" }],
+          createdAt: "2026-05-16T09:00:00.000Z",
+          completedAt: "2026-05-16T09:05:00.000Z",
+        },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+
+    const toggle = await screen.findByRole("button", {
+      name: /アジェンダ生成履歴/,
+    });
+    await user.click(toggle);
+    expect(await screen.findByText("最新版の議題")).toBeInTheDocument();
+    expect(screen.getByText("旧版の議題")).toBeInTheDocument();
+  });
+
+  it("履歴が1件以下のときは履歴カードを表示しない", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "run-1",
+          recommendedAgenda: [{ title: "唯一の議題" }],
+          createdAt: "2026-05-16T09:00:00.000Z",
+          completedAt: "2026-05-16T09:05:00.000Z",
+        },
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(
+      screen.queryByLabelText("アジェンダ生成履歴"),
+    ).not.toBeInTheDocument();
   });
 });
 

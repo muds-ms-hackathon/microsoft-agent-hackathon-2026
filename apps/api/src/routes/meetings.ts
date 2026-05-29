@@ -225,6 +225,29 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(topicRequests);
   })
+  .get("/:id/agenda-history", async (c) => {
+    const id = c.req.param("id");
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議で過去に生成された推奨アジェンダの履歴。完了した解析ランのうち
+    // recommendedAgenda を持つものを新しい順に返す（専用テーブルは設けず派生で扱う）。
+    // JSON null のフィルタは取りこぼしを避けるため取得後に JS 側で行う。
+    const runs = await prisma.meetingAnalysisRun.findMany({
+      where: { meetingId: id, status: "completed" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        recommendedAgenda: true,
+        createdAt: true,
+        completedAt: true,
+      },
+    });
+    const history = runs.filter(
+      (r) => r.recommendedAgenda != null && r.recommendedAgenda !== undefined,
+    );
+    return c.json(history);
+  })
   .post(
     "/:id/topic-requests",
     zValidator("json", topicRequestCreateSchema),
