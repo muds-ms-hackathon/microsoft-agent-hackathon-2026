@@ -47,6 +47,8 @@ export type ReviewItem = {
   meetingId: string;
   // 楽観ロック用バージョン番号
   version: number;
+  // task_candidate のみ。in_progress/done は draft への遷移が API で禁止されるため canReset 判定に使う
+  taskStatus?: string | null;
 };
 
 export const TYPE_LABELS: Record<ReviewItemType, string> = {

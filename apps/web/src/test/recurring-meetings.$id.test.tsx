@@ -280,6 +280,7 @@ describe("定例詳細ページ - 会議のセクション分け", () => {
     expect(
       await screen.findByText("会議一覧の取得に失敗しました"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
     expect(
       screen.queryByRole("list", { name: "今後の会議一覧" }),
     ).not.toBeInTheDocument();
@@ -409,6 +410,7 @@ describe("定例詳細ページ - タスクセクション", () => {
     expect(
       await screen.findByText("タスクの取得に失敗しました"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
   });
 
   it("view=kanban のとき status フィルタ UI は描画されない", async () => {

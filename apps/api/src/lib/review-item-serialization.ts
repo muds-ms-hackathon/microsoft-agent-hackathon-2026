@@ -71,6 +71,8 @@ function serializeTaskAsReviewItem(task: TaskWithReview) {
     sourceTable: "task" as const,
     type: "task_candidate" as const,
     status: task.status,
+    // PATCH /tasks/:id で in_progress/done → draft は 400 になるため、UI 側の canReset 判定に使う
+    taskStatus: task.status,
     title: task.title,
     body: task.body,
     sourceQuote: task.sourceQuote,

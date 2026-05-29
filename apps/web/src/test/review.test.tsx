@@ -344,6 +344,31 @@ describe("ReviewView", () => {
     expect(screen.getByText("このタスクを確認")).toBeInTheDocument();
     expect(screen.queryByText("この課題を確認")).not.toBeInTheDocument();
   });
+
+  it("isError=true のときエラーメッセージと再試行ボタンを表示する", async () => {
+    const refetch = vi.fn();
+
+    renderWithQuery(
+      <ReviewView
+        search={{}}
+        onSearchChange={noOp}
+        currentOrgId="org-1"
+        items={[]}
+        isError={true}
+        refetch={refetch}
+        onUpdate={noOp}
+        onResolveAmbiguity={noOp}
+      />,
+    );
+
+    expect(
+      screen.getByText("レビューアイテムの取得に失敗しました"),
+    ).toBeInTheDocument();
+    const retryBtn = screen.getByRole("button", { name: "再試行" });
+    expect(retryBtn).toBeInTheDocument();
+    await userEvent.click(retryBtn);
+    expect(refetch).toHaveBeenCalledOnce();
+  });
 });
 
 describe("ReviewItemCard — body 表示", () => {

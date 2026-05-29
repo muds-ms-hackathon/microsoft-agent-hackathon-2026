@@ -1,3 +1,4 @@
+import { SectionError } from "@/components/ui/SectionError";
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import {
@@ -122,6 +123,7 @@ export function MeetingDetailView({
   const {
     items: meetingReviewItems,
     isError: reviewItemsError,
+    refetch: refetchReviewItems,
     resetToPending,
   } = useReviewItems({
     meetingId: isPastMeeting ? id : undefined,
@@ -257,9 +259,10 @@ export function MeetingDetailView({
             </div>
             <div className="px-5 py-4 flex-1 overflow-y-auto">
               {reviewItemsError ? (
-                <p className="text-sm text-destructive">
-                  AI抽出結果の取得に失敗しました
-                </p>
+                <SectionError
+                  message="AI抽出結果の取得に失敗しました"
+                  onRetry={refetchReviewItems}
+                />
               ) : meetingReviewItems.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   AI抽出結果はまだありません
@@ -376,7 +379,10 @@ export function MeetingDetailView({
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
         ) : tasksQuery.isError ? (
-          <p className="text-destructive text-sm">タスクの取得に失敗しました</p>
+          <SectionError
+            message="タスクの取得に失敗しました"
+            onRetry={() => tasksQuery.refetch()}
+          />
         ) : (tasksQuery.data ?? []).length === 0 ? (
           <p className="text-muted-foreground">
             この会議から発生したタスクはまだありません

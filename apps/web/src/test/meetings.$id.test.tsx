@@ -185,6 +185,30 @@ describe("MeetingDetailView", () => {
     ).toBeInTheDocument();
   });
 
+  it("タスク取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
+    vi.mocked(api.meetings[":id"].tasks.$get).mockRejectedValue(
+      new Error("network"),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("タスクの取得に失敗しました"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
+  });
+
+  it("AI抽出結果取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
+    // review-items は過去の会議のみ取得されるため detailPast を使う
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockRejectedValue(
+      new Error("network"),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("AI抽出結果の取得に失敗しました"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
+  });
+
   it("「タスクを追加」ボタンが押せる（CreateTaskDialog 起動）", async () => {
     vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
       mockJson([]),
