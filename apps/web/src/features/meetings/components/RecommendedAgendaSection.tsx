@@ -1,10 +1,12 @@
 import { Card } from "@/components/ui/card";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
+import { formatAgendaForCopy } from "../agenda";
+import type { RecommendedAgendaItem } from "../hooks/useMeetingDetail";
 
 type RecommendedAgendaSectionProps = {
-  // AI が生成した次回会議の推奨アジェンダ。未解析・未生成のときは null。
-  agenda: string | null;
+  // AI が生成した次回会議の推奨アジェンダ項目。未解析・未生成のときは null。
+  agenda: RecommendedAgendaItem[] | null;
 };
 
 // 会議の解析結果（latestAnalysisRun.recommendedAgenda）として生成された
@@ -23,12 +25,12 @@ export function RecommendedAgendaSection({
     return () => clearTimeout(timer);
   }, [copied]);
 
-  const hasAgenda = agenda != null && agenda.trim().length > 0;
+  const hasAgenda = agenda != null && agenda.length > 0;
 
   const handleCopy = async () => {
     if (!hasAgenda) return;
     try {
-      await navigator.clipboard.writeText(agenda);
+      await navigator.clipboard.writeText(formatAgendaForCopy(agenda));
       setCopied(true);
     } catch {
       // クリップボード API が使えない環境では何もしない（フィードバックも出さない）。
@@ -57,9 +59,29 @@ export function RecommendedAgendaSection({
       </div>
       <div className="px-5 py-4">
         {hasAgenda ? (
-          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-            {agenda}
-          </p>
+          <ol className="space-y-3">
+            {agenda.map((item, i) => (
+              // タイトルは AI 出力上の項目識別子として一意に並ぶ前提で key に用いる。
+              <li key={item.title} className="text-sm">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-muted-foreground tabular-nums">
+                    {i + 1}.
+                  </span>
+                  <span className="font-medium flex-1">{item.title}</span>
+                  {item.estimated_minutes != null && (
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      約{item.estimated_minutes}分
+                    </span>
+                  )}
+                </div>
+                {item.reason && item.reason.trim().length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5 pl-5">
+                    理由: {item.reason}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
         ) : (
           <p className="text-sm text-muted-foreground">
             推奨アジェンダはまだありません
