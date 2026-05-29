@@ -9,7 +9,12 @@ export type PendingInvitation = {
   expiresAt: string;
   createdAt: string;
   expired: boolean;
-  inviter: { id: string; name: string; displayName: string; email: string | null };
+  inviter: {
+    id: string;
+    name: string;
+    displayName: string;
+    email: string | null;
+  };
 };
 
 // 組織の pending 招待一覧を取得するクエリ。
