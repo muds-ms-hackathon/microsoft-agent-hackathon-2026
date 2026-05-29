@@ -9,6 +9,7 @@ import { meetingsRoute } from "./routes/meetings.js";
 import { organizationsRoute } from "./routes/organizations.js";
 import { recurringMeetingsRoute } from "./routes/recurring-meetings.js";
 import { tasksRoute } from "./routes/tasks.js";
+import { topicRequestsRoute } from "./routes/topic-requests.js";
 import { internalAuth } from "./middleware/internal-auth.js";
 
 const app = new Hono();
@@ -55,6 +56,7 @@ const routes = app
   .route("/organizations", organizationsRoute)
   .route("/recurring-meetings", recurringMeetingsRoute)
   .route("/tasks", tasksRoute)
+  .route("/topic-requests", topicRequestsRoute)
   .route("/decision-items", decisionItemsRoute)
   .route("/ambiguous-infos", ambiguousInfosRoute)
   .route("/internal", internalRoute);
