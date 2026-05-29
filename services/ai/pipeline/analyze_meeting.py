@@ -14,7 +14,7 @@ from pipeline.continuity import (
     prepare_prev_open_issues_for_call2,
     prepare_prev_tasks_for_call3,
 )
-from pipeline.estimation import calc_alert_level, calc_estimation
+from pipeline.estimation import calc_alert_level, calc_estimation, fmt_estimation_note
 from pipeline.postprocess import (
     apply_due_date_conversions,
     assign_ids_and_resolve,
@@ -298,7 +298,7 @@ async def analyze_meeting(
         # ── Python: 見積もり計算 ──────────────────────────────
         estimation = calc_estimation(tasks, open_issues, decisions)
         alert_level = calc_alert_level(estimation)
-        estimation_note = _fmt_estimation_note(estimation)
+        estimation_note = fmt_estimation_note(estimation)
         logger.info(
             "[estimation] 合計: %d分、アラート: %s",
             estimation["total_minutes"],
@@ -414,32 +414,6 @@ def _failed(
         error_message=f"{step}: JSONパースエラー: {parsed.get('_parse_error', '')}",
         failed_at=datetime.now(timezone.utc).isoformat(),
     )
-
-
-def _fmt_estimation_note(estimation: dict) -> str:
-    """見積もり内訳を人間が読めるテキストに変換する。"""
-    total = estimation.get("total_minutes", 0)
-    breakdown = estimation.get("breakdown", {})
-    lines = [f"次回会議の想定所要時間: 約{total}分"]
-    label_map = {
-        "required_task_check": "必須タスク確認",
-        "open_issue_new": "新規未決事項",
-        "open_issue_recurring": "継続未決事項",
-        "overdue_task": "期限超過タスク",
-        "tentative_reconfirm": "仮決定の再確認",
-        "buffer": "バッファ",
-    }
-    for key, val in breakdown.items():
-        label = label_map.get(key, key)
-        count = val.get("count", 0)
-        minutes = val.get("minutes", 0)
-        if count <= 0:
-            # 件数 0 のカテゴリは「N分」のみ表示し、ZeroDivisionError を回避する。
-            lines.append(f"  - {label}: 0件 = {minutes}分")
-            continue
-        per = minutes // count
-        lines.append(f"  - {label}: {count}件 × {per}分 = {minutes}分")
-    return "\n".join(lines)
 
 
 def _inherit_recurrence_counts(new_issues: list[dict], prev_issues: list[dict]) -> None:

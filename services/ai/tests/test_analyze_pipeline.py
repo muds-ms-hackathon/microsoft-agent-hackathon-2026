@@ -7,7 +7,6 @@ import pytest
 from llm.client import FakeLLMClient
 from pipeline.analyze_meeting import (
     _extract_keywords,
-    _fmt_estimation_note,
     analyze_meeting,
 )
 from pipeline.continuity import (
@@ -15,7 +14,11 @@ from pipeline.continuity import (
     prepare_prev_open_issues_for_call2,
     prepare_prev_tasks_for_call3,
 )
-from pipeline.estimation import calc_alert_level, calc_estimation
+from pipeline.estimation import (
+    calc_alert_level,
+    calc_estimation,
+    fmt_estimation_note,
+)
 from pipeline.postprocess import (
     infer_assignee_resolution_status,
     merge_ambiguities,
@@ -400,7 +403,7 @@ def test_extract_keywords_coerces_to_str():
     assert _extract_keywords([1, 2, 3]) == ["1", "2", "3"]
 
 
-# ──────────────────────── _fmt_estimation_note ────────────────────────
+# ──────────────────────── fmt_estimation_note ────────────────────────
 
 
 def test_fmt_estimation_note_with_normal_breakdown():
@@ -411,7 +414,7 @@ def test_fmt_estimation_note_with_normal_breakdown():
             "buffer": {"count": 1, "minutes": 10},
         },
     }
-    note = _fmt_estimation_note(estimation)
+    note = fmt_estimation_note(estimation)
     assert "想定所要時間: 約25分" in note
     assert "必須タスク確認: 3件 × 2分 = 6分" in note
     assert "バッファ: 1件 × 10分 = 10分" in note
@@ -425,12 +428,12 @@ def test_fmt_estimation_note_handles_zero_count_without_zero_division():
             "buffer": {"count": 0, "minutes": 10},
         },
     }
-    note = _fmt_estimation_note(estimation)
+    note = fmt_estimation_note(estimation)
     # 0件のカテゴリは「N分」のみ表示する
     assert "0件" in note
     assert "10分" in note
 
 
 def test_fmt_estimation_note_with_empty_breakdown():
-    note = _fmt_estimation_note({"total_minutes": 0, "breakdown": {}})
+    note = fmt_estimation_note({"total_minutes": 0, "breakdown": {}})
     assert "想定所要時間: 約0分" in note
