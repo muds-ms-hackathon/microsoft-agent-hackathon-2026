@@ -51,6 +51,7 @@ const detail: MeetingDetail = {
   previousMeetingId: null,
   transcriptionQuality: null,
   supplementaryMemo: null,
+  transcriptText: null,
   meetingType: "recurring_meeting",
   recurringMeetingId: "rmtg-1",
   createdAt: "2026-05-01T00:00:00.000Z",
@@ -197,8 +198,10 @@ describe("MeetingDetailView", () => {
   });
 
   it("AI抽出結果取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
-    // review-items は過去の会議のみ取得されるため detailPast を使う
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    // review-items は解析完了済みの過去の会議のみ取得されるため detailCompleted を使う
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
     vi.mocked(api.meetings[":id"]["review-items"].$get).mockRejectedValue(
       new Error("network"),
     );
@@ -281,21 +284,42 @@ describe("MeetingDetailView", () => {
   });
 });
 
-// NOW より前の heldAt を持つ過去の会議
+// NOW より前の heldAt を持つ過去の会議（解析未完了）
 const detailPast: MeetingDetail = {
   ...detail,
   heldAt: "2026-05-16T01:00:00.000Z",
 };
 
+// 解析完了済みの過去の会議
+const completedRun = {
+  id: "run-1",
+  status: "completed" as const,
+  currentStep: null,
+  summary: null,
+  alertLevel: null,
+  completedAt: "2026-05-16T02:00:00.000Z",
+  failedAt: null,
+  errorMessage: null,
+  recommendedAgenda: null,
+};
+const detailCompleted: MeetingDetail = {
+  ...detailPast,
+  latestAnalysisRun: completedRun,
+};
+
 describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
-  it("過去の会議では「会議要約」カードが表示される", async () => {
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+  it("過去の会議で解析完了時に「会議要約」カードが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByLabelText("会議要約")).toBeInTheDocument();
   });
 
-  it("過去の会議では「AI抽出結果」カードが表示される", async () => {
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+  it("過去の会議で解析完了時に「AI抽出結果」カードが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByLabelText("AI抽出結果")).toBeInTheDocument();
   });
@@ -316,13 +340,10 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
   it("latestAnalysisRun.summary があればサマリーテキストが表示される", async () => {
     vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
       mockJson({
-        ...detailPast,
+        ...detailCompleted,
         latestAnalysisRun: {
-          id: "run-1",
-          status: "completed",
+          ...completedRun,
           summary: "今回の会議では予算について合意しました。",
-          alertLevel: null,
-          completedAt: "2026-05-16T02:00:00.000Z",
         },
       }),
     );
@@ -332,12 +353,18 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
     ).toBeInTheDocument();
   });
 
-  it("latestAnalysisRun が null のとき「要約はまだありません」が表示される", async () => {
+  it("解析完了で summary が null のとき「要約はまだありません」が表示される", async () => {
     vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
-      mockJson({ ...detailPast, latestAnalysisRun: null }),
+      mockJson(detailCompleted),
     );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByText("要約はまだありません")).toBeInTheDocument();
+  });
+
+  it("未解析のとき「議事録」カードの textarea が表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByLabelText("議事録")).toBeInTheDocument();
   });
 });
 
@@ -414,7 +441,10 @@ function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
 
 describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
   beforeEach(() => {
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    // アコーディオンは解析完了後の AI抽出結果カード内に表示されるため detailCompleted を使う
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
   });
 
   it("確定済みアイテムに ⋯ メニューボタンが表示される", async () => {

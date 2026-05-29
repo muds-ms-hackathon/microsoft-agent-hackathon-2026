@@ -1,6 +1,8 @@
 import { api, authHeaders } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
+export type AnalysisRunStatus = "queued" | "analyzing" | "completed" | "failed";
+
 // 会議詳細レスポンス。API 側 (apps/api/src/routes/meetings.ts) の整形に揃える。
 export type MeetingDetail = {
   id: string;
@@ -12,6 +14,7 @@ export type MeetingDetail = {
   previousMeetingId: string | null;
   transcriptionQuality: string | null;
   supplementaryMemo: string | null;
+  transcriptText: string | null;
   meetingType: string;
   recurringMeetingId: string | null;
   createdAt: string;
@@ -19,10 +22,14 @@ export type MeetingDetail = {
   organization: { id: string; name: string };
   latestAnalysisRun: {
     id: string;
-    status: string;
+    status: AnalysisRunStatus;
+    currentStep: string | null;
     summary: string | null;
     alertLevel: string | null;
     completedAt: string | null;
+    failedAt: string | null;
+    errorMessage: string | null;
+    recommendedAgenda: string | null;
   } | null;
   memberCount: number;
   members: {
@@ -31,6 +38,14 @@ export type MeetingDetail = {
     user: { id: string; name: string; displayName: string };
   }[];
 };
+
+// queued / analyzing 中は 3 秒ポーリング。それ以外は無効。
+function refetchInterval(query: {
+  state: { data?: MeetingDetail };
+}): number | false {
+  const status = query.state.data?.latestAnalysisRun?.status;
+  return status === "queued" || status === "analyzing" ? 3000 : false;
+}
 
 // 会議詳細を取得する hook。クエリキーは ["meetings", id, "detail"]。
 export function useMeetingDetail(id: string) {
@@ -46,5 +61,6 @@ export function useMeetingDetail(id: string) {
       }
       return (await res.json()) as MeetingDetail;
     },
+    refetchInterval,
   });
 }
