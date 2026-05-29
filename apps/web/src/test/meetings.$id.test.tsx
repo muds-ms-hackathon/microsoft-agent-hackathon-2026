@@ -321,6 +321,7 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
           id: "run-1",
           status: "completed",
           summary: "今回の会議では予算について合意しました。",
+          recommendedAgenda: null,
           alertLevel: null,
           completedAt: "2026-05-16T02:00:00.000Z",
         },
@@ -338,6 +339,63 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
     );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByText("要約はまだありません")).toBeInTheDocument();
+  });
+});
+
+describe("MeetingDetailView - 次回会議の推奨アジェンダ", () => {
+  // recommendedAgenda 入りの latestAnalysisRun を持つ過去会議を組み立てる。
+  const withAgenda = (agenda: string | null): MeetingDetail => ({
+    ...detailPast,
+    latestAnalysisRun: {
+      id: "run-1",
+      status: "completed",
+      summary: null,
+      recommendedAgenda: agenda,
+      alertLevel: null,
+      completedAt: "2026-05-16T02:00:00.000Z",
+    },
+  });
+
+  it("recommendedAgenda があれば本文が表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(withAgenda("1. 前回タスクの確認\n2. 予算の決定")),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByLabelText("次回会議の推奨アジェンダ"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/前回タスクの確認/)).toBeInTheDocument();
+  });
+
+  it("recommendedAgenda が null のとき「推奨アジェンダはまだありません」が表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(withAgenda(null)),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("推奨アジェンダはまだありません"),
+    ).toBeInTheDocument();
+  });
+
+  it("コピーボタンで clipboard.writeText が呼ばれ「コピーしました」表示になる", async () => {
+    const agenda = "1. 前回タスクの確認";
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(withAgenda(agenda)),
+    );
+    const user = userEvent.setup();
+    // userEvent のクリップボードスタブより後に独自スパイを差し込む。
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const copyBtn = await screen.findByRole("button", { name: "コピー" });
+    await user.click(copyBtn);
+
+    expect(writeText).toHaveBeenCalledWith(agenda);
+    expect(await screen.findByText("コピーしました")).toBeInTheDocument();
   });
 });
 

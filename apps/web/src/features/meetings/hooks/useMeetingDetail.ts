@@ -21,6 +21,7 @@ export type MeetingDetail = {
     id: string;
     status: string;
     summary: string | null;
+    recommendedAgenda: string | null;
     alertLevel: string | null;
     completedAt: string | null;
   } | null;

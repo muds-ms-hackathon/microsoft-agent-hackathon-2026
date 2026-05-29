@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import { RecommendedAgendaSection } from "@/features/meetings/components/RecommendedAgendaSection";
 import { TopicRequestSection } from "@/features/topic-requests/components/TopicRequestSection";
 import {
   REVIEW_ITEM_TYPES,
@@ -289,6 +290,13 @@ export function MeetingDetailView({
             </div>
           </Card>
         </div>
+      )}
+
+      {/* 次回会議の推奨アジェンダ（解析で生成された場合に表示）。過去の会議のみ。 */}
+      {isPastMeeting && (
+        <RecommendedAgendaSection
+          agenda={detail.latestAnalysisRun?.recommendedAgenda ?? null}
+        />
       )}
 
       {/* 下段: タスク（フルwidth） */}
