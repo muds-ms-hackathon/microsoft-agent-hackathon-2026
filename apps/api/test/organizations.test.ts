@@ -15,6 +15,7 @@ vi.mock("../src/lib/prisma.js", () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
       delete: vi.fn(),
     },
     organizationInvitation: {
@@ -145,6 +146,7 @@ const mockMembershipFindMany = vi.mocked(
   prisma.organizationMembership.findMany,
 );
 const mockMembershipDelete = vi.mocked(prisma.organizationMembership.delete);
+const mockMembershipUpdate = vi.mocked(prisma.organizationMembership.update);
 const mockInvitationCreate = vi.mocked(prisma.organizationInvitation.create);
 const mockInvitationFindUnique = vi.mocked(
   prisma.organizationInvitation.findUnique,
@@ -652,6 +654,178 @@ describe("DELETE /organizations/:id/members/:userId", () => {
     mockMembershipFindUnique.mockResolvedValueOnce(null);
 
     const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH /organizations/:id/members/:userId（ロール変更 #124）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function membership(
+    role: "owner" | "admin" | "member",
+    userId = "user-1",
+  ): OrganizationMembership {
+    return {
+      userId,
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  it("owner は他メンバーのロールを変更でき 200 を返す", async () => {
+    // requireOrgRole（呼び出し元）→ 対象 findUnique の順
+    mockMembershipFindUnique
+      .mockResolvedValueOnce(membership("owner", "user-1"))
+      .mockResolvedValueOnce(membership("member", "user-2"));
+    // include: { user: true } 付きの戻り値。テスト用に型をキャストする。
+    mockMembershipUpdate.mockResolvedValue({
+      userId: "user-2",
+      organizationId: "org-1",
+      role: "admin",
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+      user: {
+        name: "bob",
+        displayName: "Bob",
+        email: "bob@example.com",
+      },
+    } as unknown as OrganizationMembership);
+
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "admin" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockMembershipUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId_organizationId: { userId: "user-2", organizationId: "org-1" },
+        },
+        data: { role: "admin" },
+      }),
+    );
+  });
+
+  it("admin は 403 を返し update は呼ばれない", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(membership("admin"));
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "admin" }),
+    });
+    expect(res.status).toBe(403);
+    expect(mockMembershipUpdate).not.toHaveBeenCalled();
+  });
+
+  it("自分自身のロール変更は 400 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(
+      membership("owner", "user-1"),
+    );
+    const res = await app.request("/organizations/org-1/members/user-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "admin" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipUpdate).not.toHaveBeenCalled();
+  });
+
+  it("対象が owner の場合は 400 を返す", async () => {
+    mockMembershipFindUnique
+      .mockResolvedValueOnce(membership("owner", "user-1"))
+      .mockResolvedValueOnce(membership("owner", "user-2"));
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "member" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipUpdate).not.toHaveBeenCalled();
+  });
+
+  it("対象が存在しない場合は 404 を返す", async () => {
+    mockMembershipFindUnique
+      .mockResolvedValueOnce(membership("owner", "user-1"))
+      .mockResolvedValueOnce(null);
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "admin" }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockMembershipUpdate).not.toHaveBeenCalled();
+  });
+
+  it("role に owner を指定すると 400（バリデーション）", async () => {
+    // zValidator がハンドラ前に弾くため findUnique は呼ばれない。
+    // ここで mockResolvedValueOnce を積むと未消費キューが後続テストへ漏れるため積まない。
+    const res = await app.request("/organizations/org-1/members/user-2", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "owner" }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockMembershipUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /organizations/:id/membership（退会 #125）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function membership(
+    role: "owner" | "admin" | "member",
+  ): OrganizationMembership {
+    return {
+      userId: "user-1",
+      organizationId: "org-1",
+      role,
+      joinedAt: new Date("2026-05-01T00:00:00Z"),
+    };
+  }
+
+  it("member は自身の membership を削除でき 204 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(membership("member"));
+    mockMembershipDelete.mockResolvedValue(membership("member"));
+
+    const res = await app.request("/organizations/org-1/membership", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(204);
+    expect(mockMembershipDelete).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: { userId: "user-1", organizationId: "org-1" },
+      },
+    });
+  });
+
+  it("admin も退会でき 204 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(membership("admin"));
+    mockMembershipDelete.mockResolvedValue(membership("admin"));
+
+    const res = await app.request("/organizations/org-1/membership", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(204);
+  });
+
+  it("owner は退会できず 403 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(membership("owner"));
+
+    const res = await app.request("/organizations/org-1/membership", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(403);
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
+  });
+
+  it("未所属の場合は 404 を返す", async () => {
+    mockMembershipFindUnique.mockResolvedValueOnce(null);
+
+    const res = await app.request("/organizations/org-1/membership", {
       method: "DELETE",
     });
     expect(res.status).toBe(404);
