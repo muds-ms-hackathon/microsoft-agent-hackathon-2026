@@ -304,6 +304,7 @@ describe("Dashboard - NextMeetingsSection", () => {
   it("members があるとき AvatarStack が表示される", async () => {
     const rmWithMembers = {
       ...RM_1,
+      _count: { members: 1 },
       members: [
         {
           userId: "u-1",

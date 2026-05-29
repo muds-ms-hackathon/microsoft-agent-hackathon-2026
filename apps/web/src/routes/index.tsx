@@ -56,11 +56,13 @@ function NextMeetingCard({
   recurringMeetingName,
   next,
   members,
+  memberCount,
 }: {
   recurringMeetingId: string;
   recurringMeetingName: string;
   next: MeetingListItem;
   members: AvatarUser[];
+  memberCount: number;
 }) {
   return (
     <Card className="w-64 shrink-0 snap-start">
@@ -74,7 +76,13 @@ function NextMeetingCard({
           {formatMeetingTime(next.heldAt, next.estimatedDurationMinutes)}
         </p>
         <div className="flex items-center justify-between mt-1">
-          {members.length > 0 && <AvatarStack users={members} size="sm" />}
+          {memberCount > 0 && (
+            <AvatarStack
+              users={members}
+              size="sm"
+              extraCount={memberCount - members.length}
+            />
+          )}
           <Link
             to="/recurring-meetings/$id"
             params={{ id: recurringMeetingId }}
@@ -97,6 +105,7 @@ type Candidate = {
   recurringMeetingName: string;
   next: MeetingListItem;
   members: AvatarUser[];
+  memberCount: number;
 };
 
 function NextMeetingsSection({ orgId }: { orgId: string }) {
@@ -139,6 +148,7 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
           id: m.user.id,
           displayName: m.user.displayName || m.user.name,
         })),
+        memberCount: rm._count.members,
       });
     }
   }
@@ -173,6 +183,7 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
             recurringMeetingName={c.recurringMeetingName}
             next={c.next}
             members={c.members}
+            memberCount={c.memberCount}
           />
         ))}
       </div>

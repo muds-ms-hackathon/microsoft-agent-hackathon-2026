@@ -2,7 +2,7 @@ import type { RecurringMeeting } from "@/features/organizations/types";
 import { api, authHeaders } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
-// 一覧 API は _count.members とアバター用の先頭5件 members を返す。
+// 一覧 API は _count.members とアバター用の先頭4件 members を返す。
 export type RecurringMeetingListItem = RecurringMeeting & {
   _count: { members: number };
   members: {
