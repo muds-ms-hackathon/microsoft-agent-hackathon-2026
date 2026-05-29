@@ -2,6 +2,8 @@
 
 from string import Template
 
+from schemas.analysis import UserTopicRequest
+
 
 def render_prompt(template: str, **kwargs: object) -> str:
     """string.Template.safe_substituteを使いプロンプト変数を展開する。
@@ -172,6 +174,22 @@ def fmt_ambiguities_for_call6(ambiguities: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def fmt_topic_requests_for_call6(topic_requests: list[UserTopicRequest]) -> str:
+    """Call 6用：ユーザーが事前登録した議題を箇条書きで整形する。
+
+    priority を [required]/[optional] で示し、required は必ずアジェンダに
+    含めるべき議題であることを LLM に伝える。
+    """
+    lines = []
+    for tr in topic_requests:
+        priority = tr.priority or "optional"
+        body = f"：{tr.body}" if tr.body else ""
+        lines.append(
+            f"- [{priority}] {tr.title}{body}（登録者: {tr.requested_by_name}）"
+        )
+    return "\n".join(lines)
+
+
 # ──────────────────── Callプロンプト構築 ────────────────────
 
 
@@ -247,6 +265,7 @@ def build_call6_prompt(
     estimation_note: str,
     suggested_participants: str,
     change_summary: str | None = None,
+    user_topic_requests: list[UserTopicRequest] | None = None,
 ) -> str:
     """Call 6（サマリー・推奨アジェンダ生成）のプロンプトを構築する。"""
     speakers_text = fmt_speakers(speakers)
@@ -260,6 +279,16 @@ def build_call6_prompt(
     else:
         change_summary_section = ""
 
+    # ユーザー事前登録議題は、あるときだけセクションを出す
+    # （change_summary_section と同じ「あるときだけ出す」パターン）。
+    if user_topic_requests:
+        user_topic_requests_section = render_prompt(
+            prompts["call6_user_topic_requests"]["template"],
+            user_topic_requests=fmt_topic_requests_for_call6(user_topic_requests),
+        )
+    else:
+        user_topic_requests_section = ""
+
     return render_prompt(
         prompts["call6"]["template"],
         speakers=speakers_text,
@@ -270,4 +299,5 @@ def build_call6_prompt(
         estimation_note=estimation_note,
         suggested_participants=suggested_participants,
         change_summary_section=change_summary_section,
+        user_topic_requests_section=user_topic_requests_section,
     )
