@@ -358,7 +358,16 @@ describe("GET /organizations/:id/meetings", () => {
     expect(mockRecurringFindMany).toHaveBeenCalledWith({
       where: { organizationId: "org-1" },
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { members: true } } },
+      include: {
+        _count: { select: { members: true } },
+        members: {
+          take: 4,
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+          include: {
+            user: { select: { id: true, name: true, displayName: true } },
+          },
+        },
+      },
     });
   });
 

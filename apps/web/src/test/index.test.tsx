@@ -77,8 +77,18 @@ const NEAR_FUTURE = "2099-01-01T10:00:00.000Z";
 const FAR_FUTURE = "2099-06-01T10:00:00.000Z";
 const PAST = "2000-01-01T10:00:00.000Z";
 
-const RM_1 = { id: "rm-1", name: "週次定例", _count: { members: 0 } };
-const RM_2 = { id: "rm-2", name: "月次レビュー", _count: { members: 0 } };
+const RM_1 = {
+  id: "rm-1",
+  name: "週次定例",
+  _count: { members: 0 },
+  members: [],
+};
+const RM_2 = {
+  id: "rm-2",
+  name: "月次レビュー",
+  _count: { members: 0 },
+  members: [],
+};
 
 function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
   return {
@@ -289,6 +299,61 @@ describe("Dashboard - NextMeetingsSection", () => {
     expect(
       await screen.findByText("定例の取得に失敗しました"),
     ).toBeInTheDocument();
+  });
+
+  it("members があるとき AvatarStack が表示される", async () => {
+    const rmWithMembers = {
+      ...RM_1,
+      _count: { members: 1 },
+      members: [
+        {
+          userId: "u-1",
+          role: "owner",
+          user: { id: "u-1", name: "Alice", displayName: "Alice" },
+        },
+      ],
+    };
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([rmWithMembers]),
+    );
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "mtg-1",
+          title: "週次定例 会議",
+          heldAt: NEAR_FUTURE,
+          estimatedDurationMinutes: 60,
+          recurringMeetingId: "rm-1",
+        },
+      ]),
+    );
+    render();
+    await screen.findByText("週次定例");
+    expect(
+      screen.getByRole("group", { name: /担当者: Alice/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("members が空のとき AvatarStack が表示されない", async () => {
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([RM_1]),
+    );
+    vi.mocked(api["recurring-meetings"][":id"].meetings.$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "mtg-1",
+          title: "週次定例 会議",
+          heldAt: NEAR_FUTURE,
+          estimatedDurationMinutes: 60,
+          recurringMeetingId: "rm-1",
+        },
+      ]),
+    );
+    render();
+    await screen.findByText("週次定例");
+    expect(
+      screen.queryByRole("group", { name: /担当者:/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("「詳細」リンクが最も直近の定例の id のページに向いている", async () => {
