@@ -1,5 +1,12 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import {
   REVIEW_ITEM_TYPES,
@@ -7,7 +14,10 @@ import {
   TYPE_LABELS,
   type ReviewItem,
 } from "@/features/review/types";
-import { useReviewItems } from "@/features/review/useReviewItems";
+import {
+  isReviewPending,
+  useReviewItems,
+} from "@/features/review/useReviewItems";
 import {
   AvatarStack,
   type AvatarUser,
@@ -29,7 +39,7 @@ import { authAtom } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 import { z } from "zod";
 
 // 手動経路で表示する status の選択肢。AI 専用の draft/reviewing は UI から除外。
@@ -110,8 +120,11 @@ export function MeetingDetailView({
   const isPastMeeting = detailQuery.data
     ? new Date(detailQuery.data.heldAt) <= (now ?? new Date())
     : false;
-  const { items: meetingReviewItems, isError: reviewItemsError } =
-    useReviewItems({ meetingId: isPastMeeting ? id : undefined });
+  const {
+    items: meetingReviewItems,
+    isError: reviewItemsError,
+    resetToPending,
+  } = useReviewItems({ meetingId: isPastMeeting ? id : undefined, status: "all" });
 
   const statusArr = parseStatusParam(search.status);
   // Kanban view では status は列として可視化されるため、フィルタ UI も API への
@@ -260,6 +273,7 @@ export function MeetingDetailView({
                         key={type}
                         type={type}
                         items={typeItems}
+                        onResetToPending={resetToPending}
                       />
                     );
                   })}
@@ -428,14 +442,24 @@ function ResolutionBadge({
 function ReviewAccordionItem({
   type,
   items,
+  onResetToPending,
 }: {
   type: (typeof REVIEW_ITEM_TYPES)[number];
   items: ReviewItem[];
+  onResetToPending?: (id: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const pendingCount = items.filter(
-    (i) => i.status === "draft" || i.status === "reviewing",
-  ).length;
+  const [resetError, setResetError] = useState<string | null>(null);
+  const pendingCount = items.filter((i) => isReviewPending(i.status)).length;
+
+  const handleResetToPending = async (id: string) => {
+    setResetError(null);
+    try {
+      await onResetToPending?.(id);
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : "更新に失敗しました");
+    }
+  };
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -471,25 +495,62 @@ function ReviewAccordionItem({
         />
       </button>
       {open && (
-        <ul className="border-t divide-y">
-          {items.map((item) => (
-            <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm">{item.title}</p>
-                <ResolutionBadge
-                  type={type}
-                  status={item.status}
-                  resolutionType={item.resolutionType}
-                />
-              </div>
-              {item.sourceContext && (
-                <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                  {item.sourceContext}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          {resetError && (
+            <p className="px-4 py-2 text-xs text-destructive border-t">
+              {resetError}
+            </p>
+          )}
+          <ul className="border-t divide-y">
+            {items.map((item) => {
+              const isPending = isReviewPending(item.status);
+              // TODO: task の in_progress/done は API が 400 を返すが UI はボタンを出す。
+              // ReviewItem に元の task.status を持たせて除外するか、API ガードを緩めるか要検討。
+              const canReset =
+                !isPending && item.sourceTable !== "ambiguous_info";
+              return (
+                <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm">{item.title}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <ResolutionBadge
+                        type={type}
+                        status={item.status}
+                        resolutionType={item.resolutionType}
+                      />
+                      {canReset && onResetToPending && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                              aria-label="メニュー"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={() => handleResetToPending(item.id)}
+                            >
+                              レビュー待ちに戻す
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  </div>
+                  {item.sourceContext && (
+                    <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                      {item.sourceContext}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );
