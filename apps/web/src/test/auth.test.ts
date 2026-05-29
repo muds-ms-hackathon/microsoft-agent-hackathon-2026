@@ -45,6 +45,12 @@ describe("parseToken", () => {
     });
   });
 
+  it("email クレームがないトークンは email: null を返す", () => {
+    const token = makeFakeIdToken({ sub: "u3", name: "carol" });
+    const user = parseToken(token);
+    expect(user).toEqual({ sub: "u3", email: null, name: "carol" });
+  });
+
   it("不正な形式のトークンは null を返す", () => {
     expect(parseToken("not-a-jwt")).toBeNull();
   });
