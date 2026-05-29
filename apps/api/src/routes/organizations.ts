@@ -281,12 +281,17 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const guard = await requireOrgMembership(c, id);
     if (!guard.ok) return guard.res;
 
-    // 一覧画面でメンバー数バッジを出せるよう _count.members を併せて取得する。
-    // メンバー詳細は重いので別エンドポイント（GET /recurring-meetings/:id）で返す。
+    // _count.members はバッジ表示用、members は先頭5件をアバター表示用に含める。
     const meetings = await prisma.recurringMeeting.findMany({
       where: { organizationId: id },
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { members: true } } },
+      include: {
+        _count: { select: { members: true } },
+        members: {
+          take: 5,
+          include: { user: { select: { id: true, name: true, displayName: true } } },
+        },
+      },
     });
     return c.json(meetings);
   })

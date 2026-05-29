@@ -25,6 +25,10 @@ import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  AvatarStack,
+  type AvatarUser,
+} from "@/features/tasks/components/AvatarStack";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -174,16 +178,25 @@ export function MeetingDetailView({
         <h1 id="meeting-title" className="text-2xl font-bold">
           {detail.title}
         </h1>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <span>{formatDateTime(detail.heldAt)}</span>
           {detail.estimatedDurationMinutes !== null && (
             <span>{detail.estimatedDurationMinutes} 分</span>
           )}
+          {(detail.members?.length ?? 0) > 0 && (
+            <AvatarStack
+              users={(detail.members ?? []).map<AvatarUser>((m) => ({
+                id: m.user.id,
+                displayName: m.user.displayName || m.user.name,
+              }))}
+            />
+          )}
         </div>
       </header>
 
-      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（過去の会議のみ） */}
+      {new Date(detail.heldAt) <= new Date() && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card aria-label="会議要約" className="gap-0 py-0 overflow-hidden h-75">
           <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
             <span className="text-sm font-semibold flex-1">会議要約</span>
@@ -258,7 +271,8 @@ export function MeetingDetailView({
             )}
           </div>
         </Card>
-      </div>
+        </div>
+      )}
 
       {/* 下段: タスク（フルwidth） */}
       <section aria-label="タスク" className="space-y-3">

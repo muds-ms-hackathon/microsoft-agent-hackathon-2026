@@ -24,6 +24,11 @@ export type MeetingDetail = {
     alertLevel: string | null;
     completedAt: string | null;
   } | null;
+  members?: {
+    userId: string;
+    role: string;
+    user: { id: string; name: string; displayName: string };
+  }[];
 };
 
 // 会議詳細を取得する hook。クエリキーは ["meetings", id, "detail"]。

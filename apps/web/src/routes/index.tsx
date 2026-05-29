@@ -12,6 +12,10 @@ import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
+import {
+  AvatarStack,
+  type AvatarUser,
+} from "@/features/tasks/components/AvatarStack";
 import { ArrowRight, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -51,10 +55,12 @@ function NextMeetingCard({
   recurringMeetingId,
   recurringMeetingName,
   next,
+  members,
 }: {
   recurringMeetingId: string;
   recurringMeetingName: string;
   next: MeetingListItem;
+  members: AvatarUser[];
 }) {
   return (
     <Card className="w-64 shrink-0 snap-start">
@@ -67,13 +73,8 @@ function NextMeetingCard({
         <p className="text-xs text-muted-foreground tabular-nums">
           {formatMeetingTime(next.heldAt, next.estimatedDurationMinutes)}
         </p>
-        {/* TODO: 参加者一覧 API が実装されたらアバターを表示する */}
         <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1">
-            <div className="size-5 rounded-full bg-muted-foreground/20" />
-            <div className="size-5 rounded-full bg-muted-foreground/20" />
-            <div className="size-5 rounded-full bg-muted-foreground/20" />
-          </div>
+          <AvatarStack users={members} size="sm" />
           <Link
             to="/recurring-meetings/$id"
             params={{ id: recurringMeetingId }}
@@ -95,6 +96,7 @@ type Candidate = {
   recurringMeetingId: string;
   recurringMeetingName: string;
   next: MeetingListItem;
+  members: AvatarUser[];
 };
 
 function NextMeetingsSection({ orgId }: { orgId: string }) {
@@ -133,6 +135,10 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
         recurringMeetingId: rm.id,
         recurringMeetingName: rm.name,
         next,
+        members: rm.members.map((m) => ({
+          id: m.user.id,
+          displayName: m.user.displayName || m.user.name,
+        })),
       });
     }
   }
@@ -166,6 +172,7 @@ function NextMeetingsSection({ orgId }: { orgId: string }) {
             recurringMeetingId={c.recurringMeetingId}
             recurringMeetingName={c.recurringMeetingName}
             next={c.next}
+            members={c.members}
           />
         ))}
       </div>

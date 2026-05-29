@@ -2,9 +2,14 @@ import type { RecurringMeeting } from "@/features/organizations/types";
 import { api, authHeaders } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
-// 一覧 API は _count.members を付与して返すため、UI 用に型を拡張する。
+// 一覧 API は _count.members とアバター用の先頭5件 members を返す。
 export type RecurringMeetingListItem = RecurringMeeting & {
   _count: { members: number };
+  members: {
+    userId: string;
+    role: string;
+    user: { id: string; name: string; displayName: string };
+  }[];
 };
 
 // 組織配下の定例一覧を取得する hook。
