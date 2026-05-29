@@ -2,7 +2,6 @@ import { api, authHeaders } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
 // 会議詳細レスポンス。API 側 (apps/api/src/routes/meetings.ts) の整形に揃える。
-// 議事録メタ・解析結果などは別 Issue で拡張予定なので、ここでは最小限に絞っている。
 export type MeetingDetail = {
   id: string;
   title: string;

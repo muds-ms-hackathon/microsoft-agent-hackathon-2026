@@ -72,11 +72,19 @@ import type { TaskWithList } from "../src/lib/task-serialization.js";
 type MeetingWithRecurringOrgId = Prisma.MeetingGetPayload<{
   include: { recurringMeeting: { select: { organizationId: true } } };
 }>;
-// GET /meetings/:id ハンドラ用: recurringMeeting に organization (id/name) と analysisRuns を含む
+// GET /meetings/:id ハンドラ用: recurringMeeting に organization・members と analysisRuns を含む
 type MeetingDetail = Prisma.MeetingGetPayload<{
   include: {
     recurringMeeting: {
-      include: { organization: { select: { id: true; name: true } } };
+      include: {
+        organization: { select: { id: true; name: true } };
+        _count: { select: { members: true } };
+        members: {
+          include: {
+            user: { select: { id: true; name: true; displayName: true } };
+          };
+        };
+      };
     };
     analysisRuns: { orderBy: { createdAt: "desc" }; take: 1 };
   };
@@ -248,6 +256,8 @@ describe("GET /meetings/:id", () => {
       name: "週次定例",
       organizationId: "org-1",
       organization: { id: "org-1", name: "ACME" },
+      _count: { members: 0 },
+      members: [],
     },
     analysisRuns: [],
   } satisfies Partial<MeetingDetail>;
@@ -275,6 +285,57 @@ describe("GET /meetings/:id", () => {
     expect(body.recurringMeeting).toEqual({ id: "rmtg-1", name: "週次定例" });
     expect(body.organization).toEqual({ id: "org-1", name: "ACME" });
     expect(body.latestAnalysisRun).toBeNull();
+  });
+
+  it("members がある場合 レスポンスに整形して含む", async () => {
+    mockFindUnique.mockResolvedValue({
+      ...detailMeeting,
+      recurringMeeting: {
+        ...detailMeeting.recurringMeeting,
+        _count: { members: 5 },
+        members: [
+          {
+            userId: "u-1",
+            role: "owner",
+            user: { id: "u-1", name: "Alice", displayName: "Alice" },
+          },
+          {
+            userId: "u-2",
+            role: "member",
+            user: { id: "u-2", name: "Bob", displayName: "Bob" },
+          },
+        ],
+      },
+    } as MeetingDetail);
+    mockMembershipFindUnique.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      joinedAt: new Date(),
+    });
+
+    const res = await app.request("/meetings/mtg-1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      memberCount: number;
+      members: Array<{
+        userId: string;
+        role: string;
+        user: { id: string; name: string; displayName: string };
+      }>;
+    };
+    expect(body.memberCount).toBe(5);
+    expect(body.members).toHaveLength(2);
+    expect(body.members[0]).toEqual({
+      userId: "u-1",
+      role: "owner",
+      user: { id: "u-1", name: "Alice", displayName: "Alice" },
+    });
+    expect(body.members[1]).toEqual({
+      userId: "u-2",
+      role: "member",
+      user: { id: "u-2", name: "Bob", displayName: "Bob" },
+    });
   });
 
   it("解析ランがある場合 latestAnalysisRun を含む", async () => {

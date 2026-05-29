@@ -75,6 +75,14 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         recurringMeeting: {
           include: {
             organization: { select: { id: true, name: true } },
+            _count: { select: { members: true } },
+            members: {
+              take: 4,
+              orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+              include: {
+                user: { select: { id: true, name: true, displayName: true } },
+              },
+            },
           },
         },
         // 解析ラン最新 1 件をポーリング用に含める
@@ -99,6 +107,16 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         name: recurringMeeting.name,
       },
       organization: recurringMeeting.organization,
+      memberCount: recurringMeeting._count.members,
+      members: recurringMeeting.members.map((m) => ({
+        userId: m.userId,
+        role: m.role,
+        user: {
+          id: m.user.id,
+          name: m.user.name,
+          displayName: m.user.displayName,
+        },
+      })),
       latestAnalysisRun: latestRun
         ? {
             id: latestRun.id,
