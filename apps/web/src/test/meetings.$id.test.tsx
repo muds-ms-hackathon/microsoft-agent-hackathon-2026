@@ -387,6 +387,10 @@ function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
 }
 
 describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
+  beforeEach(() => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+  });
+
   it("確定済みアイテムに ⋯ メニューボタンが表示される", async () => {
     vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
       mockJson([makeReviewItem({ status: "decided" })]),
