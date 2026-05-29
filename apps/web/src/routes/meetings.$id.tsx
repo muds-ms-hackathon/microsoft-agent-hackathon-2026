@@ -115,9 +115,6 @@ export function MeetingDetailView({
     items: meetingReviewItems,
     isError: reviewItemsError,
     refetch: refetchReviewItems,
-  } = useReviewItems({ meetingId: id });
-  const pendingCount = meetingReviewItems.filter(
-    (i) => i.status === "draft" || i.status === "reviewing",
     resetToPending,
   } = useReviewItems({ meetingId: id, status: "all" });
   const pendingCount = meetingReviewItems.filter((i) =>

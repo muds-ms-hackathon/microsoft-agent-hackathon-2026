@@ -56,6 +56,9 @@ const detail: MeetingDetail = {
   createdAt: "2026-05-01T00:00:00.000Z",
   recurringMeeting: { id: "rmtg-1", name: "週次定例" },
   organization: { id: "org-1", name: "ACME" },
+  latestAnalysisRun: null,
+  memberCount: 0,
+  members: [],
 };
 
 const sampleTask = {

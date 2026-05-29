@@ -18,6 +18,19 @@ export type MeetingDetail = {
   createdAt: string;
   recurringMeeting: { id: string; name: string };
   organization: { id: string; name: string };
+  latestAnalysisRun: {
+    id: string;
+    status: string;
+    summary: string | null;
+    alertLevel: string | null;
+    completedAt: string | null;
+  } | null;
+  memberCount: number;
+  members: {
+    userId: string;
+    role: string;
+    user: { id: string; name: string; displayName: string };
+  }[];
 };
 
 // 会議詳細を取得する hook。クエリキーは ["meetings", id, "detail"]。
