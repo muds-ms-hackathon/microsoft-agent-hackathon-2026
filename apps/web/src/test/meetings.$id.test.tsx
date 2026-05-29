@@ -21,6 +21,10 @@ vi.mock("@/lib/api", () => ({
     },
     tasks: {
       $post: vi.fn(),
+      ":id": { $patch: vi.fn() },
+    },
+    "decision-items": {
+      ":id": { $patch: vi.fn() },
     },
   },
   authHeaders: () => ({ headers: {} }),
@@ -34,7 +38,7 @@ vi.mock("@tanstack/react-router", async () => {
 
 import { api } from "@/lib/api";
 import { MeetingDetailView } from "../routes/meetings.$id";
-
+import type { ReviewItem } from "@/features/review/types";
 import { mockJson } from "./helpers/mockJson";
 
 const detail: MeetingDetail = {
@@ -269,5 +273,99 @@ describe("MeetingDetailView", () => {
     expect(
       (call[0] as { query: { assigneeId?: string } }).query.assigneeId,
     ).toBe("user-42");
+  });
+});
+
+// AI抽出結果の3点メニューテスト用ヘルパー
+function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
+  return {
+    id: "ri-1",
+    sourceTable: "decision_item",
+    type: "decision",
+    title: "テスト決定事項",
+    body: null,
+    sourceQuote: null,
+    sourceContext: null,
+    status: "decided",
+    assignees: [],
+    deadline: null,
+    severity: null,
+    resolutionType: null,
+    recurringMeetingId: "rmtg-1",
+    recurringMeetingName: "週次定例",
+    meetingId: "mtg-1",
+    version: 1,
+    ...overrides,
+  };
+}
+
+describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
+  it("確定済みアイテムに ⋯ メニューボタンが表示される", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([makeReviewItem({ status: "decided" })]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    // アコーディオンを開く
+    const accordion = await screen.findByRole("button", { name: /決定事項/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.getByRole("button", { name: "メニュー" }),
+    ).toBeInTheDocument();
+  });
+
+  it("レビュー待ち（draft）アイテムには ⋯ メニューボタンが表示されない", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([makeReviewItem({ status: "draft" })]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /決定事項/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.queryByRole("button", { name: "メニュー" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ambiguous_info には ⋯ メニューボタンが表示されない", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "ambiguous_info",
+          type: "ambiguity",
+          status: "decided",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /曖昧箇所/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.queryByRole("button", { name: "メニュー" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("「レビュー待ちに戻す」クリックで decision-items PATCH が呼ばれる", async () => {
+    const item = makeReviewItem({ id: "di-1", status: "decided", version: 2 });
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([item]),
+    );
+    vi.mocked(api["decision-items"][":id"].$patch).mockResolvedValue(
+      mockJson({ ...item, status: "draft" }),
+    );
+
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /決定事項/ });
+    await userEvent.click(accordion);
+    await userEvent.click(screen.getByRole("button", { name: "メニュー" }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "レビュー待ちに戻す" }),
+    );
+
+    expect(vi.mocked(api["decision-items"][":id"].$patch)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        param: { id: "di-1" },
+        json: expect.objectContaining({ status: "draft" }),
+      }),
+      expect.anything(),
+    );
   });
 });

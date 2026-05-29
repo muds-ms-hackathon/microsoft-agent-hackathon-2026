@@ -38,7 +38,7 @@ export const recurringMeetingReviewItemQuerySchema =
 export const decisionItemPatchSchema = z
   .object({
     version: z.number().int().nonnegative(),
-    status: z.enum(["open", "decided", "cancelled"]).optional(),
+    status: z.enum(["draft", "open", "decided", "cancelled"]).optional(),
     decisionState: z
       .enum(["confirmed", "tentative", "open"])
       .nullable()

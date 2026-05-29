@@ -330,7 +330,33 @@ describe("PATCH /decision-items/:id", () => {
     expect(capturedData?.decidedAt).toBeNull();
   });
 
-  it("status=draft は 400（AI 専用なので手動 PATCH で受け付けない）", async () => {
+  it("status=draft は 200（レビュー待ちに戻す操作で使用）", async () => {
+    const res = await app.request("/decision-items/di-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("status=draft のとき現在が draft なら 400", async () => {
+    mockDecisionItemFindUnique.mockResolvedValue(
+      mockDecisionItemRaw({ status: "draft" }) as never,
+    );
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/decision-items/di-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("status=draft のとき現在が reviewing なら 400", async () => {
+    mockDecisionItemFindUnique.mockResolvedValue(
+      mockDecisionItemRaw({ status: "reviewing" }) as never,
+    );
+    mockMembershipFindUnique.mockResolvedValue(membership());
     const res = await app.request("/decision-items/di-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
