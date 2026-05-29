@@ -512,6 +512,14 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "既にこの組織に参加しています" }, 409);
     }
 
+    // email が null のユーザーは招待照合ができないため 404 を返す。
+    // 招待は email 一致で突き合わせる設計であり、email なしでは招待を受け取れない。
+    // user.email を変数に抜き出して async コールバック内で string 型が確定するようにする。
+    const userEmail = user.email;
+    if (!userEmail) {
+      return c.json({ error: "有効な招待が見つかりません" }, 404);
+    }
+
     // 招待検索 → status 更新 → membership 作成を一貫させる。
     // 期限切れ招待は status=pending のまま残るが now と比較してスキップする
     // （expired への自動遷移はバッチジョブ前提）。
@@ -529,7 +537,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         const invitation = await tx.organizationInvitation.findFirst({
           where: {
             organizationId: id,
-            email: user.email,
+            email: userEmail,
             status: "pending",
             expiresAt: { gt: new Date() },
           },
