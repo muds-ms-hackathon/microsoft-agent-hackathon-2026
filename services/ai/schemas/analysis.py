@@ -14,6 +14,17 @@ class SpeakerInfo(BaseModel):
     resolution_status: str
 
 
+class UserTopicRequest(BaseModel):
+    # ユーザーが事前登録した議題。apps/api の GET /internal/analysis-runs/:id/input が
+    # 返す user_topic_requests の各要素と形を合わせる
+    # （apps/api/src/routes/analysis-runs.ts の user_topic_requests）。
+    # priority は TopicRequestPriority?（required / optional / null）を文字列で受ける。
+    title: str
+    body: Optional[str] = None
+    priority: Optional[str] = None
+    requested_by_name: str
+
+
 class AnalysisJobInput(BaseModel):
     # None の場合はドライランモード（apps/api へのステータス更新を行わない）
     analysis_run_id: Optional[str] = None
@@ -27,6 +38,9 @@ class AnalysisJobInput(BaseModel):
     previous_meeting_id: Optional[str] = None
     speakers: list[SpeakerInfo]
     previous_report_json: Optional[dict] = None
+    # ユーザーが事前登録した議題。未指定・0件のときは空リスト。
+    # apps/api が常にキーを送るが、後方互換のためデフォルトを空リストにしておく。
+    user_topic_requests: list[UserTopicRequest] = []
 
 
 class AnalysisRunResult(BaseModel):
