@@ -37,7 +37,8 @@ export interface AuthState {
   idToken: string | null;
   user: {
     sub: string;
-    email: string;
+    // Entra External ID は email クレームを返さない設定があるため nullable。
+    email: string | null;
     name: string;
   } | null;
 }
@@ -76,7 +77,7 @@ export function parseToken(token: string): AuthState["user"] {
   try {
     const payload = decodeBase64UrlJson(token.split(".")[1]) as {
       sub: string;
-      email: string;
+      email?: string;
       name: string;
       exp?: number;
     };
@@ -87,7 +88,7 @@ export function parseToken(token: string): AuthState["user"] {
     }
     return {
       sub: payload.sub,
-      email: payload.email,
+      email: payload.email ?? null,
       name: payload.name,
     };
   } catch {
