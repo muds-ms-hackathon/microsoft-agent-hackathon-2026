@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import { TopicRequestSection } from "@/features/topic-requests/components/TopicRequestSection";
 import {
   REVIEW_ITEM_TYPES,
   TYPE_BADGE_CLASS,
@@ -401,6 +402,10 @@ export function MeetingDetailView({
             now={now}
           />
         )}
+      </section>
+
+      <section aria-label="次回会議の議題">
+        <TopicRequestSection meetingId={id} />
       </section>
     </section>
   );
