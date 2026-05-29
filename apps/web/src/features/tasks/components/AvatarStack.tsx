@@ -41,17 +41,20 @@ export function AvatarStack({
   users,
   max = 4,
   size = "sm",
+  extraCount = 0,
 }: {
   users: AvatarUser[];
   max?: number;
   size?: "sm" | "md";
+  // API 側で件数を絞って渡す場合に、実際の残り人数を上書きするための補正値。
+  extraCount?: number;
 }) {
   if (users.length === 0) {
     return <span className="text-xs text-muted-foreground">担当者未指定</span>;
   }
 
   const shown = users.slice(0, max);
-  const remaining = users.length - shown.length;
+  const remaining = users.length - shown.length + extraCount;
   const sizeClass = size === "sm" ? "h-6 w-6 text-[10px]" : "h-7 w-7 text-xs";
 
   return (

@@ -6,6 +6,11 @@ import { normalizeEmail } from "../lib/email.js";
 import { prisma } from "../lib/prisma.js";
 import { recurringMeetingCreateSchema } from "../lib/schemas/recurring-meeting.js";
 import {
+  buildReviewItemStatusFilter,
+  buildReviewItemTypeFilter,
+  reviewItemQuerySchema,
+} from "../lib/schemas/review-item.js";
+import {
   buildTaskListWhere,
   taskListQuerySchema,
 } from "../lib/schemas/task.js";
@@ -14,6 +19,12 @@ import {
   taskListInclude,
   taskListOrderBy,
 } from "../lib/task-serialization.js";
+import {
+  ambiguousInfoReviewInclude,
+  decisionItemReviewInclude,
+  serializeReviewItems,
+  taskReviewInclude,
+} from "../lib/review-item-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireOrgMembership, requireOrgRole } from "../middleware/authz.js";
 
@@ -270,12 +281,21 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
     const guard = await requireOrgMembership(c, id);
     if (!guard.ok) return guard.res;
 
-    // 一覧画面でメンバー数バッジを出せるよう _count.members を併せて取得する。
-    // メンバー詳細は重いので別エンドポイント（GET /recurring-meetings/:id）で返す。
+    // _count.members はバッジ表示用、members は先頭4件をアバター表示用に含める。
+    // AvatarStack のデフォルト max=4 と合わせる。
     const meetings = await prisma.recurringMeeting.findMany({
       where: { organizationId: id },
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { members: true } } },
+      include: {
+        _count: { select: { members: true } },
+        members: {
+          take: 4,
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+          include: {
+            user: { select: { id: true, name: true, displayName: true } },
+          },
+        },
+      },
     });
     return c.json(meetings);
   })
@@ -554,4 +574,66 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "有効な招待が見つかりません" }, 404);
     }
     return c.json(result);
-  });
+  })
+  .get(
+    "/:id/review-items",
+    zValidator("query", reviewItemQuerySchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const filters = c.req.valid("query");
+
+      const guard = await requireOrgMembership(c, id);
+      if (!guard.ok) return guard.res;
+
+      const {
+        includeDecision,
+        includeTasks,
+        includeAmbiguousInfos,
+        decisionItemTypeWhere,
+      } = buildReviewItemTypeFilter(filters.type);
+      const {
+        decisionItemStatusWhere,
+        taskStatusWhere,
+        ambiguousInfoStatusWhere,
+      } = buildReviewItemStatusFilter(filters.status);
+
+      const orgWhere = {
+        meeting: { recurringMeeting: { organizationId: id } },
+      };
+
+      const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
+        includeDecision
+          ? prisma.decisionItem.findMany({
+              where: {
+                ...orgWhere,
+                ...decisionItemTypeWhere,
+                ...decisionItemStatusWhere,
+              },
+              orderBy: { createdAt: "asc" },
+              include: decisionItemReviewInclude,
+            })
+          : [],
+        includeTasks
+          ? prisma.task.findMany({
+              where: {
+                originMeeting: { recurringMeeting: { organizationId: id } },
+                ...taskStatusWhere,
+              },
+              orderBy: { createdAt: "asc" },
+              include: taskReviewInclude,
+            })
+          : [],
+        includeAmbiguousInfos
+          ? prisma.ambiguousInfo.findMany({
+              where: { ...orgWhere, ...ambiguousInfoStatusWhere },
+              orderBy: { createdAt: "asc" },
+              include: ambiguousInfoReviewInclude,
+            })
+          : [],
+      ]);
+
+      return c.json(
+        serializeReviewItems({ decisionItems, tasks, ambiguousInfos }),
+      );
+    },
+  );

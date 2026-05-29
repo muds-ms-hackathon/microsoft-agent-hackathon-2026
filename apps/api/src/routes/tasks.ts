@@ -191,6 +191,18 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
 
     const organizationId = guard.task.organizationId;
 
+    // 一般編集 UI からの誤用防止。draft へは todo/rejected からのみ遷移可。
+    // in_progress/done は作業・完了履歴が混乱するため再レビュー対象にしない。
+    if (input.status === "draft") {
+      const current = guard.task.status;
+      if (current !== "todo" && current !== "rejected") {
+        return c.json(
+          { error: "この状態からレビュー待ちに戻すことはできません" },
+          400,
+        );
+      }
+    }
+
     // assignees / recurringMeetings の置換が指定されたら、クロス組織を再検証する。
     // 作成時と同じ整合性ルール（同一組織内のみ許可）。
     if (input.assigneeUserIds !== undefined) {

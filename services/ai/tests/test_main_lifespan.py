@@ -53,9 +53,7 @@ async def test_lifespan_starts_consumer_when_env_set():
         _ENDPOINT_KEY: _ENDPOINT_VAL,
     }
     with patch.dict(os.environ, env):
-        with patch(
-            "main.ServiceBusConsumer", return_value=mock_consumer
-        ) as mock_cls:
+        with patch("main.ServiceBusConsumer", return_value=mock_consumer) as mock_cls:
             async with main.lifespan(main.app):
                 await asyncio.wait_for(started.wait(), timeout=1.0)
 
@@ -135,8 +133,8 @@ async def test_lifespan_raises_when_deployment_name_not_set():
         try:
             async with main.lifespan(main.app):
                 pass
-        except RuntimeError as e:
-            assert _DEPLOY_KEY in str(e)
+        except RuntimeError as error:
+            assert _DEPLOY_KEY in str(error)
         else:
             raise AssertionError("RuntimeError が raise されなかった")
 
@@ -152,8 +150,8 @@ async def test_lifespan_raises_when_api_key_not_set():
         try:
             async with main.lifespan(main.app):
                 pass
-        except RuntimeError as e:
-            assert _API_KEY in str(e)
+        except RuntimeError as error:
+            assert _API_KEY in str(error)
         else:
             raise AssertionError("RuntimeError が raise されなかった")
 
@@ -170,7 +168,7 @@ async def test_lifespan_raises_when_endpoint_not_set():
         try:
             async with main.lifespan(main.app):
                 pass
-        except RuntimeError as e:
-            assert "AZURE_OPENAI_ENDPOINT" in str(e)
+        except RuntimeError as error:
+            assert "AZURE_OPENAI_ENDPOINT" in str(error)
         else:
             raise AssertionError("RuntimeError が raise されなかった")

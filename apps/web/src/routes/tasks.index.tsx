@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { SectionError } from "@/components/ui/SectionError";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
 import { OverdueOnlyToggle } from "@/features/tasks/components/OverdueOnlyToggle";
@@ -104,7 +105,7 @@ export function MyTasksView({
     Object.keys(apiFilters).length > 0 ? apiFilters : undefined;
   // API には組織フィルタが無いため、status / overdueOnly のみを API に渡し、組織はクライアントで絞り込む。
   // タスクは全件返却前提のため、組織でさらに削ってもパフォーマンス問題は出ない想定。
-  const { data, isLoading, isError } = useMyTasks(filtersForQuery);
+  const { data, isLoading, isError, refetch } = useMyTasks(filtersForQuery);
 
   const tasks = data ?? [];
   // 組織候補は取得した tasks から動的に構築する。useMyOrganizations を別途呼ばない方針。
@@ -255,7 +256,10 @@ export function MyTasksView({
       {isLoading ? (
         <p>読み込み中...</p>
       ) : isError ? (
-        <p className="text-destructive">タスクの取得に失敗しました</p>
+        <SectionError
+          message="タスクの取得に失敗しました"
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-start gap-3">
           <p className="text-muted-foreground">担当中のタスクはありません</p>

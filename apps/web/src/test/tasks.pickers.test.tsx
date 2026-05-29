@@ -1,3 +1,4 @@
+import { AssigneeDropdown } from "@/features/common/components/AssigneeDropdown";
 import { AssigneePicker } from "@/features/tasks/components/AssigneePicker";
 import { RecurringMeetingPicker } from "@/features/tasks/components/RecurringMeetingPicker";
 import { screen } from "@testing-library/react";
@@ -75,6 +76,100 @@ describe("AssigneePicker", () => {
     expect(
       await screen.findByText("組織にメンバーがいません"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("AssigneeDropdown", () => {
+  const members = [
+    {
+      userId: "user-1",
+      name: "alice",
+      displayName: "Alice",
+      email: "a@example.com",
+      role: "member",
+      joinedAt: "2026-05-01T00:00:00.000Z",
+    },
+    {
+      userId: "user-2",
+      name: "bob",
+      displayName: "Bob",
+      email: "b@example.com",
+      role: "member",
+      joinedAt: "2026-05-01T00:00:00.000Z",
+    },
+  ];
+
+  it("ボタンクリックでドロップダウンが開きメンバーが表示される", async () => {
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(members),
+    );
+
+    renderWithQuery(
+      <AssigneeDropdown
+        organizationId="org-1"
+        value={[]}
+        onChange={() => {}}
+      />,
+    );
+
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /担当者を選択/ }));
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+  });
+
+  it("メンバーを選択するとonChangeが呼ばれる", async () => {
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(members),
+    );
+
+    const onChange = vi.fn();
+    renderWithQuery(
+      <AssigneeDropdown
+        organizationId="org-1"
+        value={[]}
+        onChange={onChange}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /担当者を選択/ }));
+    await userEvent.click(await screen.findByText("Alice"));
+    expect(onChange).toHaveBeenCalledWith(["user-1"]);
+  });
+
+  it("選択済みメンバーの名前がボタンに表示される", async () => {
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(members),
+    );
+
+    renderWithQuery(
+      <AssigneeDropdown
+        organizationId="org-1"
+        value={["user-1"]}
+        onChange={() => {}}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /Alice/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("メンバー 0 件は空メッセージ", async () => {
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson([]),
+    );
+
+    renderWithQuery(
+      <AssigneeDropdown
+        organizationId="org-1"
+        value={[]}
+        onChange={() => {}}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /担当者を選択/ }));
+    expect(await screen.findByText("メンバーがいません")).toBeInTheDocument();
   });
 });
 

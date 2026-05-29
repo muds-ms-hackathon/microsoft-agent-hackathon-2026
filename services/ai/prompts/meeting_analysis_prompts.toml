@@ -44,9 +44,9 @@ $transcript
 {
   "decisions": [
     {
-      "topic": "決定事項のトピック（30字以内）",
+      "title": "決定事項のタイトル（30字以内）",
       "decision_state": "confirmed",
-      "content": "決定内容の詳細",
+      "body": "決定内容の詳細",
       "source_quote": "書き起こしからの引用文（原文ママ）",
       "source_context": "前後の文脈説明",
       "status": "draft"
@@ -54,7 +54,7 @@ $transcript
   ],
   "open_issues": [
     {
-      "topic": "未決事項のトピック（30字以内）",
+      "title": "未決事項のタイトル（30字以内）",
       "reason": "no_consensus",
       "status": "open",
       "source_quote": "書き起こしからの引用文（原文ママ）",
