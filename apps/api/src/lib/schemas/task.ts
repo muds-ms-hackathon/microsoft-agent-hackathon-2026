@@ -1,8 +1,9 @@
 import { z } from "zod";
 
-// 手動経路で受け付ける status 値（draft / reviewing は AI 専用なので除外）。
+// 手動経路で受け付ける status 値。draft はレビュー待ち戻し操作のみで使用。
 // POST では指定不可（サーバ側で todo 固定）、PATCH でのみ変更可能。
 const manualTaskStatusSchema = z.enum([
+  "draft",
   "todo",
   "in_progress",
   "done",

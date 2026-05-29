@@ -12,7 +12,13 @@ export type AmbiguityResolution =
   | { resolution: "decision_item" }
   | { resolution: "rejected" };
 
-export function reviewItemsQueryKey(params: {
+type ReviewItemStatus = "pending" | "all" | "decided";
+
+export const isReviewPending = (status: string) =>
+  status === "draft" || status === "reviewing";
+
+// "pending"/"all" など全バリアントをまとめて invalidate するために status を含まない。
+function reviewItemsBaseQueryKey(params: {
   meetingId?: string;
   recurringMeetingId?: string;
   organizationId?: string;
@@ -34,21 +40,40 @@ export function reviewItemsQueryKey(params: {
   ] as const;
 }
 
+export function reviewItemsQueryKey(params: {
+  meetingId?: string;
+  recurringMeetingId?: string;
+  organizationId?: string;
+  status?: ReviewItemStatus;
+}) {
+  const status = params.status ?? "pending";
+  return [...reviewItemsBaseQueryKey(params), status] as const;
+}
+
 export function useReviewItems({
   meetingId,
   recurringMeetingId,
   organizationId,
+  status,
 }: {
   meetingId?: string;
   recurringMeetingId?: string;
   organizationId?: string;
+  status?: ReviewItemStatus;
 }) {
   const queryClient = useQueryClient();
-  const queryKey = reviewItemsQueryKey({
+  const baseQueryKey = reviewItemsBaseQueryKey({
     meetingId,
     recurringMeetingId,
     organizationId,
   });
+  const queryKey = reviewItemsQueryKey({
+    meetingId,
+    recurringMeetingId,
+    organizationId,
+    status,
+  });
+  const statusQuery = status && status !== "pending" ? { status } : {};
 
   const query = useQuery<ReviewItem[]>({
     queryKey,
@@ -56,17 +81,17 @@ export function useReviewItems({
       let res: Response;
       if (meetingId) {
         res = await api.meetings[":id"]["review-items"].$get(
-          { param: { id: meetingId }, query: {} },
+          { param: { id: meetingId }, query: statusQuery },
           authHeaders(),
         );
       } else if (recurringMeetingId) {
         res = await api["recurring-meetings"][":id"]["review-items"].$get(
-          { param: { id: recurringMeetingId }, query: {} },
+          { param: { id: recurringMeetingId }, query: statusQuery },
           authHeaders(),
         );
       } else {
         res = await api.organizations[":id"]["review-items"].$get(
-          { param: { id: organizationId ?? "" }, query: {} },
+          { param: { id: organizationId ?? "" }, query: statusQuery },
           authHeaders(),
         );
       }
@@ -87,12 +112,14 @@ export function useReviewItems({
     if (item?.sourceTable === "decision_item") {
       const body: Record<string, unknown> = { version: item.version };
       if (updates.status !== undefined) {
-        // DecisionItem は "rejected" を持たず "cancelled" が対応する
-        body.status =
-          updates.status === "rejected" ? "cancelled" : updates.status;
-        // open_issue 承認時は AI の次回持ち越しを防ぐため confirmed に昇格する
-        if (updates.status === "decided" && item.type === "open_issue") {
+        if (updates.status === "rejected") {
+          body.status = "cancelled";
+        } else if (updates.status === "decided" && item.type === "open_issue") {
+          // 未決事項の承認は "open"（未決確定）に対応する
+          body.status = "open";
           body.decisionState = "confirmed";
+        } else {
+          body.status = updates.status;
         }
       }
       if (updates.title !== undefined) body.title = updates.title;
@@ -117,7 +144,7 @@ export function useReviewItems({
       );
 
       if (res.status === 409) {
-        await queryClient.invalidateQueries({ queryKey });
+        await queryClient.invalidateQueries({ queryKey: baseQueryKey });
         throw new Error(
           "他のユーザーが先に更新しました。最新の状態を取得しました。",
         );
@@ -127,9 +154,14 @@ export function useReviewItems({
       }
 
       const updated = (await res.json()) as ReviewItem;
+      // queryKey は status: "pending" 前提。pending でなくなった項目はリストから除く。
+      // status: "all" 文脈で呼ぶと approved 項目が一瞬消えて refetch で戻るチラツキが起きる。
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-        (prev ?? []).map((i) => (i.id === id ? updated : i)),
+        isReviewPending(updated.status)
+          ? (prev ?? []).map((i) => (i.id === id ? updated : i))
+          : (prev ?? []).filter((i) => i.id !== id),
       );
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       return;
     }
 
@@ -163,7 +195,7 @@ export function useReviewItems({
       );
 
       if (res.status === 409) {
-        await queryClient.invalidateQueries({ queryKey });
+        await queryClient.invalidateQueries({ queryKey: baseQueryKey });
         throw new Error(
           "他のユーザーが先に更新しました。最新の状態を取得しました。",
         );
@@ -189,24 +221,28 @@ export function useReviewItems({
       const reviewStatus: ReviewItem["status"] =
         task.status === "rejected"
           ? "rejected"
-          : task.status === "draft" || task.status === "reviewing"
+          : isReviewPending(task.status)
             ? item.status
             : "decided";
 
+      // queryKey は status: "pending" 前提。pending でなくなった項目はリストから除く。
       queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-        (prev ?? []).map((i) =>
-          i.id === id
-            ? {
-                ...i,
-                title: task.title,
-                assignees: task.assignees,
-                deadline: task.dueDate,
-                version: task.version,
-                status: reviewStatus,
-              }
-            : i,
-        ),
+        isReviewPending(reviewStatus)
+          ? (prev ?? []).map((i) =>
+              i.id === id
+                ? {
+                    ...i,
+                    title: task.title,
+                    assignees: task.assignees,
+                    deadline: task.dueDate,
+                    version: task.version,
+                    status: reviewStatus,
+                  }
+                : i,
+            )
+          : (prev ?? []).filter((i) => i.id !== id),
       );
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       return;
     }
 
@@ -255,7 +291,7 @@ export function useReviewItems({
     );
 
     if (res.status === 409) {
-      await queryClient.invalidateQueries({ queryKey });
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
       throw new Error(
         "他のユーザーが先に更新しました。最新の状態を取得しました。",
       );
@@ -265,8 +301,53 @@ export function useReviewItems({
     }
 
     const updated = (await res.json()) as ReviewItem;
+    // queryKey は status: "pending" 前提。pending でなくなった項目はリストから除く。
     queryClient.setQueryData<ReviewItem[]>(queryKey, (prev) =>
-      (prev ?? []).map((i) => (i.id === id ? updated : i)),
+      isReviewPending(updated.status)
+        ? (prev ?? []).map((i) => (i.id === id ? updated : i))
+        : (prev ?? []).filter((i) => i.id !== id),
+    );
+    await queryClient.invalidateQueries({ queryKey: baseQueryKey });
+  };
+
+  const resetToPending = async (id: string): Promise<void> => {
+    const item = (query.data ?? []).find((i) => i.id === id);
+    if (!item) throw new Error(`resetToPending: id="${id}" が見つかりません`);
+
+    if (item.sourceTable === "decision_item") {
+      const res = await api["decision-items"][":id"].$patch(
+        {
+          param: { id },
+          json: {
+            version: item.version,
+            status: "draft" as const,
+            ...(item.type === "open_issue" && {
+              decisionState: "open" as const,
+            }),
+          },
+        },
+        authHeaders(),
+      );
+      if (!res.ok) throw new Error(`更新に失敗しました (${res.status})`);
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
+      return;
+    }
+
+    if (item.sourceTable === "task") {
+      const res = await api.tasks[":id"].$patch(
+        {
+          param: { id },
+          json: { version: item.version, status: "draft" as const },
+        },
+        authHeaders(),
+      );
+      if (!res.ok) throw new Error(`更新に失敗しました (${res.status})`);
+      await queryClient.invalidateQueries({ queryKey: baseQueryKey });
+      return;
+    }
+
+    throw new Error(
+      `resetToPending: 未対応の sourceTable="${item.sourceTable}"`,
     );
   };
 
@@ -277,5 +358,6 @@ export function useReviewItems({
     refetch: query.refetch,
     updateItem,
     resolveAmbiguity,
+    resetToPending,
   };
 }

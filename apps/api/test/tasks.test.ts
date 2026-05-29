@@ -545,7 +545,35 @@ describe("PATCH /tasks/:id", () => {
     expect(res.status).toBe(200);
   });
 
-  it("status=draft は 400（AI 専用なので手動 PATCH で受け付けない）", async () => {
+  it("status=draft は 200（レビュー待ちに戻す操作で使用）", async () => {
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("status=draft のとき現在が in_progress なら 400", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      ...sampleTask,
+      status: "in_progress",
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("status=draft のとき現在が done なら 400", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      ...sampleTask,
+      status: "done",
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
     const res = await app.request("/tasks/task-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

@@ -36,8 +36,10 @@ type AmbiguousInfoWithReview = Prisma.AmbiguousInfoGetPayload<{
 }>;
 
 export function serializeDecisionItem(item: DecisionItemWithReview) {
+  // status:"open" は未決確定済み → decisionState によらず open_issue のまま
   const type =
-    item.decisionState === "confirmed" || item.decisionState === "tentative"
+    item.status !== "open" &&
+    (item.decisionState === "confirmed" || item.decisionState === "tentative")
       ? ("decision" as const)
       : ("open_issue" as const);
   return {
