@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { RetryButton } from "@/components/ui/RetryButton";
+import { SectionError } from "@/components/ui/SectionError";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
 import { OverdueOnlyToggle } from "@/features/tasks/components/OverdueOnlyToggle";
@@ -256,10 +256,10 @@ export function MyTasksView({
       {isLoading ? (
         <p>読み込み中...</p>
       ) : isError ? (
-        <div className="flex items-center gap-1">
-          <p className="text-sm text-destructive">タスクの取得に失敗しました</p>
-          <RetryButton onClick={() => refetch()} />
-        </div>
+        <SectionError
+          message="タスクの取得に失敗しました"
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-start gap-3">
           <p className="text-muted-foreground">担当中のタスクはありません</p>

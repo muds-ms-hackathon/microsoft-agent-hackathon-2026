@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { RetryButton } from "@/components/ui/RetryButton";
+import { SectionError } from "@/components/ui/SectionError";
 import { AddReviewItemDialog } from "@/features/review/components/AddReviewItemDialog";
 import { ReviewItemCard } from "@/features/review/components/ReviewItemCard";
 import {
@@ -224,12 +224,10 @@ export function ReviewView({
           <p className="text-muted-foreground">読み込み中...</p>
         </div>
       ) : isError ? (
-        <div className="flex items-center gap-1">
-          <p className="text-sm text-destructive">
-            レビューアイテムの取得に失敗しました
-          </p>
-          {refetch && <RetryButton onClick={refetch} />}
-        </div>
+        <SectionError
+          message="レビューアイテムの取得に失敗しました"
+          onRetry={refetch ?? undefined}
+        />
       ) : isCompleted ? (
         // レビュー完了状態
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 gap-4">

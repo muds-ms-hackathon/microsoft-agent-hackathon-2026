@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { RetryButton } from "@/components/ui/RetryButton";
+import { SectionError } from "@/components/ui/SectionError";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import {
   REVIEW_ITEM_TYPES,
@@ -274,12 +274,10 @@ export function MeetingDetailView({
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
         ) : tasksQuery.isError ? (
-          <div className="flex items-center gap-1">
-            <p className="text-sm text-destructive">
-              タスクの取得に失敗しました
-            </p>
-            <RetryButton onClick={() => tasksQuery.refetch()} />
-          </div>
+          <SectionError
+            message="タスクの取得に失敗しました"
+            onRetry={() => tasksQuery.refetch()}
+          />
         ) : (tasksQuery.data ?? []).length === 0 ? (
           <p className="text-muted-foreground">
             この会議から発生したタスクはまだありません
@@ -335,12 +333,10 @@ export function MeetingDetailView({
           ) : null}
         </div>
         {reviewItemsError ? (
-          <div className="flex items-center gap-1">
-            <p className="text-sm text-destructive">
-              AI抽出結果の取得に失敗しました
-            </p>
-            <RetryButton onClick={refetchReviewItems} />
-          </div>
+          <SectionError
+            message="AI抽出結果の取得に失敗しました"
+            onRetry={refetchReviewItems}
+          />
         ) : meetingReviewItems.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             AI抽出結果はまだありません
