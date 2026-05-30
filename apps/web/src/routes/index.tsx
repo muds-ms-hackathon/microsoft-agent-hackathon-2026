@@ -7,11 +7,14 @@ import {
 import { partitionMeetings } from "@/features/recurring-meetings/meetingSections";
 import { TYPE_LABELS, type ReviewItemType } from "@/features/review/types";
 import { useReviewItems } from "@/features/review/useReviewItems";
+import { useMarkTaskRead } from "@/features/tasks/hooks/useMarkTaskRead";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
+import type { TaskListFilters } from "@/features/tasks/types";
 import {
   URGENCY_STYLE,
   calcUrgency,
   formatDeadline,
+  summarizeReminders,
 } from "@/features/tasks/urgency";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
@@ -21,7 +24,14 @@ import {
   AvatarStack,
   type AvatarUser,
 } from "@/features/tasks/components/AvatarStack";
-import { ArrowRight, ChevronRight } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Bell,
+  CalendarClock,
+  ChevronRight,
+  Clock,
+} from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -277,17 +287,101 @@ function ReviewPendingCard({ orgId }: { orgId: string }) {
   );
 }
 
+// ===== リマインド集約バナー =====
+
+// 未完了タスクの取得フィルタ。バナーとカードで同一キーを使い fetch を共有する。
+const INCOMPLETE_SEARCH_FILTER: TaskListFilters = {
+  status: ["todo", "in_progress"],
+};
+
+// /tasks 一覧への遷移に使う共通フィルタ（未完了タスクに絞る）。
+const INCOMPLETE_SEARCH = { status: "todo,in_progress" } as const;
+
+// バナーに表示する各カテゴリの定義。
+// 期限超過のみ既存の overdueOnly フィルタへ正確に遷移し、
+// 今週期限・着手予定日超過・未読は専用フィルタUIが無いため未完了一覧へ遷移する。
+const REMINDER_ITEMS = [
+  {
+    key: "overdue" as const,
+    label: "期限超過",
+    Icon: AlertTriangle,
+    className: "text-destructive border-destructive/30 bg-destructive/5",
+    search: { ...INCOMPLETE_SEARCH, overdueOnly: "true" },
+  },
+  {
+    key: "dueSoon" as const,
+    label: "今週期限",
+    Icon: Clock,
+    className: "text-amber-600 border-amber-500/30 bg-amber-500/5",
+    search: INCOMPLETE_SEARCH,
+  },
+  {
+    key: "startOverdue" as const,
+    label: "着手予定日超過",
+    Icon: CalendarClock,
+    className: "text-orange-600 border-orange-500/30 bg-orange-500/5",
+    search: INCOMPLETE_SEARCH,
+  },
+  {
+    key: "unread" as const,
+    label: "未読",
+    Icon: Bell,
+    className: "text-sky-600 border-sky-500/30 bg-sky-500/5",
+    search: INCOMPLETE_SEARCH,
+  },
+];
+
+// 期限超過・今週期限・着手予定日超過・未読を件数付きで集約表示するバナー。
+// 見落とし防止が目的のため、件数 0 のカテゴリは出さず、全て 0 なら非表示にする。
+function RemindersBanner() {
+  const {
+    data = [],
+    isLoading,
+    isError,
+  } = useMyTasks(INCOMPLETE_SEARCH_FILTER);
+
+  if (isLoading || isError) return null;
+
+  const summary = summarizeReminders(data);
+  const visible = REMINDER_ITEMS.filter((item) => summary[item.key] > 0);
+  if (visible.length === 0) return null;
+
+  return (
+    <div
+      role="status"
+      aria-label="リマインド"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card px-4 py-3"
+    >
+      <span className="text-xs font-semibold text-muted-foreground shrink-0">
+        リマインド
+      </span>
+      {visible.map(({ key, label, Icon, className, search }) => (
+        <Link
+          key={key}
+          to="/tasks"
+          search={search}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:brightness-95 ${className}`}
+        >
+          <Icon size={13} />
+          <span>{label}</span>
+          <span className="font-semibold">{summary[key]}</span>
+          <span>件</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 // ===== 未完了タスクカード =====
 
 function IncompleteTasksCard() {
+  const markRead = useMarkTaskRead();
   const {
     data = [],
     isLoading,
     isError,
     refetch,
-  } = useMyTasks({
-    status: ["todo", "in_progress"],
-  });
+  } = useMyTasks(INCOMPLETE_SEARCH_FILTER);
 
   return (
     <Card className="gap-0 py-0 overflow-hidden h-90">
@@ -361,6 +455,19 @@ function IncompleteTasksCard() {
                       </span>
                     )}
                   </div>
+                  {task.unread && (
+                    <button
+                      type="button"
+                      // クリックで既読化する最小導線。pending 中は二重送信を防ぐ。
+                      onClick={() => markRead.mutate(task.id)}
+                      disabled={markRead.isPending}
+                      title="クリックで既読にする"
+                      className="shrink-0 inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-600 transition-colors hover:bg-sky-500/20 disabled:opacity-50"
+                    >
+                      <Bell size={11} />
+                      未読
+                    </button>
+                  )}
                   <span className={`text-xs shrink-0 ${style.deadline}`}>
                     {formatDeadline(task.dueDate, urgency)}
                   </span>
@@ -396,6 +503,9 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* 最上段：未達・期限超過・未読のリマインド集約バナー */}
+          <RemindersBanner />
+
           {/* 上段：次回会議（横スクロール） */}
           <NextMeetingsSection orgId={orgId} />
 

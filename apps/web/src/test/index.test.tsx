@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithQuery } from "./test-utils";
 
@@ -17,6 +17,7 @@ vi.mock("@/lib/api", () => ({
     },
     tasks: {
       me: { $get: vi.fn() },
+      ":id": { read: { $post: vi.fn() } },
     },
   },
   authHeaders: () => ({ headers: {} }),
@@ -537,7 +538,8 @@ describe("Dashboard - IncompleteTasksCard", () => {
       mockJson([makeTask({ id: "t1", dueDate: PAST })]),
     );
     renderDashboard();
-    expect(await screen.findByText(/超過/)).toBeInTheDocument();
+    // カードの期限表示「N日超過」を指す。バナーの「期限超過」と区別するため /日超過/ で照合。
+    expect(await screen.findByText(/日超過/)).toBeInTheDocument();
   });
 
   it("期限ありのタスクは「月/日」形式で表示される", async () => {
@@ -583,5 +585,97 @@ describe("Dashboard - IncompleteTasksCard", () => {
     await screen.findByText("タスクA");
     const header = screen.getByText("未完了タスク").closest("div");
     expect(header?.textContent).toContain("2");
+  });
+
+  it("未読タスクには未読バッジ（ボタン）が表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([makeTask({ id: "u1", title: "未読タスク", unread: true })]),
+    );
+    renderDashboard();
+    expect(
+      await screen.findByRole("button", { name: /未読/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("既読タスクには未読バッジが表示されない", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([makeTask({ id: "r1", title: "既読タスク", unread: false })]),
+    );
+    renderDashboard();
+    await screen.findByText("既読タスク");
+    expect(screen.queryByRole("button", { name: /未読/ })).toBeNull();
+  });
+
+  it("未読バッジをクリックすると既読化APIが呼ばれる", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([makeTask({ id: "u1", title: "未読タスク", unread: true })]),
+    );
+    const post = vi
+      .mocked(api.tasks[":id"].read.$post)
+      .mockResolvedValue(mockJson(null, 204));
+    renderDashboard();
+    const badge = await screen.findByRole("button", { name: /未読/ });
+    fireEvent.click(badge);
+    await waitFor(() => expect(post).toHaveBeenCalled());
+  });
+});
+
+// ===== RemindersBanner =====
+
+describe("Dashboard - RemindersBanner", () => {
+  beforeEach(() => {
+    vi.mocked(useAtomValue).mockReturnValue("org-1");
+    vi.mocked(api.organizations[":id"].meetings.$get).mockResolvedValue(
+      mockJson([]),
+    );
+    vi.mocked(api.organizations[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([]),
+    );
+  });
+
+  function renderDashboard() {
+    return renderWithQuery(<Dashboard />);
+  }
+
+  // now を基準にした相対日付。fake timer を避けるため Date.now() から算出する。
+  const threeDaysLater = new Date(
+    Date.now() + 3 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  it("期限超過・今週期限の件数が表示され、該当一覧へ遷移するリンクがある", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([
+        makeTask({ id: "o1", dueDate: PAST }),
+        makeTask({ id: "w1", dueDate: threeDaysLater }),
+      ]),
+    );
+    renderDashboard();
+
+    const overdueLink = await screen.findByRole("link", {
+      name: /期限超過/,
+    });
+    expect(overdueLink.textContent).toContain("1");
+    expect(overdueLink).toHaveAttribute("href", "/tasks");
+
+    const dueSoonLink = screen.getByRole("link", { name: /今週/ });
+    expect(dueSoonLink.textContent).toContain("1");
+    expect(dueSoonLink).toHaveAttribute("href", "/tasks");
+  });
+
+  it("未読件数も集約表示される", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(
+      mockJson([makeTask({ id: "u1", unread: true })]),
+    );
+    renderDashboard();
+    const unreadLink = await screen.findByRole("link", { name: /未読/ });
+    expect(unreadLink.textContent).toContain("1");
+  });
+
+  it("リマインド対象が無いときバナーは表示されない", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+    renderDashboard();
+    // タスク取得完了を待ってからバナー非表示を確認する
+    await screen.findByText("未完了のタスクはありません");
+    expect(screen.queryByRole("link", { name: /期限超過/ })).toBeNull();
   });
 });
