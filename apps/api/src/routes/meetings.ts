@@ -37,6 +37,7 @@ import {
   taskListInclude,
   taskListOrderBy,
 } from "../lib/task-serialization.js";
+import { buildDecisionGraph } from "../lib/decision-graph-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireMeetingAccess } from "../middleware/meeting-access.js";
 
@@ -314,6 +315,77 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(infos);
     },
   )
+  .get("/:id/decision-graph", async (c) => {
+    const id = c.req.param("id");
+
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議スコープで、来歴をたどるのに必要なノード素材を一括取得する。
+    // 会議は前回/次回のチェーン、決定・タスク・未決・次回議題は当該会議に紐付くもの。
+    const [meeting, decisionItems, tasks, ambiguousInfos, topicRequests] =
+      await Promise.all([
+        prisma.meeting.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            title: true,
+            heldAt: true,
+            previousMeeting: { select: { id: true, title: true } },
+            nextMeetings: { select: { id: true, title: true } },
+          },
+        }),
+        prisma.decisionItem.findMany({
+          where: { meetingId: id },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            decisionState: true,
+            blockingItemId: true,
+            plannedMeeting: { select: { id: true, title: true } },
+          },
+        }),
+        prisma.task.findMany({
+          where: { originMeetingId: id },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            decisionItemId: true,
+            blockingItemId: true,
+          },
+        }),
+        prisma.ambiguousInfo.findMany({
+          where: { meetingId: id },
+          select: {
+            id: true,
+            body: true,
+            status: true,
+            resolvedToTaskId: true,
+            resolvedToDecisionItemId: true,
+          },
+        }),
+        prisma.topicRequest.findMany({
+          where: { meetingId: id },
+          select: { id: true, title: true, priority: true },
+        }),
+      ]);
+
+    // requireMeetingAccess 通過直後なので存在は保証されるが、型ナローイングのため再判定
+    if (!meeting) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
+
+    const graph = buildDecisionGraph({
+      meeting,
+      decisionItems,
+      tasks,
+      ambiguousInfos,
+      topicRequests,
+    });
+    return c.json(graph);
+  })
   // TODO: 動作確認用のため削除する
   .post(
     "/:id/review-items",
