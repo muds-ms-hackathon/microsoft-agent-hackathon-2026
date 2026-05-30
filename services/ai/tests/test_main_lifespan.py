@@ -93,14 +93,26 @@ async def test_lifespan_cancels_task_on_shutdown():
 
 
 async def test_lifespan_logs_error_on_consumer_failure(caplog):
-    """コンシューマーが予期せず例外で終了した場合に ERROR をログに残す"""
+    """コンシューマーが接続失敗した際に WARNING ログを出し、asyncio.sleep でリトライを待つ"""
     import main
 
+    call_count = 0
+
     async def fake_start(handler):
-        raise RuntimeError("接続失敗")
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("接続失敗")
+        # 2 回目以降はキャンセルされるまでブロック
+        await asyncio.Event().wait()
 
     mock_consumer = MagicMock()
     mock_consumer.start = fake_start
+
+    sleep_called = asyncio.Event()
+
+    async def fast_sleep(delay):
+        sleep_called.set()
 
     env = {
         _SB_CONN_KEY: "fake://conn",
@@ -111,14 +123,14 @@ async def test_lifespan_logs_error_on_consumer_failure(caplog):
     }
     with patch.dict(os.environ, env):
         with patch("main.ServiceBusConsumer", return_value=mock_consumer):
-            with caplog.at_level(logging.ERROR, logger="main"):
-                async with main.lifespan(main.app):
-                    await asyncio.sleep(0)  # タスクを実行させる
-                    # done callback は call_soon で遅延するため 2 ティック必要
-                    await asyncio.sleep(0)
+            with patch("main.asyncio.sleep", new=fast_sleep):
+                with caplog.at_level(logging.WARNING, logger="main"):
+                    async with main.lifespan(main.app):
+                        await asyncio.wait_for(sleep_called.wait(), timeout=1.0)
 
+    assert sleep_called.is_set()
     assert any(
-        r.levelno == logging.ERROR and "予期せず終了" in r.message
+        r.levelno == logging.WARNING and "リトライ" in r.message
         for r in caplog.records
     )
 
