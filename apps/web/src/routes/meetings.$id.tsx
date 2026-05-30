@@ -214,6 +214,14 @@ export function MeetingDetailView({
               extraCount={detail.memberCount - detail.members.length}
             />
           )}
+          {/* 意思決定の文脈グラフ（決定→タスク→次回議題の来歴）への導線 */}
+          <Link
+            to="/meetings/$id/decision-graph"
+            params={{ id }}
+            className="text-primary hover:underline"
+          >
+            意思決定グラフを見る →
+          </Link>
         </div>
       </header>
 
