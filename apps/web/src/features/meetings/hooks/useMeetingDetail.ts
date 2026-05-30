@@ -31,14 +31,13 @@ export type MeetingDetail = {
   latestAnalysisRun: {
     id: string;
     status: AnalysisRunStatus;
-    currentStep: string | null;
+    currentStep?: string | null;
     summary: string | null;
     recommendedAgenda: RecommendedAgendaItem[] | null;
     alertLevel: string | null;
     completedAt: string | null;
-    failedAt: string | null;
-    errorMessage: string | null;
-    recommendedAgenda: string | null;
+    failedAt?: string | null;
+    errorMessage?: string | null;
   } | null;
   memberCount: number;
   members: {
