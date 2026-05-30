@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
-import { markTaskRead } from "../lib/read-log.js";
+import { buildTaskUnreadMap, markTaskRead } from "../lib/read-log.js";
 import {
   buildTaskListWhere,
   taskCreateSchema,
@@ -95,7 +95,15 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
       orderBy: taskListOrderBy,
       include: taskListInclude,
     });
-    return c.json(tasks.map(serializeTask));
+
+    // 各タスクの未読判定を 1 クエリで取得し、レスポンスに unread を付与する。
+    const unreadMap = await buildTaskUnreadMap(user.id, tasks);
+    return c.json(
+      tasks.map((task) => ({
+        ...serializeTask(task),
+        unread: unreadMap.get(task.id) ?? true,
+      })),
+    );
   })
   .post("/", zValidator("json", taskCreateSchema), async (c) => {
     const input = c.req.valid("json");

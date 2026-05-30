@@ -22,3 +22,39 @@ export async function markTaskRead(
     },
   });
 }
+
+// 指定ユーザーについて、与えたタスク群の未読判定を行い taskId -> unread の Map を返す。
+// 未読 = ReadLog 未記録、または 最新 readAt < task.updatedAt（更新後にまだ見ていない）。
+// ReadLog を taskId 群で 1 クエリ取得し、メモリ上で集計して N+1 を避ける。
+export async function buildTaskUnreadMap(
+  userId: string,
+  tasks: ReadonlyArray<{ id: string; updatedAt: Date }>,
+): Promise<Map<string, boolean>> {
+  const unreadMap = new Map<string, boolean>();
+  if (tasks.length === 0) return unreadMap;
+
+  const taskIds = tasks.map((t) => t.id);
+  const logs = await prisma.readLog.findMany({
+    where: {
+      userId,
+      resourceType: READ_LOG_RESOURCE_TASK,
+      resourceId: { in: taskIds },
+    },
+    select: { resourceId: true, readAt: true },
+  });
+
+  // resourceId ごとに最新の readAt を求める（追記専用ログのため複数行あり得る）。
+  const latestReadAt = new Map<string, Date>();
+  for (const log of logs) {
+    const prev = latestReadAt.get(log.resourceId);
+    if (!prev || log.readAt > prev) {
+      latestReadAt.set(log.resourceId, log.readAt);
+    }
+  }
+
+  for (const task of tasks) {
+    const readAt = latestReadAt.get(task.id);
+    unreadMap.set(task.id, !readAt || readAt < task.updatedAt);
+  }
+  return unreadMap;
+}
