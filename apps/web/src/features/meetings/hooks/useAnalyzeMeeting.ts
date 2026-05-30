@@ -13,7 +13,9 @@ export function useAnalyzeMeeting(meetingId: string) {
         authHeaders(),
       );
       if (!patchRes.ok) {
-        const body = await patchRes.json().catch(() => ({})) as { error?: string };
+        const body = (await patchRes.json().catch(() => ({}))) as {
+          error?: string;
+        };
         throw new Error(body.error ?? "議事録の保存に失敗しました");
       }
 
@@ -22,7 +24,9 @@ export function useAnalyzeMeeting(meetingId: string) {
         authHeaders(),
       );
       if (!analyzeRes.ok) {
-        const body = await analyzeRes.json().catch(() => ({})) as { error?: string };
+        const body = (await analyzeRes.json().catch(() => ({}))) as {
+          error?: string;
+        };
         throw new Error(body.error ?? "解析の実行に失敗しました");
       }
     },
