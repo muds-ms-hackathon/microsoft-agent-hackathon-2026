@@ -136,6 +136,14 @@ describe("MeetingDetailView", () => {
     expect(link).toHaveAttribute("href", "/recurring-meetings/rmtg-1");
   });
 
+  it("意思決定グラフへの導線が /meetings/$id/decision-graph を指す", async () => {
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const link = await screen.findByRole("link", {
+      name: /意思決定グラフを見る/,
+    });
+    expect(link).toHaveAttribute("href", "/meetings/mtg-1/decision-graph");
+  });
+
   it("タスク 1 件を行として表示する", async () => {
     vi.mocked(api.meetings[":id"].tasks.$get).mockResolvedValue(
       mockJson([sampleTask]),
