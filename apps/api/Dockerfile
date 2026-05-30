@@ -31,7 +31,9 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/api/prisma ./apps/api/prisma
 # devDependencies を除外してインストール
-RUN pnpm install --frozen-lockfile --prod && pnpm --filter api exec prisma generate
+# prisma は本番でも generate / migrate deploy が必要なため dependencies に含める
+# prisma-dbml-generator は devDependencies のため --generator client でスキップ
+RUN pnpm install --frozen-lockfile --prod && pnpm --filter api exec prisma generate --generator client
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 WORKDIR /app/apps/api
 EXPOSE 3001
