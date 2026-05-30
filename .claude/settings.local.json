@@ -23,7 +23,22 @@
       "Bash(npx vitest *)",
       "Bash(gh issue *)",
       "Bash(.venv/bin/python -m pytest tests/test_analyze_pipeline.py tests/test_handle_message.py -v)",
-      "Bash(.venv/bin/python *)"
+      "Bash(.venv/bin/python *)",
+      "Bash(curl -s http://localhost:8001/health)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(curl -s --max-time 5 http://localhost:8001/health)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(docker exec *)",
+      "Bash(curl -s --max-time 5 http://localhost:3001/health)",
+      "Bash(curl -s --max-time 5 -X GET \"http://localhost:3001/internal/analysis-runs/test-id/input\" -H \"x-internal-secret: test\")",
+      "Bash(curl -s -X POST http://localhost:8002/analyze -H 'Content-Type: application/json' -d @/tmp/meeting01_input.json --max-time 300 -o /tmp/meeting01_result.json)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(python3 *)",
+      "Bash(curl -s -X POST http://localhost:8002/analyze -H 'Content-Type: application/json' -d @/tmp/meeting02_input.json --max-time 300 -o /tmp/meeting02_result.json)",
+      "Bash(curl -s -X POST http://localhost:8002/analyze -H 'Content-Type: application/json' -d @/tmp/meeting03_input.json --max-time 300 -o /tmp/meeting03_result.json)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -X POST http://localhost:8002/analyze -H 'Content-Type: application/json' -d @/tmp/meeting_empty_input.json --max-time 120 -o /tmp/meeting_empty_result.json)",
+      "Bash(PGPASSWORD=postgres psql *)"
     ]
   }
 }
