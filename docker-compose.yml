@@ -86,6 +86,9 @@ services:
       # service 名で解決する。token の iss クレーム（fake-auth 側 ISSUER）と
       # 完全一致している必要があるため、両者を同一値で揃える。
       OIDC_ISSUER_URL: "http://fake-auth:3007"
+      # ai サービスと同じ値。servicebus は Docker ネットワーク上のサービス名
+      AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+      AZURE_SERVICE_BUS_QUEUE_NAME: "decision-loop"
     env_file:
       - path: .env.local
         required: false
@@ -94,6 +97,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      servicebus:
+        condition: service_started
 
   ai:
     build:
