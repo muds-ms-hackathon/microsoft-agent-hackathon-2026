@@ -1,3 +1,7 @@
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useAtomValue, useSetAtom } from "jotai";
+import { Mail, Settings } from "lucide-react";
+import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -6,10 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { authAtom, logoutAtom } from "@/lib/auth";
-import { useAtomValue, useSetAtom } from "jotai";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { Mail, Settings } from "lucide-react";
 
 // 名前の頭文字を取り出す。サロゲートペアを Array.from で正しく扱う。
 function initial(name: string | null | undefined): string {
@@ -58,6 +60,8 @@ function UserAvatar() {
 }
 
 export function Topbar() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
     <header className="h-12 border-b border-border/50 flex items-center px-5 bg-background shadow-sm shrink-0 z-10">
       {/* アプリ名: index.tsx の h1 と重複するため "Decision Loop" は使わない */}
@@ -75,15 +79,18 @@ export function Topbar() {
         >
           <Mail size={18} />
         </Link>
-        {/* 設定ボタン（未実装） */}
+        {/* 設定ボタン。表示名などを編集する設定ダイアログを開く。 */}
         <button
           type="button"
+          aria-label="設定"
+          onClick={() => setSettingsOpen(true)}
           className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <Settings size={18} />
         </button>
         <UserAvatar />
       </div>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </header>
   );
 }

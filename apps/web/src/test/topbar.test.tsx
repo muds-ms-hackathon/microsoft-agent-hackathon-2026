@@ -13,6 +13,26 @@ vi.mock("@tanstack/react-router", async () => {
   return buildRouterMock({ useNavigate: navigateMock });
 });
 
+// 設定ダイアログ内のフックをモックし、QueryClient 無しでも描画できるようにする。
+vi.mock("@/features/settings/hooks/useMe", () => ({
+  useMe: () => ({
+    data: {
+      id: "user-1",
+      email: "me@example.com",
+      name: "Me User",
+      displayName: "現在の名前",
+    },
+    isLoading: false,
+  }),
+}));
+vi.mock("@/features/settings/hooks/useUpdateDisplayName", () => ({
+  useUpdateDisplayName: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+  }),
+}));
+
 function renderTopbar(name = "田中太郎", email = "tanaka@example.com") {
   const store = createStore();
   store.set(loginAtom, makeFakeIdToken({ sub: "u1", name, email }));
@@ -49,5 +69,21 @@ describe("Topbar", () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith({ to: "/login" });
     });
+  });
+
+  it("設定ボタンが表示される", () => {
+    renderTopbar();
+    expect(screen.getByRole("button", { name: "設定" })).toBeInTheDocument();
+  });
+
+  it("設定ボタンを押すと設定ダイアログが開く", async () => {
+    const { user } = renderTopbar();
+    // 初期状態ではダイアログは閉じている。
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    // 開くと表示名の入力欄を持つダイアログが現れる。
+    const dialog = await screen.findByRole("dialog", { name: "設定" });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByLabelText("表示名")).toBeInTheDocument();
   });
 });
