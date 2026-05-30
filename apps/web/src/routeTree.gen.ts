@@ -19,7 +19,7 @@ import { Route as OrganizationsIndexRouteImport } from './routes/organizations.i
 import { Route as RecurringMeetingsIdRouteImport } from './routes/recurring-meetings.$id'
 import { Route as OrganizationsIdRouteImport } from './routes/organizations.$id'
 import { Route as MeetingsIdRouteImport } from './routes/meetings.$id'
-import { Route as MeetingsIdDecisionGraphRouteImport } from './routes/meetings.$id.decision-graph'
+import { Route as MeetingsIdDecisionGraphRouteImport } from './routes/meetings.$id_.decision-graph'
 
 const ReviewRoute = ReviewRouteImport.update({
   id: '/review',
@@ -72,9 +72,9 @@ const MeetingsIdRoute = MeetingsIdRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeetingsIdDecisionGraphRoute = MeetingsIdDecisionGraphRouteImport.update({
-  id: '/decision-graph',
-  path: '/decision-graph',
-  getParentRoute: () => MeetingsIdRoute,
+  id: '/meetings/$id_/decision-graph',
+  path: '/meetings/$id/decision-graph',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -83,7 +83,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
   '/review': typeof ReviewRoute
-  '/meetings/$id': typeof MeetingsIdRouteWithChildren
+  '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations/': typeof OrganizationsIndexRoute
@@ -95,7 +95,7 @@ export interface FileRoutesByTo {
   '/invitations': typeof InvitationsRoute
   '/login': typeof LoginRoute
   '/review': typeof ReviewRoute
-  '/meetings/$id': typeof MeetingsIdRouteWithChildren
+  '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations': typeof OrganizationsIndexRoute
@@ -109,12 +109,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
   '/review': typeof ReviewRoute
-  '/meetings/$id': typeof MeetingsIdRouteWithChildren
+  '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations/': typeof OrganizationsIndexRoute
   '/tasks/': typeof TasksIndexRoute
-  '/meetings/$id/decision-graph': typeof MeetingsIdDecisionGraphRoute
+  '/meetings/$id_/decision-graph': typeof MeetingsIdDecisionGraphRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -154,7 +154,7 @@ export interface FileRouteTypes {
     | '/recurring-meetings/$id'
     | '/organizations/'
     | '/tasks/'
-    | '/meetings/$id/decision-graph'
+    | '/meetings/$id_/decision-graph'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -163,9 +163,10 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OrganizationsRoute: typeof OrganizationsRouteWithChildren
   ReviewRoute: typeof ReviewRoute
-  MeetingsIdRoute: typeof MeetingsIdRouteWithChildren
+  MeetingsIdRoute: typeof MeetingsIdRoute
   RecurringMeetingsIdRoute: typeof RecurringMeetingsIdRoute
   TasksIndexRoute: typeof TasksIndexRoute
+  MeetingsIdDecisionGraphRoute: typeof MeetingsIdDecisionGraphRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -240,12 +241,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MeetingsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/meetings/$id/decision-graph': {
-      id: '/meetings/$id/decision-graph'
-      path: '/decision-graph'
+    '/meetings/$id_/decision-graph': {
+      id: '/meetings/$id_/decision-graph'
+      path: '/meetings/$id/decision-graph'
       fullPath: '/meetings/$id/decision-graph'
       preLoaderRoute: typeof MeetingsIdDecisionGraphRouteImport
-      parentRoute: typeof MeetingsIdRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -264,27 +265,16 @@ const OrganizationsRouteWithChildren = OrganizationsRoute._addFileChildren(
   OrganizationsRouteChildren,
 )
 
-interface MeetingsIdRouteChildren {
-  MeetingsIdDecisionGraphRoute: typeof MeetingsIdDecisionGraphRoute
-}
-
-const MeetingsIdRouteChildren: MeetingsIdRouteChildren = {
-  MeetingsIdDecisionGraphRoute: MeetingsIdDecisionGraphRoute,
-}
-
-const MeetingsIdRouteWithChildren = MeetingsIdRoute._addFileChildren(
-  MeetingsIdRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   InvitationsRoute: InvitationsRoute,
   LoginRoute: LoginRoute,
   OrganizationsRoute: OrganizationsRouteWithChildren,
   ReviewRoute: ReviewRoute,
-  MeetingsIdRoute: MeetingsIdRouteWithChildren,
+  MeetingsIdRoute: MeetingsIdRoute,
   RecurringMeetingsIdRoute: RecurringMeetingsIdRoute,
   TasksIndexRoute: TasksIndexRoute,
+  MeetingsIdDecisionGraphRoute: MeetingsIdDecisionGraphRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

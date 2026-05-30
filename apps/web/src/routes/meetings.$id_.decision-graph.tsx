@@ -1,7 +1,10 @@
 import { DecisionGraphView } from "@/features/decision-graph/components/DecisionGraphView";
 import { Link, createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/meetings/$id/decision-graph")({
+// ファイル名の `$id_`（末尾アンダースコア）で meetings.$id レイアウトから独立させる。
+// これがないと会議詳細ページ（Outlet を持たない）の子ルート扱いになり、グラフが
+// 描画されず会議詳細にフォールバックしてしまう。URL は /meetings/$id/decision-graph のまま。
+export const Route = createFileRoute("/meetings/$id_/decision-graph")({
   component: DecisionGraphPage,
 });
 
