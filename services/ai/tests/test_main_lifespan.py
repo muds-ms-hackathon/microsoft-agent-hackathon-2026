@@ -93,7 +93,7 @@ async def test_lifespan_cancels_task_on_shutdown():
 
 
 async def test_lifespan_logs_error_on_consumer_failure(caplog):
-    """コンシューマーが接続失敗した際に WARNING ログを出し、asyncio.sleep でリトライを待つ"""
+    """接続失敗時に WARNING ログを出し asyncio.sleep でリトライすることを確認する"""
     import main
 
     call_count = 0
