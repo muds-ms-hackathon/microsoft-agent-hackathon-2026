@@ -7,7 +7,6 @@ import pytest
 from llm.client import FakeLLMClient
 from pipeline.analyze_meeting import (
     _extract_keywords,
-    _fmt_estimation_note,
     analyze_meeting,
 )
 from pipeline.continuity import (
@@ -15,7 +14,11 @@ from pipeline.continuity import (
     prepare_prev_open_issues_for_call2,
     prepare_prev_tasks_for_call3,
 )
-from pipeline.estimation import calc_alert_level, calc_estimation
+from pipeline.estimation import (
+    calc_alert_level,
+    calc_estimation,
+    fmt_estimation_note,
+)
 from pipeline.postprocess import (
     infer_assignee_resolution_status,
     merge_ambiguities,
@@ -246,6 +249,49 @@ async def test_analyze_meeting_parse_error_returns_failed():
     assert "JSONパースエラー" in result.error_message
 
 
+# ──────────────────────── エージェント統合（chat_service 注入） ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_analyze_meeting_with_agent_chat_service():
+    """chat_service を渡すと、エージェントが文脈ツールを自律的に呼び履歴が残る。
+
+    抽出（Call1〜6）は従来どおり FakeLLMClient で動き、出力スキーマは退行しない。
+    """
+    from agent.kernel_factory import FakeChatCompletion, planned_tool_call
+
+    job = _make_job()
+    client = FakeLLMClient(_make_fake_responses())
+    chat = FakeChatCompletion(
+        tool_call_turns=[
+            [
+                planned_tool_call("meeting_context", "estimate_next_meeting_duration"),
+                planned_tool_call("meeting_context", "search_related_past_meetings"),
+            ]
+        ],
+        final_message="文脈収集を完了しました",
+    )
+
+    result = await analyze_meeting(job, client, chat_service=chat)
+
+    assert result.status == "completed"
+    report = result.report_json
+    assert report is not None
+    # 既存スキーマは維持される
+    assert "estimation" in report
+    assert "total_minutes" in report["estimation"]
+    assert isinstance(report.get("estimation_note"), str)
+    # エージェントのツール呼び出し履歴が記録される（受け入れ基準①）
+    assert "agent" in report
+    assert len(report["agent"]["tool_calls"]) >= 1
+    assert (
+        report["agent"]["tool_call_counts"][
+            "meeting_context-estimate_next_meeting_duration"
+        ]
+        == 1
+    )
+
+
 # ──────────────────────── 個別モジュールのユニットテスト ─────────────────────
 
 
@@ -400,7 +446,7 @@ def test_extract_keywords_coerces_to_str():
     assert _extract_keywords([1, 2, 3]) == ["1", "2", "3"]
 
 
-# ──────────────────────── _fmt_estimation_note ────────────────────────
+# ──────────────────────── fmt_estimation_note ────────────────────────
 
 
 def test_fmt_estimation_note_with_normal_breakdown():
@@ -411,7 +457,7 @@ def test_fmt_estimation_note_with_normal_breakdown():
             "buffer": {"count": 1, "minutes": 10},
         },
     }
-    note = _fmt_estimation_note(estimation)
+    note = fmt_estimation_note(estimation)
     assert "想定所要時間: 約25分" in note
     assert "必須タスク確認: 3件 × 2分 = 6分" in note
     assert "バッファ: 1件 × 10分 = 10分" in note
@@ -425,12 +471,12 @@ def test_fmt_estimation_note_handles_zero_count_without_zero_division():
             "buffer": {"count": 0, "minutes": 10},
         },
     }
-    note = _fmt_estimation_note(estimation)
+    note = fmt_estimation_note(estimation)
     # 0件のカテゴリは「N分」のみ表示する
     assert "0件" in note
     assert "10分" in note
 
 
 def test_fmt_estimation_note_with_empty_breakdown():
-    note = _fmt_estimation_note({"total_minutes": 0, "breakdown": {}})
+    note = fmt_estimation_note({"total_minutes": 0, "breakdown": {}})
     assert "想定所要時間: 約0分" in note

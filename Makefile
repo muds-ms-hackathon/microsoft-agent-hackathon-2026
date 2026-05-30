@@ -66,3 +66,6 @@ migrate-status: ## マイグレーションの適用状況を確認する
 db-shell: ## psql で decision_loop DB に直接接続する
 	@if [ -f apps/api/.env ]; then set -a; . apps/api/.env; set +a; fi; \
 	  psql "$${DATABASE_URL}"
+
+seed-demo: ## 意思決定グラフ用のデモデータを投入する（Issue #350・冪等）
+	@if [ -f apps/api/.env ]; then set -a; . apps/api/.env; set +a; fi; pnpm --filter api seed:demo

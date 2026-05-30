@@ -66,3 +66,29 @@ def calc_alert_level(estimation: dict) -> str:
     if total >= 30:
         return "medium"
     return "low"
+
+
+def fmt_estimation_note(estimation: dict) -> str:
+    """見積もり内訳を人間が読めるテキストに変換する。"""
+    total = estimation.get("total_minutes", 0)
+    breakdown = estimation.get("breakdown", {})
+    lines = [f"次回会議の想定所要時間: 約{total}分"]
+    label_map = {
+        "required_task_check": "必須タスク確認",
+        "open_issue_new": "新規未決事項",
+        "open_issue_recurring": "継続未決事項",
+        "overdue_task": "期限超過タスク",
+        "tentative_reconfirm": "仮決定の再確認",
+        "buffer": "バッファ",
+    }
+    for key, val in breakdown.items():
+        label = label_map.get(key, key)
+        count = val.get("count", 0)
+        minutes = val.get("minutes", 0)
+        if count <= 0:
+            # 件数 0 のカテゴリは「N分」のみ表示し、ZeroDivisionError を回避する。
+            lines.append(f"  - {label}: 0件 = {minutes}分")
+            continue
+        per = minutes // count
+        lines.append(f"  - {label}: {count}件 × {per}分 = {minutes}分")
+    return "\n".join(lines)

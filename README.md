@@ -28,6 +28,8 @@ flowchart LR
 
 > 解析の完了通知はプッシュ（WebSocket / Web PubSub）ではなく、Frontend が `GET /meetings/:id` で `analysisRun.status` をポーリングして検知する方式です。AI Service は解析結果を App Server の内部 API 経由で保存します。Azure AI Search（RAG）は現状インターフェースのみで、実連携は将来対応です。
 
+> AI Service の解析オーケストレーションは Semantic Kernel ベースのツール利用エージェントです。次回会議計画の文脈（所要時間見積もり・関連過去会議検索・前回からの変化要約）を、エージェントがツール（プラグイン関数）として自律的に呼び出して集めます。呼び出したツールの履歴はログに残り、Agentic な振る舞いを確認できます。Azure OpenAI が未設定のローカル/CI ではフェイク経由で動作し、直接計算にフォールバックします。
+
 ## Prerequisites
 
 | ツール | バージョン | インストール |
@@ -47,6 +49,7 @@ make install                # 依存関係のインストール（pnpm install +
 make fake-auth-keys         # fake-authのRSA鍵ペアを生成（初回のみ）
 make dev                    # 全サービスを Docker Compose で起動
 make migrate                # DB マイグレーションを適用（初回起動時）
+make seed-demo              # 意思決定グラフ用のデモデータを投入（任意・何度でも可）
 ```
 
 > アプリサービスをネイティブ起動したい場合は `docker-compose.yml` の web / api / ai をコメントアウトして `make dev-native` を使用してください（overmind が必要）。

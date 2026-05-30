@@ -14,7 +14,8 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "seed:demo": "tsx prisma/seed-decision-graph.ts"
   },
   "dependencies": {
     "@azure/service-bus": "^7.9.5",
