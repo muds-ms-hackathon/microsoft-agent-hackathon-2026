@@ -788,7 +788,9 @@ describe("GET /tasks/me", () => {
   // updatedAt を 2026-05-17 に固定し、ReadLog の readAt との前後で未読を判定する。
   const listTaskForUnread = {
     ...sampleTask,
-    assignees: [{ user: { id: "user-1", name: "alice", displayName: "alice" } }],
+    assignees: [
+      { user: { id: "user-1", name: "alice", displayName: "alice" } },
+    ],
     recurringMeetings: [],
   };
 
