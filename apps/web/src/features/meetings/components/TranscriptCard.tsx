@@ -48,8 +48,8 @@ export function TranscriptCard({
 
       <div className="px-5 py-4 flex flex-col gap-3">
         {isRunning ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">
-            {STATUS_LABELS[analysisStatus]}
+          <p className="text-sm text-muted-foreground py-8 text-center">
+            しばらくお待ちください
           </p>
         ) : (
           <>

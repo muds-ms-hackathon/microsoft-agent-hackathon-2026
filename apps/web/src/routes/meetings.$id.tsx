@@ -215,8 +215,8 @@ export function MeetingDetailView({
         </div>
       </header>
 
-      {/* 議事録入力 + 解析実行（解析完了前のみ表示） */}
-      {detail.latestAnalysisRun?.status !== "completed" && (
+      {/* 議事録入力 + 解析実行（過去の会議かつ解析完了前のみ表示） */}
+      {isPastMeeting && detail.latestAnalysisRun?.status !== "completed" && (
         <TranscriptCard
           meetingId={id}
           initialText={detail.transcriptText}
