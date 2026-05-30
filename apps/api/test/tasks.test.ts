@@ -28,6 +28,10 @@ vi.mock("../src/lib/prisma.js", () => ({
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    readLog: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -802,5 +806,43 @@ describe("DELETE /tasks/:id", () => {
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/tasks/task-1", { method: "DELETE" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /tasks/:id/read", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("組織メンバーは 204 で既読化でき ReadLog を追記する", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const mockReadLogCreate = vi.mocked(prisma.readLog.create);
+    mockReadLogCreate.mockResolvedValue({} as never);
+
+    const res = await app.request("/tasks/task-1/read", { method: "POST" });
+    expect(res.status).toBe(204);
+    expect(mockReadLogCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "user-1",
+        resourceType: "task",
+        resourceId: "task-1",
+      },
+    });
+  });
+
+  it("タスク不存在は 404 で ReadLog を作らない", async () => {
+    mockTaskFindUnique.mockResolvedValue(null);
+    const mockReadLogCreate = vi.mocked(prisma.readLog.create);
+    const res = await app.request("/tasks/missing/read", { method: "POST" });
+    expect(res.status).toBe(404);
+    expect(mockReadLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("非メンバーは 404 で ReadLog を作らない", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const mockReadLogCreate = vi.mocked(prisma.readLog.create);
+    const res = await app.request("/tasks/task-1/read", { method: "POST" });
+    expect(res.status).toBe(404);
+    expect(mockReadLogCreate).not.toHaveBeenCalled();
   });
 });
