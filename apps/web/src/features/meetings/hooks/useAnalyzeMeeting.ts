@@ -12,14 +12,17 @@ export function useAnalyzeMeeting(meetingId: string) {
         { param: { id: meetingId }, json: { transcriptText } },
         authHeaders(),
       );
-      if (!patchRes.ok) throw new Error("議事録の保存に失敗しました");
+      if (!patchRes.ok) {
+        const body = await patchRes.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? "議事録の保存に失敗しました");
+      }
 
       const analyzeRes = await api.meetings[":id"].analyze.$post(
         { param: { id: meetingId } },
         authHeaders(),
       );
       if (!analyzeRes.ok) {
-        const body = (await analyzeRes.json()) as { error?: string };
+        const body = await analyzeRes.json().catch(() => ({})) as { error?: string };
         throw new Error(body.error ?? "解析の実行に失敗しました");
       }
     },
