@@ -8,6 +8,11 @@ import { partitionMeetings } from "@/features/recurring-meetings/meetingSections
 import { TYPE_LABELS, type ReviewItemType } from "@/features/review/types";
 import { useReviewItems } from "@/features/review/useReviewItems";
 import { useMyTasks } from "@/features/tasks/hooks/useMyTasks";
+import {
+  URGENCY_STYLE,
+  calcUrgency,
+  formatDeadline,
+} from "@/features/tasks/urgency";
 import { currentOrganizationIdAtom } from "@/lib/currentOrganization";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQueries } from "@tanstack/react-query";
@@ -273,50 +278,6 @@ function ReviewPendingCard({ orgId }: { orgId: string }) {
 }
 
 // ===== 未完了タスクカード =====
-
-type TaskUrgency = "overdue" | "this-week" | "later";
-
-const URGENCY_STYLE: Record<TaskUrgency, { border: string; deadline: string }> =
-  {
-    overdue: {
-      border: "border-l-destructive",
-      deadline: "text-destructive font-medium",
-    },
-    "this-week": {
-      border: "border-l-amber-500",
-      deadline: "text-amber-600 font-medium",
-    },
-    later: {
-      border: "border-l-slate-200",
-      deadline: "text-muted-foreground",
-    },
-  };
-
-function calcUrgency(dueDate: string | null): TaskUrgency {
-  if (!dueDate) return "later";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
-  if (due < today) return "overdue";
-  const weekLater = new Date(today);
-  weekLater.setDate(weekLater.getDate() + 7);
-  if (due <= weekLater) return "this-week";
-  return "later";
-}
-
-function formatDeadline(dueDate: string | null, urgency: TaskUrgency): string {
-  if (!dueDate) return "未設定";
-  if (urgency === "overdue") {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const days = Math.ceil(
-      (today.getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24),
-    );
-    return `${days}日超過`;
-  }
-  const d = new Date(dueDate);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
 
 function IncompleteTasksCard() {
   const {

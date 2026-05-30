@@ -81,6 +81,9 @@ export type TaskListItem = TaskEditableFields &
     } | null;
     assignees: AssigneeUser[];
     recurringMeetings: Array<{ id: string; name: string }>;
+    // 未読フラグ。GET /tasks/me のみが付与する（ReadLog 未記録 or 更新後未読）。
+    // 他経路のレスポンスでは undefined。
+    unread?: boolean;
   };
 
 // 詳細 API のレスポンス。assignees に email が含まれる以外は一覧と同形。
