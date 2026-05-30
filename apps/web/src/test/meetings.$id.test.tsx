@@ -9,6 +9,8 @@ vi.mock("@/lib/api", () => ({
     meetings: {
       ":id": {
         $get: vi.fn(),
+        $patch: vi.fn(),
+        analyze: { $post: vi.fn() },
         tasks: { $get: vi.fn() },
         "review-items": { $get: vi.fn() },
       },
@@ -365,6 +367,49 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
     vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByLabelText("議事録")).toBeInTheDocument();
+  });
+
+  it("queued のとき「議事録」カードが表示され textarea は表示されない", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...detailPast,
+        latestAnalysisRun: {
+          ...completedRun,
+          status: "queued" as const,
+          completedAt: null,
+        },
+      }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByLabelText("議事録")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("failed のとき「解析失敗」とエラーメッセージが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...detailPast,
+        latestAnalysisRun: {
+          ...completedRun,
+          status: "failed" as const,
+          completedAt: null,
+          errorMessage: "OpenAI呼び出しに失敗しました",
+        },
+      }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByText("解析失敗")).toBeInTheDocument();
+    expect(
+      await screen.findByText("OpenAI呼び出しに失敗しました"),
+    ).toBeInTheDocument();
+  });
+
+  it("テキストが空のとき「解析を実行」ボタンが disabled", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByRole("button", { name: "解析を実行" }),
+    ).toBeDisabled();
   });
 });
 
