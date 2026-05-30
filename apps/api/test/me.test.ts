@@ -6,6 +6,9 @@ vi.mock("../src/lib/prisma.js", () => ({
     organizationInvitation: {
       findMany: vi.fn(),
     },
+    user: {
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -44,6 +47,7 @@ import { prisma } from "../src/lib/prisma.js";
 const mockInvitationFindMany = vi.mocked(
   prisma.organizationInvitation.findMany,
 );
+const mockUserUpdate = vi.mocked(prisma.user.update);
 
 // GET /me/invitations ハンドラの include 形に対応する型エイリアス。
 type InvitationListRow = Prisma.OrganizationInvitationGetPayload<{
@@ -148,5 +152,84 @@ describe("GET /me/invitations", () => {
     await app.request("/me/invitations");
     const callArg = mockInvitationFindMany.mock.calls[0]?.[0];
     expect(callArg?.orderBy).toEqual({ createdAt: "desc" });
+  });
+});
+
+describe("GET /me", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.current = { ...authState.defaultUser };
+  });
+
+  it("認証ユーザー自身のプロフィールを返す", async () => {
+    const res = await app.request("/me");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // c.var.user の表示用フィールドのみを返す（externalId 等は含めない）。
+    expect(body).toEqual({
+      id: "user-1",
+      email: "alice@example.com",
+      name: "alice",
+      displayName: "alice",
+    });
+  });
+});
+
+describe("PATCH /me", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.current = { ...authState.defaultUser };
+  });
+
+  it("displayName を更新して更新後のプロフィールを返す", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user-1",
+      email: "alice@example.com",
+      name: "alice",
+      displayName: "新しい表示名",
+    } as Awaited<ReturnType<typeof prisma.user.update>>);
+
+    const res = await app.request("/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "新しい表示名" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({
+      id: "user-1",
+      email: "alice@example.com",
+      name: "alice",
+      displayName: "新しい表示名",
+    });
+    // 自分自身 (user.id) のみを更新する。
+    expect(mockUserUpdate).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { displayName: "新しい表示名" },
+      select: { id: true, email: true, name: true, displayName: true },
+    });
+  });
+
+  it("displayName が空文字なら 400 を返し更新しない", async () => {
+    const res = await app.request("/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "" }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+  });
+
+  it("displayName が 50 文字を超えると 400 を返し更新しない", async () => {
+    const res = await app.request("/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "あ".repeat(51) }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockUserUpdate).not.toHaveBeenCalled();
   });
 });
