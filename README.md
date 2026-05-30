@@ -47,6 +47,7 @@ make install                # 依存関係のインストール（pnpm install +
 make fake-auth-keys         # fake-authのRSA鍵ペアを生成（初回のみ）
 make dev                    # 全サービスを Docker Compose で起動
 make migrate                # DB マイグレーションを適用（初回起動時）
+make seed-demo              # 意思決定グラフ用のデモデータを投入（任意・何度でも可）
 ```
 
 > アプリサービスをネイティブ起動したい場合は `docker-compose.yml` の web / api / ai をコメントアウトして `make dev-native` を使用してください（overmind が必要）。
