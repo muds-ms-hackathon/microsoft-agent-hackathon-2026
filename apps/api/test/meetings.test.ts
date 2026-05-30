@@ -19,6 +19,9 @@ vi.mock("../src/lib/prisma.js", () => ({
     ambiguousInfo: {
       findMany: vi.fn(),
     },
+    topicRequest: {
+      findMany: vi.fn(),
+    },
     meetingAnalysisRun: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -104,6 +107,47 @@ type TaskWithReview = Prisma.TaskGetPayload<{
 type AmbiguousInfoWithReview = Prisma.AmbiguousInfoGetPayload<{
   include: typeof ambiguousInfoReviewInclude;
 }>;
+// GET /meetings/:id/decision-graph ハンドラ用: グラフ構築に必要な select 形
+type MeetingForGraph = Prisma.MeetingGetPayload<{
+  select: {
+    id: true;
+    title: true;
+    heldAt: true;
+    previousMeeting: { select: { id: true; title: true } };
+    nextMeetings: { select: { id: true; title: true } };
+  };
+}>;
+type DecisionItemForGraph = Prisma.DecisionItemGetPayload<{
+  select: {
+    id: true;
+    title: true;
+    status: true;
+    decisionState: true;
+    blockingItemId: true;
+    plannedMeeting: { select: { id: true; title: true } };
+  };
+}>;
+type TaskForGraph = Prisma.TaskGetPayload<{
+  select: {
+    id: true;
+    title: true;
+    status: true;
+    decisionItemId: true;
+    blockingItemId: true;
+  };
+}>;
+type AmbiguousInfoForGraph = Prisma.AmbiguousInfoGetPayload<{
+  select: {
+    id: true;
+    body: true;
+    status: true;
+    resolvedToTaskId: true;
+    resolvedToDecisionItemId: true;
+  };
+}>;
+type TopicRequestForGraph = Prisma.TopicRequestGetPayload<{
+  select: { id: true; title: true; priority: true };
+}>;
 
 const mockFindUnique = vi.mocked(prisma.meeting.findUnique);
 const mockMeetingUpdate = vi.mocked(prisma.meeting.update);
@@ -118,6 +162,7 @@ const mockAnalysisRunFindFirst = vi.mocked(prisma.meetingAnalysisRun.findFirst);
 const mockAnalysisRunFindMany = vi.mocked(prisma.meetingAnalysisRun.findMany);
 const mockDecisionItemFindMany = vi.mocked(prisma.decisionItem.findMany);
 const mockAmbiguousInfoFindMany = vi.mocked(prisma.ambiguousInfo.findMany);
+const mockTopicRequestFindMany = vi.mocked(prisma.topicRequest.findMany);
 
 describe("旧 GET / と POST /meetings は撤去済み", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -1209,6 +1254,146 @@ describe("GET /meetings/:id/review-items", () => {
     mockFindUnique.mockResolvedValue(meetingBase);
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/meetings/mtg-1/review-items");
+    expect(res.status).toBe(404);
+    expect(mockDecisionItemFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /meetings/:id/decision-graph", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // 認可チェック（requireMeetingAccess）が参照する最小形の会議。
+  const accessMeeting = {
+    id: "mtg-1",
+    recurringMeetingId: "rmtg-1",
+    recurringMeeting: { organizationId: "org-1" },
+  } as MeetingWithRecurringOrgId;
+
+  const membership = {
+    userId: "user-1",
+    organizationId: "org-1",
+    role: "member" as const,
+    joinedAt: new Date("2026-05-01T00:00:00Z"),
+  };
+
+  it("組織メンバーは会議の意思決定グラフを 200 で取得できる", async () => {
+    // findUnique は認可（access 形）→ グラフ用（select 形）の順で 2 回呼ばれる。
+    mockFindUnique.mockResolvedValueOnce(accessMeeting).mockResolvedValueOnce({
+      id: "mtg-1",
+      title: "第3回",
+      heldAt: new Date("2026-05-17T10:00:00Z"),
+      previousMeeting: { id: "mtg-0", title: "第2回" },
+      nextMeetings: [{ id: "mtg-2", title: "第4回" }],
+    } as MeetingForGraph);
+    mockMembershipFindUnique.mockResolvedValue(membership);
+    mockDecisionItemFindMany.mockResolvedValue([
+      {
+        id: "dec-1",
+        title: "予算承認",
+        status: "decided",
+        decisionState: "confirmed",
+        blockingItemId: null,
+        plannedMeeting: null,
+      },
+    ] as DecisionItemForGraph[]);
+    mockTaskFindMany.mockResolvedValue([
+      {
+        id: "task-1",
+        title: "資料作成",
+        status: "todo",
+        decisionItemId: "dec-1",
+        blockingItemId: null,
+      },
+    ] as TaskForGraph[]);
+    mockAmbiguousInfoFindMany.mockResolvedValue([] as AmbiguousInfoForGraph[]);
+    mockTopicRequestFindMany.mockResolvedValue([
+      { id: "tr-1", title: "次回論点", priority: "required" },
+    ] as TopicRequestForGraph[]);
+
+    const res = await app.request("/meetings/mtg-1/decision-graph");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      nodes: Array<{ id: string; type: string }>;
+      edges: Array<{ source: string; target: string; type: string }>;
+    };
+
+    const nodeIds = body.nodes.map((n) => n.id);
+    expect(nodeIds).toEqual(
+      expect.arrayContaining([
+        "meeting:mtg-1",
+        "meeting:mtg-0",
+        "meeting:mtg-2",
+        "decision:dec-1",
+        "task:task-1",
+        "topic:tr-1",
+      ]),
+    );
+    // 決定由来のタスクは derives、次回議題は agenda エッジで結ばれる。
+    expect(body.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "decision:dec-1",
+          target: "task:task-1",
+          type: "derives",
+        }),
+        expect.objectContaining({
+          source: "topic:tr-1",
+          target: "meeting:mtg-1",
+          type: "agenda",
+        }),
+      ]),
+    );
+    // タスクは当該会議を発生源とするものに限定して取得する。
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ originMeetingId: "mtg-1" }),
+      }),
+    );
+  });
+
+  it("関連が無くても会議ノードのみのグラフを 200 で返す", async () => {
+    mockFindUnique.mockResolvedValueOnce(accessMeeting).mockResolvedValueOnce({
+      id: "mtg-1",
+      title: "第1回",
+      heldAt: new Date("2026-05-17T10:00:00Z"),
+      previousMeeting: null,
+      nextMeetings: [],
+    } as MeetingForGraph);
+    mockMembershipFindUnique.mockResolvedValue(membership);
+    mockDecisionItemFindMany.mockResolvedValue([] as DecisionItemForGraph[]);
+    mockTaskFindMany.mockResolvedValue([] as TaskForGraph[]);
+    mockAmbiguousInfoFindMany.mockResolvedValue([] as AmbiguousInfoForGraph[]);
+    mockTopicRequestFindMany.mockResolvedValue([] as TopicRequestForGraph[]);
+
+    const res = await app.request("/meetings/mtg-1/decision-graph");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { nodes: unknown[]; edges: unknown[] };
+    expect(body.nodes).toHaveLength(1);
+    expect(body.edges).toEqual([]);
+  });
+
+  it("会議不存在は 404", async () => {
+    mockFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/missing/decision-graph");
+    expect(res.status).toBe(404);
+    expect(mockDecisionItemFindMany).not.toHaveBeenCalled();
+  });
+
+  it("単発会議（recurringMeetingId=null）は 404", async () => {
+    mockFindUnique.mockResolvedValue({
+      id: "mtg-x",
+      recurringMeetingId: null,
+      recurringMeeting: null,
+    } as MeetingWithRecurringOrgId);
+    const res = await app.request("/meetings/mtg-x/decision-graph");
+    expect(res.status).toBe(404);
+    expect(mockDecisionItemFindMany).not.toHaveBeenCalled();
+  });
+
+  it("組織非所属は 404", async () => {
+    mockFindUnique.mockResolvedValue(accessMeeting);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const res = await app.request("/meetings/mtg-1/decision-graph");
     expect(res.status).toBe(404);
     expect(mockDecisionItemFindMany).not.toHaveBeenCalled();
   });
