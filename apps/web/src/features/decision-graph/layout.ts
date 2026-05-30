@@ -25,6 +25,24 @@ export const EDGE_LABELS: Record<GraphEdgeType, string> = {
   agenda: "次回議題",
 };
 
+// 種別ごとの表示ラベル（凡例・ノード分類で使う）。
+export const NODE_TYPE_LABELS: Record<GraphNodeType, string> = {
+  meeting: "会議",
+  decision: "決定",
+  task: "タスク",
+  ambiguous: "未決",
+  topic: "次回議題",
+};
+
+// 種別ごとの背景色（凡例とノード塗りで共有する）。
+export const NODE_COLORS: Record<GraphNodeType, string> = {
+  meeting: "#dbeafe",
+  decision: "#dcfce7",
+  task: "#fef9c3",
+  ambiguous: "#ffedd5",
+  topic: "#f3e8ff",
+};
+
 // React Flow ノードの data に載せる表示用メタ。
 export type FlowNodeData = {
   label: string;
