@@ -111,6 +111,7 @@ services:
       - ./services/ai/pipeline:/app/pipeline
       - ./services/ai/rag:/app/rag
       - ./services/ai/prompts:/app/prompts
+      - ./services/ai/agent:/app/agent
     environment:
       # Docker 内では servicebus コンテナ名で解決する（.env.local の localhost 指定を上書き）
       AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"

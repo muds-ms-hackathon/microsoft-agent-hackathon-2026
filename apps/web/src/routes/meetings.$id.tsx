@@ -9,6 +9,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TranscriptCard } from "@/features/meetings/components/TranscriptCard";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import { AgendaHistorySection } from "@/features/meetings/components/AgendaHistorySection";
+import { RecommendedAgendaSection } from "@/features/meetings/components/RecommendedAgendaSection";
+import { TopicRequestSection } from "@/features/topic-requests/components/TopicRequestSection";
 import {
   REVIEW_ITEM_TYPES,
   TYPE_BADGE_CLASS,
@@ -301,6 +304,18 @@ export function MeetingDetailView({
         </div>
       )}
 
+      {/* 次回会議の推奨アジェンダ（解析で生成された場合に表示）。過去の会議のみ。 */}
+      {isPastMeeting && (
+        <RecommendedAgendaSection
+          agenda={detail.latestAnalysisRun?.recommendedAgenda ?? null}
+        />
+      )}
+
+      {/* アジェンダ生成履歴（過去に複数回生成された場合のみ表示）。過去の会議のみ。 */}
+      {isPastMeeting && (
+        <AgendaHistorySection meetingId={id} enabled={isPastMeeting} />
+      )}
+
       {/* 下段: タスク（フルwidth） */}
       <section aria-label="タスク" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -412,6 +427,10 @@ export function MeetingDetailView({
             now={now}
           />
         )}
+      </section>
+
+      <section aria-label="次回会議の議題">
+        <TopicRequestSection meetingId={id} />
       </section>
     </section>
   );

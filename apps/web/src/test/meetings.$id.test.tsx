@@ -1,4 +1,7 @@
-import type { MeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import type {
+  MeetingDetail,
+  RecommendedAgendaItem,
+} from "@/features/meetings/hooks/useMeetingDetail";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +16,7 @@ vi.mock("@/lib/api", () => ({
         analyze: { $post: vi.fn() },
         tasks: { $get: vi.fn() },
         "review-items": { $get: vi.fn() },
+        "agenda-history": { $get: vi.fn() },
       },
     },
     organizations: {
@@ -103,6 +107,9 @@ beforeEach(() => {
   vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detail));
   vi.mocked(api.meetings[":id"].tasks.$get).mockResolvedValue(mockJson([]));
   vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+    mockJson([]),
+  );
+  vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
     mockJson([]),
   );
   // AssigneeFilter のメンバー取得はデフォルトで空配列。個別テストで上書きしない想定。
@@ -346,6 +353,9 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
         latestAnalysisRun: {
           ...completedRun,
           summary: "今回の会議では予算について合意しました。",
+          recommendedAgenda: null,
+          alertLevel: null,
+          completedAt: "2026-05-16T02:00:00.000Z",
         },
       }),
     );
@@ -410,6 +420,129 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
     expect(
       await screen.findByRole("button", { name: "解析を実行" }),
     ).toBeDisabled();
+  });
+});
+
+describe("MeetingDetailView - 次回会議の推奨アジェンダ", () => {
+  // recommendedAgenda 入りの latestAnalysisRun を持つ過去会議を組み立てる。
+  const withAgenda = (
+    agenda: RecommendedAgendaItem[] | null,
+  ): MeetingDetail => ({
+    ...detailPast,
+    latestAnalysisRun: {
+      id: "run-1",
+      status: "completed",
+      summary: null,
+      recommendedAgenda: agenda,
+      alertLevel: null,
+      completedAt: "2026-05-16T02:00:00.000Z",
+    },
+  });
+
+  it("recommendedAgenda があれば各項目が表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(
+        withAgenda([
+          { title: "前回タスクの確認", estimated_minutes: 5, reason: "継続" },
+          { title: "予算の決定", estimated_minutes: null, reason: null },
+        ]),
+      ),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByLabelText("次回会議の推奨アジェンダ"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("前回タスクの確認")).toBeInTheDocument();
+    expect(screen.getByText("予算の決定")).toBeInTheDocument();
+    // estimated_minutes / reason がある項目は補足表示される
+    expect(screen.getByText("約5分")).toBeInTheDocument();
+    expect(screen.getByText("理由: 継続")).toBeInTheDocument();
+  });
+
+  it("recommendedAgenda が空配列/null のとき「推奨アジェンダはまだありません」が表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(withAgenda(null)),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByText("推奨アジェンダはまだありません"),
+    ).toBeInTheDocument();
+  });
+
+  it("コピーボタンで整形済みテキストが clipboard.writeText に渡り「コピーしました」表示になる", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(
+        withAgenda([
+          { title: "前回タスクの確認", estimated_minutes: 5, reason: "継続" },
+        ]),
+      ),
+    );
+    const user = userEvent.setup();
+    // userEvent のクリップボードスタブより後に独自スパイを差し込む。
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const copyBtn = await screen.findByRole("button", { name: "コピー" });
+    await user.click(copyBtn);
+
+    expect(writeText).toHaveBeenCalledWith(
+      "1. 前回タスクの確認（約5分）\n   理由: 継続",
+    );
+    expect(await screen.findByText("コピーしました")).toBeInTheDocument();
+  });
+});
+
+describe("MeetingDetailView - アジェンダ生成履歴", () => {
+  it("履歴が2件以上あれば履歴カードが表示され、展開すると各版が出る", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "run-2",
+          recommendedAgenda: [{ title: "最新版の議題" }],
+          createdAt: "2026-05-16T11:00:00.000Z",
+          completedAt: "2026-05-16T11:05:00.000Z",
+        },
+        {
+          id: "run-1",
+          recommendedAgenda: [{ title: "旧版の議題" }],
+          createdAt: "2026-05-16T09:00:00.000Z",
+          completedAt: "2026-05-16T09:05:00.000Z",
+        },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+
+    const toggle = await screen.findByRole("button", {
+      name: /アジェンダ生成履歴/,
+    });
+    await user.click(toggle);
+    expect(await screen.findByText("最新版の議題")).toBeInTheDocument();
+    expect(screen.getByText("旧版の議題")).toBeInTheDocument();
+  });
+
+  it("履歴が1件以下のときは履歴カードを表示しない", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "run-1",
+          recommendedAgenda: [{ title: "唯一の議題" }],
+          createdAt: "2026-05-16T09:00:00.000Z",
+          completedAt: "2026-05-16T09:05:00.000Z",
+        },
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(
+      screen.queryByLabelText("アジェンダ生成履歴"),
+    ).not.toBeInTheDocument();
   });
 });
 

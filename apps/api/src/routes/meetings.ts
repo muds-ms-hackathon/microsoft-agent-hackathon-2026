@@ -27,6 +27,7 @@ import {
   buildTaskListWhere,
   taskListQuerySchema,
 } from "../lib/schemas/task.js";
+import { topicRequestCreateSchema } from "../lib/schemas/topic-request.js";
 import {
   decisionItemListInclude,
   decisionItemListOrderBy,
@@ -209,6 +210,65 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(
         serializeReviewItems({ decisionItems, tasks, ambiguousInfos }),
       );
+    },
+  )
+  .get("/:id/topic-requests", async (c) => {
+    const id = c.req.param("id");
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議を「次回会議」として紐付く議題のみ。古い順で並べる
+    // （会議当日にユーザーが追加した順で確認しやすい）。
+    const topicRequests = await prisma.topicRequest.findMany({
+      where: { meetingId: id },
+      orderBy: { createdAt: "asc" },
+    });
+    return c.json(topicRequests);
+  })
+  .get("/:id/agenda-history", async (c) => {
+    const id = c.req.param("id");
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議で過去に生成された推奨アジェンダの履歴。完了した解析ランのうち
+    // recommendedAgenda を持つものを新しい順に返す（専用テーブルは設けず派生で扱う）。
+    // JSON null のフィルタは取りこぼしを避けるため取得後に JS 側で行う。
+    const runs = await prisma.meetingAnalysisRun.findMany({
+      where: { meetingId: id, status: "completed" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        recommendedAgenda: true,
+        createdAt: true,
+        completedAt: true,
+      },
+    });
+    const history = runs.filter(
+      (r) => r.recommendedAgenda != null && r.recommendedAgenda !== undefined,
+    );
+    return c.json(history);
+  })
+  .post(
+    "/:id/topic-requests",
+    zValidator("json", topicRequestCreateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      // 認証済みユーザーを requestedBy とする。クライアントからの指定は受け付けない。
+      const created = await prisma.topicRequest.create({
+        data: {
+          meetingId: id,
+          requestedBy: c.var.user.id,
+          title: input.title,
+          body: input.body,
+          priority: input.priority,
+        },
+      });
+      return c.json(created, 201);
     },
   )
   .get(

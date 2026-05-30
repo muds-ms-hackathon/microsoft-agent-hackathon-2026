@@ -262,9 +262,12 @@ $suggested_participants
 
 $change_summary_section
 
+$user_topic_requests_section
+
 ## 出力ルール
 - summaryは今回の会議全体を200字以内で要約する
 - recommended_agendaは次回会議で議論すべき項目を優先度順に並べる
+- ユーザー事前登録議題（上掲の「ユーザーが事前登録した議題」）のうち[required]はrecommended_agendaに必ず含め、タイトルの文言を変えない。[optional]は内容に応じて取り込む。既存の議論項目と重複する場合は1つにまとめる
 - estimation_noteは次回会議の所要時間見積もりを記す
 
 ## 出力フォーマット（JSON）
@@ -285,3 +288,8 @@ JSONのみ返してください（コードブロック不要）。"""
 [continuity_call6_change_summary]
 template = """## 前回からの変化サマリー
 $change_summary"""
+
+[call6_user_topic_requests]
+template = """## ユーザーが事前登録した議題
+次回会議でユーザーが取り上げたいと登録した議題です。[required]は必ず推奨アジェンダに含めてください。
+$user_topic_requests"""

@@ -2,6 +2,14 @@ import { api, authHeaders } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
 export type AnalysisRunStatus = "queued" | "analyzing" | "completed" | "failed";
+// AI が生成する推奨アジェンダの 1 項目。
+// 実体は MeetingAnalysisRun.recommendedAgenda（JSON 配列）で、AI 出力のブレに備え
+// title 以外は欠落/ null を許容する。
+export type RecommendedAgendaItem = {
+  title: string;
+  estimated_minutes?: number | null;
+  reason?: string | null;
+};
 
 // 会議詳細レスポンス。API 側 (apps/api/src/routes/meetings.ts) の整形に揃える。
 export type MeetingDetail = {
@@ -25,6 +33,7 @@ export type MeetingDetail = {
     status: AnalysisRunStatus;
     currentStep: string | null;
     summary: string | null;
+    recommendedAgenda: RecommendedAgendaItem[] | null;
     alertLevel: string | null;
     completedAt: string | null;
     failedAt: string | null;
