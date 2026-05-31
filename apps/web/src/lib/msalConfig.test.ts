@@ -14,7 +14,7 @@ vi.mock("@azure/msal-browser", () => ({
     .fn()
     .mockImplementation((config: CapturedConfig) => {
       capturedConfig.push(config);
-      return {};
+      return { initialize: vi.fn().mockResolvedValue(undefined) };
     }),
 }));
 
@@ -33,14 +33,14 @@ describe("getMsalInstance (MSAL 設定)", () => {
 
   it("複数回呼び出しても同一インスタンスを返す（シングルトン）", async () => {
     const { getMsalInstance } = await import("@/lib/msalConfig");
-    const a = getMsalInstance();
-    const b = getMsalInstance();
+    const a = await getMsalInstance();
+    const b = await getMsalInstance();
     expect(a).toBe(b);
   });
 
   it("knownAuthorities に authority URL のホスト名が設定される", async () => {
     const { getMsalInstance } = await import("@/lib/msalConfig");
-    getMsalInstance();
+    await getMsalInstance();
 
     expect(capturedConfig[0]?.auth?.knownAuthorities).toEqual([
       "test-tenant.ciamlogin.com",
@@ -49,7 +49,7 @@ describe("getMsalInstance (MSAL 設定)", () => {
 
   it("cacheLocation が sessionStorage に設定される", async () => {
     const { getMsalInstance } = await import("@/lib/msalConfig");
-    getMsalInstance();
+    await getMsalInstance();
 
     expect(capturedConfig[0]?.cache?.cacheLocation).toBe("sessionStorage");
   });
@@ -58,7 +58,7 @@ describe("getMsalInstance (MSAL 設定)", () => {
     import.meta.env.VITE_ENTRA_AUTHORITY =
       "https://test-tenant.ciamlogin.com/test-tenant-id/";
     const { getMsalInstance } = await import("@/lib/msalConfig");
-    getMsalInstance();
+    await getMsalInstance();
 
     expect(capturedConfig[0]?.auth?.authority).toBe(
       "https://test-tenant.ciamlogin.com/test-tenant-id",

@@ -24,7 +24,7 @@ const mockMsal = {
 
 // @/lib/msalConfig を常にモックとして差し替える（vi.mock は巻き上げられる）
 vi.mock("@/lib/msalConfig", () => ({
-  getMsalInstance: () => mockMsal,
+  getMsalInstance: async () => mockMsal,
   ENTRA_SCOPES: ["openid", "profile", "email"],
   fetchUserInfoEmail: vi.fn().mockResolvedValue(null),
 }));

@@ -8,7 +8,7 @@ import {
   PublicClientApplication,
 } from "@azure/msal-browser";
 
-function getEntraConfig(): Configuration {
+function getEntraConfig(authorityMetadata?: string): Configuration {
   const clientId = import.meta.env.VITE_ENTRA_CLIENT_ID as string | undefined;
   const authority = import.meta.env.VITE_ENTRA_AUTHORITY as string | undefined;
   const redirectUri = import.meta.env.VITE_ENTRA_REDIRECT_URI as
@@ -37,8 +37,6 @@ function getEntraConfig(): Configuration {
 
   // CIAM エンドポイント (*.ciamlogin.com) は MSAL の既定の信頼済みホストではないため、
   // knownAuthorities に明示する必要がある。
-  // CIAM の OIDC discovery issuer はテナント名ベースではなく GUID ベースのホスト名
-  // （{tenantId}.ciamlogin.com）を返すため、両方を登録しないと endpoints_resolution_error になる。
   const knownAuthorities: string[] = [];
   if (resolvedAuthority) {
     knownAuthorities.push(new URL(resolvedAuthority).hostname);
@@ -53,6 +51,7 @@ function getEntraConfig(): Configuration {
       authority: resolvedAuthority,
       redirectUri: redirectUri ?? `${window.location.origin}/login`,
       knownAuthorities,
+      ...(authorityMetadata ? { authorityMetadata } : {}),
     },
     cache: {
       // sessionStorage は localStorage より安全（タブを閉じると消える）
@@ -63,12 +62,35 @@ function getEntraConfig(): Configuration {
 
 let _msalInstance: PublicClientApplication | undefined;
 
-// MSAL インスタンスを取得する（初回呼び出し時に生成）。
-// loginRedirect / handleRedirectPromise の前に initialize() を呼ぶこと。
-export function getMsalInstance(): PublicClientApplication {
-  if (!_msalInstance) {
-    _msalInstance = new PublicClientApplication(getEntraConfig());
+// CIAM の OIDC discovery issuer（GUID ベース）が MSAL の期待するテナント名ベースの
+// パターンと一致せず validateIssuer で失敗するため、authorityMetadata を事前に
+// 取得して渡すことでネットワーク経由の validateIssuer をバイパスする。
+async function fetchAuthorityMetadata(
+  authority: string,
+): Promise<string | undefined> {
+  try {
+    const res = await fetch(
+      `${authority}/v2.0/.well-known/openid-configuration`,
+    );
+    return res.ok ? await res.text() : undefined;
+  } catch {
+    return undefined;
   }
+}
+
+// MSAL インスタンスを取得する（初回呼び出し時に生成・初期化）。
+// initialize() も内部で完了させるため、呼び出し側での追加呼び出しは不要。
+export async function getMsalInstance(): Promise<PublicClientApplication> {
+  if (_msalInstance) return _msalInstance;
+  const authority = (
+    import.meta.env.VITE_ENTRA_AUTHORITY as string ?? ""
+  ).replace(/\/+$/, "");
+  const authorityMetadata = await fetchAuthorityMetadata(authority);
+  const instance = new PublicClientApplication(
+    getEntraConfig(authorityMetadata),
+  );
+  await instance.initialize();
+  _msalInstance = instance;
   return _msalInstance;
 }
 
