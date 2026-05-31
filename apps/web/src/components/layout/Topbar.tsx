@@ -32,7 +32,7 @@ function UserAvatar() {
       try {
         const msal = await getMsalInstance();
         await msal.logoutRedirect({
-          postLogoutRedirectUri: window.location.origin + "/login",
+          postLogoutRedirectUri: `${window.location.origin}/login`,
         });
       } catch (e) {
         console.error("[logout] Entra ログアウトエラー:", e);
