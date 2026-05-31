@@ -71,27 +71,31 @@ function Login() {
           // parseToken でクレームを検証してから保存する。
           // 検証なしに setLogin すると beforeLoad で token が除去されて
           // /login → / → /login の無限ループが発生する。
-          if (!parseToken(result.idToken)) {
-            setError(
-              "認証トークンにメールアドレスが含まれていません。管理者に連絡してください。",
-            );
+          const parsed = parseToken(result.idToken);
+          if (!parsed) {
+            setError("認証トークンが無効または期限切れです。管理者に連絡してください。");
             return;
           }
           // MSAL が返す idToken を既存の localStorage ベースの仕組みに橋渡しする
           setLogin(result.idToken);
 
-          // ID トークンにメールがない場合は UserInfo エンドポイントから取得する
-          const email = await fetchUserInfoEmail(result.accessToken);
-          if (email) {
-            setUserEmail(email);
-            await fetch("/api/me", {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${result.idToken}`,
-              },
-              body: JSON.stringify({ email }),
-            });
+          // ID トークンにメールがない場合のみ UserInfo エンドポイントから取得する
+          if (!parsed.email) {
+            const email = await fetchUserInfoEmail(result.accessToken);
+            if (email) {
+              setUserEmail(email);
+              const res = await fetch("/api/me", {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${result.idToken}`,
+                },
+                body: JSON.stringify({ email }),
+              });
+              if (!res.ok) {
+                console.warn("[login] PATCH /me failed:", res.status);
+              }
+            }
           }
 
           navigate({ to: "/" });
