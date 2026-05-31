@@ -50,6 +50,7 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      target: dev
     ports:
       - "5173:5173"
     volumes:
@@ -74,6 +75,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      target: dev
     ports:
       - "3001:3001"
     volumes:
@@ -104,6 +106,7 @@ services:
     build:
       context: .
       dockerfile: services/ai/Dockerfile
+      target: dev
     ports:
       - "8001:8001"
     volumes:
