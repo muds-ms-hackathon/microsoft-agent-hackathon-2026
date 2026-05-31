@@ -142,3 +142,13 @@ jobs:
             --resource-group rg-ms-hackathon-dev \
             --name decision-loop-ai \
             --container-image-name decisionloopacr.azurecr.io/ai:${{ github.sha }}
+
+      - name: ヘルスチェック
+        # イメージ pull・コンテナ起動に時間がかかるため --retry-delay 15 × 20回（最大5分）でリトライ
+        run: |
+          curl --fail --silent --retry 20 --retry-delay 15 --retry-all-errors \
+            https://decision-loop-web.azurewebsites.net/
+          curl --fail --silent --retry 20 --retry-delay 15 --retry-all-errors \
+            https://decision-loop-api.azurewebsites.net/health
+          curl --fail --silent --retry 20 --retry-delay 15 --retry-all-errors \
+            https://decision-loop-ai.azurewebsites.net/health
