@@ -3,7 +3,7 @@
 
 export interface FakeIdTokenPayload {
   sub: string;
-  email: string;
+  email?: string;
   name: string;
   // UNIX 秒。未指定時は 1 時間後を期限とする。
   exp?: number;

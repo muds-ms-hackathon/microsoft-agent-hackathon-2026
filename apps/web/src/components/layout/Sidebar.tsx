@@ -26,6 +26,7 @@ import {
   CalendarDays,
   CheckSquare,
   ChevronDown,
+  ClipboardList,
   LayoutDashboard,
   ListIcon,
   PlusIcon,
@@ -96,7 +97,7 @@ export function Sidebar() {
   return (
     <aside
       aria-label="サイドバー"
-      className="w-52 border-r border-border/50 bg-muted/30 flex flex-col shrink-0"
+      className="w-52 border-r border-border/50 bg-muted/30 flex flex-col shrink-0 overflow-y-auto"
     >
       <OrganizationSelector
         isLoading={isLoading}
@@ -127,6 +128,18 @@ export function Sidebar() {
         >
           <LayoutDashboard size={15} />
           ダッシュボード
+        </Link>
+
+        <Link
+          to="/review"
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+          activeProps={{
+            className:
+              "flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm bg-foreground/10 text-foreground font-medium",
+          }}
+        >
+          <ClipboardList size={15} />
+          レビュー
         </Link>
 
         {/* My タスクへの導線。組織非依存（assignee 経由で組織横断）のため

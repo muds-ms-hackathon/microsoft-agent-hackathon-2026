@@ -25,8 +25,9 @@ vi.mock("@/lib/api", () => ({
         invite: { $post: vi.fn() },
         members: {
           $get: vi.fn(),
-          ":userId": { $delete: vi.fn() },
+          ":userId": { $delete: vi.fn(), $patch: vi.fn() },
         },
+        membership: { $delete: vi.fn() },
         meetings: { $post: vi.fn() },
       },
     },
@@ -63,16 +64,18 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(screen.getAllByText("オーナー").length).toBeGreaterThan(0);
   });
 
-  it("メンバー一覧が role バッジ付きで表示される", async () => {
-    renderDetail();
+  it("メンバー一覧が表示され、owner 閲覧時は owner にバッジ・他メンバーにロール変更 select が出る", async () => {
+    renderDetail({ currentUserEmail: "alice@example.com" });
     const memberList = await screen.findByRole("list", {
       name: "メンバー一覧",
     });
     expect(within(memberList).getByText("Alice A.")).toBeInTheDocument();
     expect(within(memberList).getByText("Bob B.")).toBeInTheDocument();
     expect(within(memberList).getByText("Carol C.")).toBeInTheDocument();
-    expect(within(memberList).getByText("管理者")).toBeInTheDocument();
-    expect(within(memberList).getByText("メンバー")).toBeInTheDocument();
+    // owner（alice 自身）はバッジ表示
+    expect(within(memberList).getByText("オーナー")).toBeInTheDocument();
+    // bob(admin) / carol(member) はロール変更 select（owner 閲覧時）
+    expect(within(memberList).getAllByLabelText("ロール変更")).toHaveLength(2);
   });
 
   it("定例一覧がカードで表示され、定例名・scheduleCron・所要時間・作成日を含む", async () => {
@@ -147,6 +150,7 @@ describe("組織詳細ページ - 基本表示", () => {
     expect(
       await screen.findByText("メンバーの取得に失敗しました"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
     expect(
       screen.queryByRole("list", { name: "メンバー一覧" }),
     ).not.toBeInTheDocument();
@@ -619,5 +623,105 @@ describe("組織詳細ページ - 定例削除ダイアログ", () => {
     expect(
       await within(dialog).findByText("定例の削除に失敗しました"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("組織詳細ページ - メンバーのロール変更（#124）", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("owner 閲覧時は owner 以外・自分以外のメンバーにロール変更 select が出る", async () => {
+    renderDetail({ currentUserEmail: "alice@example.com" });
+    await screen.findByText("Bob B.");
+    // bob(admin) と carol(member) の 2 件。owner の alice 自身には出ない。
+    const selects = screen.getAllByLabelText("ロール変更");
+    expect(selects).toHaveLength(2);
+  });
+
+  it("select 変更で PATCH members/:userId が呼ばれる", async () => {
+    const patch = vi.mocked(api.organizations[":id"].members[":userId"].$patch);
+    patch.mockResolvedValue(mockJson({}));
+    const user = userEvent.setup();
+    renderDetail({ currentUserEmail: "alice@example.com" });
+    await screen.findByText("Bob B.");
+
+    // bob(admin) の select を member に変更
+    const selects = screen.getAllByLabelText("ロール変更");
+    await user.selectOptions(selects[0], "member");
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    const call = patch.mock.calls[0][0] as {
+      param: { id: string; userId: string };
+      json: { role: string };
+    };
+    expect(call.param).toEqual({ id: "org-1", userId: "user-2" });
+    expect(call.json).toEqual({ role: "member" });
+  });
+
+  it("member 閲覧時はロール変更 select が出ない", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "member" }),
+    );
+    renderDetail({ currentUserEmail: "carol@example.com" });
+    await screen.findByText("Bob B.");
+    expect(screen.queryByLabelText("ロール変更")).not.toBeInTheDocument();
+  });
+});
+
+describe("組織詳細ページ - 退会（#125）", () => {
+  beforeEach(() => {
+    vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
+      mockJson(sampleMembers),
+    );
+  });
+
+  it("非 owner 閲覧時は「組織を退会」ボタンが出る", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "member" }),
+    );
+    renderDetail({ currentUserEmail: "carol@example.com" });
+    expect(
+      await screen.findByRole("button", { name: "組織を退会" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "組織を削除" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("owner 閲覧時は「組織を削除」が出て「組織を退会」は出ない", async () => {
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson(ownerOrgDetail),
+    );
+    renderDetail({ currentUserEmail: "alice@example.com" });
+    expect(
+      await screen.findByRole("button", { name: "組織を削除" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "組織を退会" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("退会実行で DELETE membership が呼ばれる", async () => {
+    const del = vi.mocked(api.organizations[":id"].membership.$delete);
+    del.mockResolvedValue(mockJson(null, 204));
+    vi.mocked(api.organizations[":id"].$get).mockResolvedValue(
+      mockJson({ ...ownerOrgDetail, role: "member" }),
+    );
+    const user = userEvent.setup();
+    renderDetail({ currentUserEmail: "carol@example.com" });
+
+    await user.click(await screen.findByRole("button", { name: "組織を退会" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "退会する" }));
+
+    await waitFor(() => expect(del).toHaveBeenCalled());
+    const call = del.mock.calls[0][0] as { param: { id: string } };
+    expect(call.param).toEqual({ id: "org-1" });
   });
 });

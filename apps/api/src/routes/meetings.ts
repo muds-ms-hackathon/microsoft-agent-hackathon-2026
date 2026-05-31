@@ -18,6 +18,7 @@ import {
   taskReviewInclude,
 } from "../lib/review-item-serialization.js";
 import {
+  buildReviewItemStatusFilter,
   buildReviewItemTypeFilter,
   reviewItemCreateSchema,
   reviewItemQuerySchema,
@@ -26,6 +27,7 @@ import {
   buildTaskListWhere,
   taskListQuerySchema,
 } from "../lib/schemas/task.js";
+import { topicRequestCreateSchema } from "../lib/schemas/topic-request.js";
 import {
   decisionItemListInclude,
   decisionItemListOrderBy,
@@ -35,6 +37,7 @@ import {
   taskListInclude,
   taskListOrderBy,
 } from "../lib/task-serialization.js";
+import { buildDecisionGraph } from "../lib/decision-graph-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireMeetingAccess } from "../middleware/meeting-access.js";
 
@@ -74,6 +77,14 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         recurringMeeting: {
           include: {
             organization: { select: { id: true, name: true } },
+            _count: { select: { members: true } },
+            members: {
+              take: 4,
+              orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+              include: {
+                user: { select: { id: true, name: true, displayName: true } },
+              },
+            },
           },
         },
         // 解析ラン最新 1 件をポーリング用に含める
@@ -98,6 +109,16 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         name: recurringMeeting.name,
       },
       organization: recurringMeeting.organization,
+      memberCount: recurringMeeting._count.members,
+      members: recurringMeeting.members.map((m) => ({
+        userId: m.userId,
+        role: m.role,
+        user: {
+          id: m.user.id,
+          name: m.user.name,
+          displayName: m.user.displayName,
+        },
+      })),
       latestAnalysisRun: latestRun
         ? {
             id: latestRun.id,
@@ -147,14 +168,19 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
         includeAmbiguousInfos,
         decisionItemTypeWhere,
       } = buildReviewItemTypeFilter(filters.type);
+      const {
+        decisionItemStatusWhere,
+        taskStatusWhere,
+        ambiguousInfoStatusWhere,
+      } = buildReviewItemStatusFilter(filters.status);
 
       const [decisionItems, tasks, ambiguousInfos] = await Promise.all([
         includeDecision
           ? prisma.decisionItem.findMany({
               where: {
                 meetingId: id,
-                status: { in: ["draft", "reviewing"] },
                 ...decisionItemTypeWhere,
+                ...decisionItemStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: decisionItemReviewInclude,
@@ -164,7 +190,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.task.findMany({
               where: {
                 originMeetingId: id,
-                status: { in: ["draft", "reviewing"] },
+                ...taskStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: taskReviewInclude,
@@ -174,7 +200,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
           ? prisma.ambiguousInfo.findMany({
               where: {
                 meetingId: id,
-                status: { in: ["draft", "reviewing"] },
+                ...ambiguousInfoStatusWhere,
               },
               orderBy: { createdAt: "asc" },
               include: ambiguousInfoReviewInclude,
@@ -185,6 +211,65 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(
         serializeReviewItems({ decisionItems, tasks, ambiguousInfos }),
       );
+    },
+  )
+  .get("/:id/topic-requests", async (c) => {
+    const id = c.req.param("id");
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議を「次回会議」として紐付く議題のみ。古い順で並べる
+    // （会議当日にユーザーが追加した順で確認しやすい）。
+    const topicRequests = await prisma.topicRequest.findMany({
+      where: { meetingId: id },
+      orderBy: { createdAt: "asc" },
+    });
+    return c.json(topicRequests);
+  })
+  .get("/:id/agenda-history", async (c) => {
+    const id = c.req.param("id");
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議で過去に生成された推奨アジェンダの履歴。完了した解析ランのうち
+    // recommendedAgenda を持つものを新しい順に返す（専用テーブルは設けず派生で扱う）。
+    // JSON null のフィルタは取りこぼしを避けるため取得後に JS 側で行う。
+    const runs = await prisma.meetingAnalysisRun.findMany({
+      where: { meetingId: id, status: "completed" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        recommendedAgenda: true,
+        createdAt: true,
+        completedAt: true,
+      },
+    });
+    const history = runs.filter(
+      (r) => r.recommendedAgenda != null && r.recommendedAgenda !== undefined,
+    );
+    return c.json(history);
+  })
+  .post(
+    "/:id/topic-requests",
+    zValidator("json", topicRequestCreateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      // 認証済みユーザーを requestedBy とする。クライアントからの指定は受け付けない。
+      const created = await prisma.topicRequest.create({
+        data: {
+          meetingId: id,
+          requestedBy: c.var.user.id,
+          title: input.title,
+          body: input.body,
+          priority: input.priority,
+        },
+      });
+      return c.json(created, 201);
     },
   )
   .get(
@@ -230,6 +315,77 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(infos);
     },
   )
+  .get("/:id/decision-graph", async (c) => {
+    const id = c.req.param("id");
+
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議スコープで、来歴をたどるのに必要なノード素材を一括取得する。
+    // 会議は前回/次回のチェーン、決定・タスク・未決・次回議題は当該会議に紐付くもの。
+    const [meeting, decisionItems, tasks, ambiguousInfos, topicRequests] =
+      await Promise.all([
+        prisma.meeting.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            title: true,
+            heldAt: true,
+            previousMeeting: { select: { id: true, title: true } },
+            nextMeetings: { select: { id: true, title: true } },
+          },
+        }),
+        prisma.decisionItem.findMany({
+          where: { meetingId: id },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            decisionState: true,
+            blockingItemId: true,
+            plannedMeeting: { select: { id: true, title: true } },
+          },
+        }),
+        prisma.task.findMany({
+          where: { originMeetingId: id },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            decisionItemId: true,
+            blockingItemId: true,
+          },
+        }),
+        prisma.ambiguousInfo.findMany({
+          where: { meetingId: id },
+          select: {
+            id: true,
+            body: true,
+            status: true,
+            resolvedToTaskId: true,
+            resolvedToDecisionItemId: true,
+          },
+        }),
+        prisma.topicRequest.findMany({
+          where: { meetingId: id },
+          select: { id: true, title: true, priority: true },
+        }),
+      ]);
+
+    // requireMeetingAccess 通過直後なので存在は保証されるが、型ナローイングのため再判定
+    if (!meeting) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
+
+    const graph = buildDecisionGraph({
+      meeting,
+      decisionItems,
+      tasks,
+      ambiguousInfos,
+      topicRequests,
+    });
+    return c.json(graph);
+  })
   // TODO: 動作確認用のため削除する
   .post(
     "/:id/review-items",

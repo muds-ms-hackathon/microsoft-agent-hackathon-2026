@@ -143,7 +143,7 @@ describe("PATCH /ambiguous-infos/:id", () => {
         ...sampleItem,
         status: "rejected",
         version: 1,
-        meeting: { recurringMeetingId: "rmtg-1" },
+        meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
       },
     });
 
@@ -190,7 +190,7 @@ describe("PATCH /ambiguous-infos/:id", () => {
         status: "resolved",
         resolutionType: "discarded",
         version: 1,
-        meeting: { recurringMeetingId: "rmtg-1" },
+        meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
       },
     });
 
@@ -229,7 +229,7 @@ describe("PATCH /ambiguous-infos/:id", () => {
             resolutionType: "task",
             resolvedToTaskId: "task-new",
             version: 1,
-            meeting: { recurringMeetingId: "rmtg-1" },
+            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
           }),
         },
       };
@@ -338,7 +338,7 @@ describe("PATCH /ambiguous-infos/:id", () => {
             resolutionType: "decision_item",
             resolvedToDecisionItemId: "di-new",
             version: 1,
-            meeting: { recurringMeetingId: "rmtg-1" },
+            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
           }),
         },
       };

@@ -7,18 +7,22 @@ const userSelect = {
   email: true,
 } as const;
 
+const recurringMeetingSelect = { id: true, name: true } as const;
+
 export const decisionItemReviewInclude = {
   assignees: { include: { user: { select: userSelect } } },
-  meeting: { select: { recurringMeetingId: true } },
+  meeting: { select: { recurringMeeting: { select: recurringMeetingSelect } } },
 } as const satisfies Prisma.DecisionItemInclude;
 
 export const taskReviewInclude = {
   assignees: { include: { user: { select: userSelect } } },
-  originMeeting: { select: { recurringMeetingId: true } },
+  originMeeting: {
+    select: { recurringMeeting: { select: recurringMeetingSelect } },
+  },
 } as const satisfies Prisma.TaskInclude;
 
 export const ambiguousInfoReviewInclude = {
-  meeting: { select: { recurringMeetingId: true } },
+  meeting: { select: { recurringMeeting: { select: recurringMeetingSelect } } },
 } as const satisfies Prisma.AmbiguousInfoInclude;
 
 type DecisionItemWithReview = Prisma.DecisionItemGetPayload<{
@@ -32,8 +36,10 @@ type AmbiguousInfoWithReview = Prisma.AmbiguousInfoGetPayload<{
 }>;
 
 export function serializeDecisionItem(item: DecisionItemWithReview) {
+  // status:"open" は未決確定済み → decisionState によらず open_issue のまま
   const type =
-    item.decisionState === "confirmed" || item.decisionState === "tentative"
+    item.status !== "open" &&
+    (item.decisionState === "confirmed" || item.decisionState === "tentative")
       ? ("decision" as const)
       : ("open_issue" as const);
   return {
@@ -46,8 +52,12 @@ export function serializeDecisionItem(item: DecisionItemWithReview) {
     sourceQuote: item.sourceQuote,
     sourceContext: item.sourceContext,
     severity: null,
+    resolutionType: null,
     meetingId: item.meetingId,
-    recurringMeetingId: item.meeting.recurringMeetingId,
+    // biome-ignore lint/style/noNonNullAssertion: レビューアイテムは必ず定例配下の会議に属する
+    recurringMeetingId: item.meeting.recurringMeeting!.id,
+    // biome-ignore lint/style/noNonNullAssertion: 同上
+    recurringMeetingName: item.meeting.recurringMeeting!.name,
     assignees: item.assignees.map((a) => a.user),
     deadline: item.decisionDeadline,
     version: item.version,
@@ -61,15 +71,20 @@ function serializeTaskAsReviewItem(task: TaskWithReview) {
     sourceTable: "task" as const,
     type: "task_candidate" as const,
     status: task.status,
+    // PATCH /tasks/:id で in_progress/done → draft は 400 になるため、UI 側の canReset 判定に使う
+    taskStatus: task.status,
     title: task.title,
     body: task.body,
     sourceQuote: task.sourceQuote,
     sourceContext: task.sourceContext,
     severity: null,
+    resolutionType: null,
     // biome-ignore lint/style/noNonNullAssertion: where 条件で originMeetingId: { not: null } を保証済み
     meetingId: task.originMeetingId!,
     // biome-ignore lint/style/noNonNullAssertion: 同上
-    recurringMeetingId: task.originMeeting!.recurringMeetingId,
+    recurringMeetingId: task.originMeeting!.recurringMeeting!.id,
+    // biome-ignore lint/style/noNonNullAssertion: 同上
+    recurringMeetingName: task.originMeeting!.recurringMeeting!.name,
     assignees: task.assignees.map((a) => a.user),
     deadline: task.dueDate,
     version: task.version,
@@ -87,8 +102,12 @@ export function serializeAmbiguousInfo(item: AmbiguousInfoWithReview) {
     sourceQuote: item.sourceQuote,
     sourceContext: item.sourceContext,
     severity: item.severity,
+    resolutionType: item.resolutionType,
     meetingId: item.meetingId,
-    recurringMeetingId: item.meeting.recurringMeetingId,
+    // biome-ignore lint/style/noNonNullAssertion: レビューアイテムは必ず定例配下の会議に属する
+    recurringMeetingId: item.meeting.recurringMeeting!.id,
+    // biome-ignore lint/style/noNonNullAssertion: 同上
+    recurringMeetingName: item.meeting.recurringMeeting!.name,
     assignees: [],
     deadline: null,
     version: item.version,

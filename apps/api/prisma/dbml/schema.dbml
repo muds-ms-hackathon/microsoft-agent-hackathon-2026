@@ -29,12 +29,13 @@ Table Meeting {
   originTasks Task [not null]
   ambiguousInfos AmbiguousInfo [not null]
   analysisRuns MeetingAnalysisRun [not null]
+  topicRequests TopicRequest [not null]
 }
 
 Table User {
   id String [pk]
   externalId String [unique, not null]
-  email String [unique, not null]
+  email String [unique]
   name String [not null]
   displayName String [not null]
   createdAt DateTime [default: `now()`, not null]
@@ -48,6 +49,7 @@ Table User {
   taskAssignees TaskAssignee [not null]
   auditLogs AuditLog [not null]
   readLogs ReadLog [not null]
+  topicRequests TopicRequest [not null]
 }
 
 Table Organization {
@@ -299,6 +301,19 @@ Table AmbiguousInfo {
   resolvedToDecision DecisionItem
 }
 
+Table TopicRequest {
+  id String [pk]
+  meetingId String [not null]
+  requestedBy String [not null]
+  title String [not null]
+  body String
+  priority TopicRequestPriority
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  meeting Meeting [not null]
+  requester User [not null]
+}
+
 Table MeetingAnalysisRun {
   id String [pk]
   meetingId String [not null]
@@ -381,6 +396,11 @@ Enum TaskStatus {
 }
 
 Enum TaskPriority {
+  required
+  optional
+}
+
+Enum TopicRequestPriority {
   required
   optional
 }
@@ -516,6 +536,10 @@ Ref: AmbiguousInfo.meetingId > Meeting.id [delete: Cascade]
 Ref: AmbiguousInfo.resolvedToTaskId > Task.id [delete: Set Null]
 
 Ref: AmbiguousInfo.resolvedToDecisionItemId > DecisionItem.id [delete: Set Null]
+
+Ref: TopicRequest.meetingId > Meeting.id [delete: Cascade]
+
+Ref: TopicRequest.requestedBy > User.id [delete: Restrict]
 
 Ref: MeetingAnalysisRun.meetingId > Meeting.id [delete: Cascade]
 

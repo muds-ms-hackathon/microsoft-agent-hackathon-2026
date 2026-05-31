@@ -358,7 +358,16 @@ describe("GET /organizations/:id/meetings", () => {
     expect(mockRecurringFindMany).toHaveBeenCalledWith({
       where: { organizationId: "org-1" },
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { members: true } } },
+      include: {
+        _count: { select: { members: true } },
+        members: {
+          take: 4,
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+          include: {
+            user: { select: { id: true, name: true, displayName: true } },
+          },
+        },
+      },
     });
   });
 
@@ -1086,7 +1095,7 @@ describe("GET /recurring-meetings/:id/review-items", () => {
     createdAt: new Date("2026-05-17T00:00:00Z"),
     updatedAt: new Date("2026-05-17T00:00:00Z"),
     assignees: [],
-    meeting: { recurringMeetingId: "rmtg-1" },
+    meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
   } as DecisionItemWithReview;
 
   const sampleReviewTask = {
@@ -1114,7 +1123,7 @@ describe("GET /recurring-meetings/:id/review-items", () => {
     createdAt: new Date("2026-05-17T00:00:00Z"),
     updatedAt: new Date("2026-05-17T00:00:00Z"),
     assignees: [],
-    originMeeting: { recurringMeetingId: "rmtg-1" },
+    originMeeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
   } as TaskWithReview;
 
   const sampleAmbiguousInfo = {
@@ -1128,7 +1137,7 @@ describe("GET /recurring-meetings/:id/review-items", () => {
     version: 0,
     createdAt: new Date("2026-05-17T00:00:00Z"),
     updatedAt: new Date("2026-05-17T00:00:00Z"),
-    meeting: { recurringMeetingId: "rmtg-1" },
+    meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
   } as AmbiguousInfoWithReview;
 
   it("type 未指定 → recurringMeetingId スコープで 3 テーブル全件を取得する", async () => {

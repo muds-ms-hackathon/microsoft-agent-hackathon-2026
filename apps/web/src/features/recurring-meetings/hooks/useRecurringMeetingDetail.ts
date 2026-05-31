@@ -9,7 +9,7 @@ export type RecurringMeetingDetail = RecurringMeeting & {
     userId: string;
     name: string;
     displayName: string;
-    email: string;
+    email: string | null;
     role: "owner" | "member";
     joinedAt: string;
   }>;
@@ -20,6 +20,7 @@ export type RecurringMeetingDetail = RecurringMeeting & {
 export function useRecurringMeetingDetail(id: string) {
   return useQuery<RecurringMeetingDetail>({
     queryKey: ["recurring-meetings", id, "detail"],
+    enabled: !!id,
     queryFn: async () => {
       const res = await api["recurring-meetings"][":id"].$get(
         { param: { id } },

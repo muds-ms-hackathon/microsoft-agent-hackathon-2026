@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReviewRouteImport } from './routes/review'
 import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvitationsRouteImport } from './routes/invitations'
@@ -18,7 +19,13 @@ import { Route as OrganizationsIndexRouteImport } from './routes/organizations.i
 import { Route as RecurringMeetingsIdRouteImport } from './routes/recurring-meetings.$id'
 import { Route as OrganizationsIdRouteImport } from './routes/organizations.$id'
 import { Route as MeetingsIdRouteImport } from './routes/meetings.$id'
+import { Route as MeetingsIdDecisionGraphRouteImport } from './routes/meetings.$id_.decision-graph'
 
+const ReviewRoute = ReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OrganizationsRoute = OrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
@@ -64,27 +71,36 @@ const MeetingsIdRoute = MeetingsIdRouteImport.update({
   path: '/meetings/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MeetingsIdDecisionGraphRoute = MeetingsIdDecisionGraphRouteImport.update({
+  id: '/meetings/$id_/decision-graph',
+  path: '/meetings/$id/decision-graph',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/invitations': typeof InvitationsRoute
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
+  '/review': typeof ReviewRoute
   '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations/': typeof OrganizationsIndexRoute
   '/tasks/': typeof TasksIndexRoute
+  '/meetings/$id/decision-graph': typeof MeetingsIdDecisionGraphRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/invitations': typeof InvitationsRoute
   '/login': typeof LoginRoute
+  '/review': typeof ReviewRoute
   '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations': typeof OrganizationsIndexRoute
   '/tasks': typeof TasksIndexRoute
+  '/meetings/$id/decision-graph': typeof MeetingsIdDecisionGraphRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -92,11 +108,13 @@ export interface FileRoutesById {
   '/invitations': typeof InvitationsRoute
   '/login': typeof LoginRoute
   '/organizations': typeof OrganizationsRouteWithChildren
+  '/review': typeof ReviewRoute
   '/meetings/$id': typeof MeetingsIdRoute
   '/organizations/$id': typeof OrganizationsIdRoute
   '/recurring-meetings/$id': typeof RecurringMeetingsIdRoute
   '/organizations/': typeof OrganizationsIndexRoute
   '/tasks/': typeof TasksIndexRoute
+  '/meetings/$id_/decision-graph': typeof MeetingsIdDecisionGraphRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -105,32 +123,38 @@ export interface FileRouteTypes {
     | '/invitations'
     | '/login'
     | '/organizations'
+    | '/review'
     | '/meetings/$id'
     | '/organizations/$id'
     | '/recurring-meetings/$id'
     | '/organizations/'
     | '/tasks/'
+    | '/meetings/$id/decision-graph'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/invitations'
     | '/login'
+    | '/review'
     | '/meetings/$id'
     | '/organizations/$id'
     | '/recurring-meetings/$id'
     | '/organizations'
     | '/tasks'
+    | '/meetings/$id/decision-graph'
   id:
     | '__root__'
     | '/'
     | '/invitations'
     | '/login'
     | '/organizations'
+    | '/review'
     | '/meetings/$id'
     | '/organizations/$id'
     | '/recurring-meetings/$id'
     | '/organizations/'
     | '/tasks/'
+    | '/meetings/$id_/decision-graph'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -138,13 +162,22 @@ export interface RootRouteChildren {
   InvitationsRoute: typeof InvitationsRoute
   LoginRoute: typeof LoginRoute
   OrganizationsRoute: typeof OrganizationsRouteWithChildren
+  ReviewRoute: typeof ReviewRoute
   MeetingsIdRoute: typeof MeetingsIdRoute
   RecurringMeetingsIdRoute: typeof RecurringMeetingsIdRoute
   TasksIndexRoute: typeof TasksIndexRoute
+  MeetingsIdDecisionGraphRoute: typeof MeetingsIdDecisionGraphRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/review': {
+      id: '/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof ReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/organizations': {
       id: '/organizations'
       path: '/organizations'
@@ -208,6 +241,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MeetingsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/meetings/$id_/decision-graph': {
+      id: '/meetings/$id_/decision-graph'
+      path: '/meetings/$id/decision-graph'
+      fullPath: '/meetings/$id/decision-graph'
+      preLoaderRoute: typeof MeetingsIdDecisionGraphRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -230,9 +270,11 @@ const rootRouteChildren: RootRouteChildren = {
   InvitationsRoute: InvitationsRoute,
   LoginRoute: LoginRoute,
   OrganizationsRoute: OrganizationsRouteWithChildren,
+  ReviewRoute: ReviewRoute,
   MeetingsIdRoute: MeetingsIdRoute,
   RecurringMeetingsIdRoute: RecurringMeetingsIdRoute,
   TasksIndexRoute: TasksIndexRoute,
+  MeetingsIdDecisionGraphRoute: MeetingsIdDecisionGraphRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -28,6 +28,10 @@ vi.mock("../src/lib/prisma.js", () => ({
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    readLog: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -545,7 +549,35 @@ describe("PATCH /tasks/:id", () => {
     expect(res.status).toBe(200);
   });
 
-  it("status=draft は 400（AI 専用なので手動 PATCH で受け付けない）", async () => {
+  it("status=draft は 200（レビュー待ちに戻す操作で使用）", async () => {
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("status=draft のとき現在が in_progress なら 400", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      ...sampleTask,
+      status: "in_progress",
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("status=draft のとき現在が done なら 400", async () => {
+    mockTaskFindUnique.mockResolvedValue({
+      ...sampleTask,
+      status: "done",
+    } as never);
+    mockMembershipFindUnique.mockResolvedValue(membership());
     const res = await app.request("/tasks/task-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -636,7 +668,12 @@ describe("PATCH /tasks/:id", () => {
 });
 
 describe("GET /tasks/me", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // 未読判定用の ReadLog 取得は既定で空（＝全件未読）にしておく。
+    // 各ケースで必要に応じて上書きする。
+    vi.mocked(prisma.readLog.findMany).mockResolvedValue([]);
+  });
 
   it("認証ユーザーが assignee のタスクを 200 で返す", async () => {
     const listTask = {
@@ -715,7 +752,9 @@ describe("GET /tasks/me", () => {
     };
     // now はサーバ側現在時刻のため、Date インスタンスが入っていることだけ確認する。
     expect(where.dueDate?.lt).toBeInstanceOf(Date);
-    expect(where.status).toEqual({ notIn: ["done", "rejected"] });
+    expect(where.status).toEqual({
+      notIn: ["draft", "reviewing", "done", "rejected"],
+    });
   });
 
   it("overdueOnly=true と status=todo の併用は AND で結合される", async () => {
@@ -745,6 +784,63 @@ describe("GET /tasks/me", () => {
     expect(where.dueDate?.lt).toBeInstanceOf(Date);
     expect(where.dueDate?.lte).toEqual(new Date("2026-05-31T00:00:00Z"));
   });
+
+  // updatedAt を 2026-05-17 に固定し、ReadLog の readAt との前後で未読を判定する。
+  const listTaskForUnread = {
+    ...sampleTask,
+    assignees: [
+      { user: { id: "user-1", name: "alice", displayName: "alice" } },
+    ],
+    recurringMeetings: [],
+  };
+
+  it("ReadLog 未記録のタスクは unread=true", async () => {
+    mockTaskFindMany.mockResolvedValue([listTaskForUnread]);
+    vi.mocked(prisma.readLog.findMany).mockResolvedValue([]);
+    const res = await app.request("/tasks/me");
+    const body = (await res.json()) as Array<{ unread: boolean }>;
+    expect(body[0].unread).toBe(true);
+  });
+
+  it("最新 readAt が updatedAt より前なら unread=true（更新後未読）", async () => {
+    mockTaskFindMany.mockResolvedValue([listTaskForUnread]);
+    vi.mocked(prisma.readLog.findMany).mockResolvedValue([
+      {
+        resourceId: "task-1",
+        readAt: new Date("2026-05-16T00:00:00Z"),
+      },
+    ] as never);
+    const res = await app.request("/tasks/me");
+    const body = (await res.json()) as Array<{ unread: boolean }>;
+    expect(body[0].unread).toBe(true);
+  });
+
+  it("最新 readAt が updatedAt 以降なら unread=false（既読）", async () => {
+    mockTaskFindMany.mockResolvedValue([listTaskForUnread]);
+    vi.mocked(prisma.readLog.findMany).mockResolvedValue([
+      {
+        resourceId: "task-1",
+        readAt: new Date("2026-05-18T00:00:00Z"),
+      },
+    ] as never);
+    const res = await app.request("/tasks/me");
+    const body = (await res.json()) as Array<{ unread: boolean }>;
+    expect(body[0].unread).toBe(false);
+  });
+
+  it("ReadLog 取得は userId と resourceType=task で絞り込む", async () => {
+    mockTaskFindMany.mockResolvedValue([listTaskForUnread]);
+    await app.request("/tasks/me");
+    expect(vi.mocked(prisma.readLog.findMany)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: "user-1",
+          resourceType: "task",
+          resourceId: { in: ["task-1"] },
+        }),
+      }),
+    );
+  });
 });
 
 describe("DELETE /tasks/:id", () => {
@@ -772,5 +868,43 @@ describe("DELETE /tasks/:id", () => {
     mockMembershipFindUnique.mockResolvedValue(null);
     const res = await app.request("/tasks/task-1", { method: "DELETE" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /tasks/:id/read", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("組織メンバーは 204 で既読化でき ReadLog を追記する", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const mockReadLogCreate = vi.mocked(prisma.readLog.create);
+    mockReadLogCreate.mockResolvedValue({} as never);
+
+    const res = await app.request("/tasks/task-1/read", { method: "POST" });
+    expect(res.status).toBe(204);
+    expect(mockReadLogCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "user-1",
+        resourceType: "task",
+        resourceId: "task-1",
+      },
+    });
+  });
+
+  it("タスク不存在は 404 で ReadLog を作らない", async () => {
+    mockTaskFindUnique.mockResolvedValue(null);
+    const mockReadLogCreate = vi.mocked(prisma.readLog.create);
+    const res = await app.request("/tasks/missing/read", { method: "POST" });
+    expect(res.status).toBe(404);
+    expect(mockReadLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("非メンバーは 404 で ReadLog を作らない", async () => {
+    mockTaskFindUnique.mockResolvedValue(sampleTask);
+    mockMembershipFindUnique.mockResolvedValue(null);
+    const mockReadLogCreate = vi.mocked(prisma.readLog.create);
+    const res = await app.request("/tasks/task-1/read", { method: "POST" });
+    expect(res.status).toBe(404);
+    expect(mockReadLogCreate).not.toHaveBeenCalled();
   });
 });

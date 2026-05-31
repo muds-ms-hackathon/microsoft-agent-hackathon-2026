@@ -109,7 +109,7 @@ const sampleDecisionItem = {
   createdAt: new Date("2026-05-17T00:00:00Z"),
   updatedAt: new Date("2026-05-17T00:00:00Z"),
   assignees: [],
-  meeting: { recurringMeetingId: "rmtg-1" },
+  meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
 };
 
 // ──────────────────────────────────────────────
@@ -271,9 +271,12 @@ describe("PATCH /decision-items/:id", () => {
             capturedData = data;
             return Promise.resolve({ count: 1 });
           }),
-          findUniqueOrThrow: vi
-            .fn()
-            .mockResolvedValue({ ...sampleDecisionItem, status: "decided" }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            ...sampleDecisionItem,
+            status: "decided",
+            assignees: [],
+            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+          }),
         },
         decisionItemAssignee: { deleteMany: vi.fn(), createMany: vi.fn() },
       };
@@ -327,7 +330,33 @@ describe("PATCH /decision-items/:id", () => {
     expect(capturedData?.decidedAt).toBeNull();
   });
 
-  it("status=draft は 400（AI 専用なので手動 PATCH で受け付けない）", async () => {
+  it("status=draft は 200（レビュー待ちに戻す操作で使用）", async () => {
+    const res = await app.request("/decision-items/di-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("status=draft のとき現在が draft なら 400", async () => {
+    mockDecisionItemFindUnique.mockResolvedValue(
+      mockDecisionItemRaw({ status: "draft" }) as never,
+    );
+    mockMembershipFindUnique.mockResolvedValue(membership());
+    const res = await app.request("/decision-items/di-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 0, status: "draft" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("status=draft のとき現在が reviewing なら 400", async () => {
+    mockDecisionItemFindUnique.mockResolvedValue(
+      mockDecisionItemRaw({ status: "reviewing" }) as never,
+    );
+    mockMembershipFindUnique.mockResolvedValue(membership());
     const res = await app.request("/decision-items/di-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -409,7 +438,11 @@ describe("PATCH /decision-items/:id", () => {
       const tx = {
         decisionItem: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findUniqueOrThrow: vi.fn().mockResolvedValue(sampleDecisionItem),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            ...sampleDecisionItem,
+            assignees: [],
+            meeting: { recurringMeeting: { id: "rmtg-1", name: "週次定例" } },
+          }),
         },
         decisionItemAssignee: {
           deleteMany: vi.fn(() => {

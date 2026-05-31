@@ -1,4 +1,30 @@
+import { SectionError } from "@/components/ui/SectionError";
+import { useState } from "react";
+import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import { AgendaHistorySection } from "@/features/meetings/components/AgendaHistorySection";
+import { RecommendedAgendaSection } from "@/features/meetings/components/RecommendedAgendaSection";
+import { TopicRequestSection } from "@/features/topic-requests/components/TopicRequestSection";
+import {
+  REVIEW_ITEM_TYPES,
+  TYPE_BADGE_CLASS,
+  TYPE_LABELS,
+  type ReviewItem,
+} from "@/features/review/types";
+import {
+  isReviewPending,
+  useReviewItems,
+} from "@/features/review/useReviewItems";
+import {
+  AvatarStack,
+  type AvatarUser,
+} from "@/features/tasks/components/AvatarStack";
 import { AssigneeFilter } from "@/features/tasks/components/AssigneeFilter";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { KanbanBoard } from "@/features/tasks/components/KanbanBoard";
@@ -9,13 +35,14 @@ import {
   type TaskView,
 } from "@/features/tasks/components/ViewToggle";
 import { useMeetingTasks } from "@/features/tasks/hooks/useMeetingTasks";
-import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import { taskStatusLabels } from "@/features/tasks/labels";
+import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import type { TaskListFilters, TaskStatus } from "@/features/tasks/types";
 import { authAtom } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
+import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 import { z } from "zod";
 
 // 手動経路で表示する status の選択肢。AI 専用の draft/reviewing は UI から除外。
@@ -91,6 +118,21 @@ export function MeetingDetailView({
   now?: Date;
 }) {
   const detailQuery = useMeetingDetail(id);
+
+  // 過去の会議のみレビューアイテムを取得する。未来の会議は meetingId を渡さず無効化。
+  const isPastMeeting = detailQuery.data
+    ? new Date(detailQuery.data.heldAt) <= (now ?? new Date())
+    : false;
+  const {
+    items: meetingReviewItems,
+    isError: reviewItemsError,
+    refetch: refetchReviewItems,
+    resetToPending,
+  } = useReviewItems({
+    meetingId: isPastMeeting ? id : undefined,
+    status: "all",
+  });
+
   const statusArr = parseStatusParam(search.status);
   // Kanban view では status は列として可視化されるため、フィルタ UI も API への
   // status 絞り込みも外す（全件取得）。URL の `?status=...` 自体は List に戻したときの
@@ -158,14 +200,120 @@ export function MeetingDetailView({
         <h1 id="meeting-title" className="text-2xl font-bold">
           {detail.title}
         </h1>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <span>{formatDateTime(detail.heldAt)}</span>
           {detail.estimatedDurationMinutes !== null && (
             <span>{detail.estimatedDurationMinutes} 分</span>
           )}
+          {detail.memberCount > 0 && (
+            <AvatarStack
+              users={detail.members.map<AvatarUser>((m) => ({
+                id: m.user.id,
+                displayName: m.user.displayName || m.user.name,
+              }))}
+              extraCount={detail.memberCount - detail.members.length}
+            />
+          )}
+          {/* 意思決定の文脈グラフ（決定→タスク→次回議題の来歴）への導線 */}
+          <Link
+            to="/meetings/$id/decision-graph"
+            params={{ id }}
+            className="text-primary hover:underline"
+          >
+            意思決定グラフを見る →
+          </Link>
         </div>
       </header>
 
+      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（過去の会議のみ） */}
+      {isPastMeeting && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card
+            aria-label="会議要約"
+            className="gap-0 py-0 overflow-hidden h-75"
+          >
+            <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+              <span className="text-sm font-semibold flex-1">会議要約</span>
+            </div>
+            <div className="px-5 py-4 flex-1 overflow-y-auto">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {detail.latestAnalysisRun?.summary ?? "要約はまだありません"}
+              </p>
+            </div>
+          </Card>
+
+          {/* AI抽出結果セクション（読み取り専用・アコーディオン） */}
+          <Card
+            aria-label="AI抽出結果"
+            className="gap-0 py-0 overflow-hidden h-75"
+          >
+            <div className="flex items-center gap-2 px-5 py-3.5 bg-muted/40 border-b border-border/50 shrink-0">
+              <span className="text-sm font-semibold flex-1">AI抽出結果</span>
+              {meetingReviewItems.length > 0 && (
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+                  {meetingReviewItems.length}
+                </span>
+              )}
+              {meetingReviewItems.length > 0 && (
+                <Link
+                  to="/review"
+                  search={{
+                    recurringMeetingId: detail.recurringMeeting.id,
+                    meetingId: id,
+                    from: "hub",
+                  }}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronRight size={15} />
+                </Link>
+              )}
+            </div>
+            <div className="px-5 py-4 flex-1 overflow-y-auto">
+              {reviewItemsError ? (
+                <SectionError
+                  message="AI抽出結果の取得に失敗しました"
+                  onRetry={refetchReviewItems}
+                />
+              ) : meetingReviewItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  AI抽出結果はまだありません
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {REVIEW_ITEM_TYPES.map((type) => {
+                    const typeItems = meetingReviewItems.filter(
+                      (i) => i.type === type,
+                    );
+                    if (typeItems.length === 0) return null;
+                    return (
+                      <ReviewAccordionItem
+                        key={type}
+                        type={type}
+                        items={typeItems}
+                        onResetToPending={resetToPending}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 次回会議の推奨アジェンダ（解析で生成された場合に表示）。過去の会議のみ。 */}
+      {isPastMeeting && (
+        <RecommendedAgendaSection
+          agenda={detail.latestAnalysisRun?.recommendedAgenda ?? null}
+        />
+      )}
+
+      {/* アジェンダ生成履歴（過去に複数回生成された場合のみ表示）。過去の会議のみ。 */}
+      {isPastMeeting && (
+        <AgendaHistorySection meetingId={id} enabled={isPastMeeting} />
+      )}
+
+      {/* 下段: タスク（フルwidth） */}
       <section aria-label="タスク" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">タスク</h2>
@@ -254,7 +402,10 @@ export function MeetingDetailView({
         {tasksQuery.isLoading ? (
           <p className="text-muted-foreground">タスクを読み込み中...</p>
         ) : tasksQuery.isError ? (
-          <p className="text-destructive text-sm">タスクの取得に失敗しました</p>
+          <SectionError
+            message="タスクの取得に失敗しました"
+            onRetry={() => tasksQuery.refetch()}
+          />
         ) : (tasksQuery.data ?? []).length === 0 ? (
           <p className="text-muted-foreground">
             この会議から発生したタスクはまだありません
@@ -274,6 +425,169 @@ export function MeetingDetailView({
           />
         )}
       </section>
+
+      <section aria-label="次回会議の議題">
+        <TopicRequestSection meetingId={id} />
+      </section>
     </section>
+  );
+}
+
+function ResolutionBadge({
+  type,
+  status,
+  resolutionType,
+}: {
+  type: (typeof REVIEW_ITEM_TYPES)[number];
+  status: ReviewItem["status"];
+  resolutionType: ReviewItem["resolutionType"];
+}) {
+  if (status === "draft" || status === "reviewing") return null;
+  if (status === "rejected" || status === "cancelled") {
+    return (
+      <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+        却下
+      </span>
+    );
+  }
+  let label: string;
+  if (type === "ambiguity") {
+    label =
+      resolutionType === "task"
+        ? "→タスク登録済み"
+        : resolutionType === "decision_item"
+          ? "→未決事項に変換"
+          : resolutionType === "discarded"
+            ? "→破棄"
+            : "→解消済み";
+  } else if (type === "task_candidate") {
+    label = "タスク登録済み";
+  } else if (type === "open_issue") {
+    label = "決定済み";
+  } else {
+    label = "確定済み";
+  }
+  return (
+    <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+      {label}
+    </span>
+  );
+}
+
+// AI抽出結果アコーディオン（読み取り専用）
+function ReviewAccordionItem({
+  type,
+  items,
+  onResetToPending,
+}: {
+  type: (typeof REVIEW_ITEM_TYPES)[number];
+  items: ReviewItem[];
+  onResetToPending?: (id: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const pendingCount = items.filter((i) => isReviewPending(i.status)).length;
+
+  const handleResetToPending = async (id: string) => {
+    setResetError(null);
+    try {
+      await onResetToPending?.(id);
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : "更新に失敗しました");
+    }
+  };
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/40 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "text-xs font-medium px-2 py-0.5 rounded-full",
+              TYPE_BADGE_CLASS[type],
+            )}
+          >
+            {TYPE_LABELS[type]}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {items.length}件
+            {pendingCount > 0 && (
+              <span className="ml-1 text-orange-500">
+                （未確定 {pendingCount}件）
+              </span>
+            )}
+          </span>
+        </div>
+        <ChevronDown
+          size={14}
+          className={cn(
+            "text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <>
+          {resetError && (
+            <p className="px-4 py-2 text-xs text-destructive border-t">
+              {resetError}
+            </p>
+          )}
+          <ul className="border-t divide-y">
+            {items.map((item) => {
+              const isPending = isReviewPending(item.status);
+              // TODO: task の in_progress/done は API が 400 を返すが UI はボタンを出す。
+              // ReviewItem に元の task.status を持たせて除外するか、API ガードを緩めるか要検討。
+              const canReset =
+                !isPending && item.sourceTable !== "ambiguous_info";
+              return (
+                <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm">{item.title}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <ResolutionBadge
+                        type={type}
+                        status={item.status}
+                        resolutionType={item.resolutionType}
+                      />
+                      {canReset && onResetToPending && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                              aria-label="メニュー"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              className="text-xs"
+                              onClick={() => handleResetToPending(item.id)}
+                            >
+                              レビュー待ちに戻す
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  </div>
+                  {item.sourceContext && (
+                    <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                      {item.sourceContext}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </div>
   );
 }

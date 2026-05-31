@@ -52,6 +52,17 @@ const sampleUser = {
   updatedAt: new Date("2026-05-01T00:00:00Z"),
 };
 
+// email なしユーザー（Entra External ID が email クレームを返さない場合）
+const sampleUserNoEmail = {
+  id: "cuid-user-3",
+  externalId: "ext-3",
+  email: null,
+  name: "carol",
+  displayName: "carol",
+  createdAt: new Date("2026-05-01T00:00:00Z"),
+  updatedAt: new Date("2026-05-01T00:00:00Z"),
+};
+
 // auth ミドルウェアを適用したテスト用アプリ
 function buildTestApp() {
   const app = new Hono();
@@ -65,7 +76,10 @@ function buildTestApp() {
 
 describe("auth middleware", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks で未消費の mockResolvedValueOnce キューも含めクリアする。
+    // clearAllMocks だと実装キューが残り、早期 return するテスト（Red フェーズ等）の
+    // 未消費モック値が次のテストに漏れてしまう。
+    vi.resetAllMocks();
   });
 
   it("Authorization ヘッダ無しの場合は 401 を返す", async () => {
@@ -126,16 +140,68 @@ describe("auth middleware", () => {
     expect(mockFindUnique).not.toHaveBeenCalled();
   });
 
-  it("payload.email が無い場合は 401 を返す", async () => {
+  it("payload.email が無くても sub と name があれば 200 を返す", async () => {
     mockJwtVerify.mockResolvedValueOnce(
-      jwtVerifyResult({ sub: "ext-1", name: "alice" }),
+      jwtVerifyResult({ sub: "ext-3", name: "carol" }),
     );
+    mockFindUnique.mockResolvedValueOnce(sampleUserNoEmail);
     const app = buildTestApp();
     const res = await app.request("/whoami", {
       headers: { Authorization: "Bearer t" },
     });
-    expect(res.status).toBe(401);
-    expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+  });
+
+  it("email なしの新規ユーザーは email: null で create される", async () => {
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ sub: "ext-3", name: "carol" }),
+    );
+    mockFindUnique.mockResolvedValueOnce(null);
+    mockCreate.mockResolvedValueOnce(sampleUserNoEmail);
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: {
+        externalId: "ext-3",
+        email: null,
+        name: "carol",
+        displayName: "carol",
+      },
+    });
+  });
+
+  it("email なしの既存ユーザー (DB も email: null) は update しない", async () => {
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ sub: "ext-3", name: "carol" }),
+    );
+    mockFindUnique.mockResolvedValueOnce(sampleUserNoEmail);
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(200);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("DB に email がある既存ユーザーに email なしトークンが来た場合 email: null で update される", async () => {
+    mockJwtVerify.mockResolvedValueOnce(
+      jwtVerifyResult({ sub: "ext-1", name: "alice" }),
+    );
+    mockFindUnique.mockResolvedValueOnce(sampleUser);
+    mockUpdate.mockResolvedValueOnce({ ...sampleUser, email: null });
+    const app = buildTestApp();
+    const res = await app.request("/whoami", {
+      headers: { Authorization: "Bearer t" },
+    });
+    expect(res.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { externalId: "ext-1" },
+      data: { email: null, name: "alice" },
+    });
   });
 
   it("payload.email が無く preferred_username がメール形式の場合はそれを使用する", async () => {

@@ -47,6 +47,10 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
     # 取り出し失敗で Consumer が落ちないよう、パース段階で完結させる
     try:
         body = json.loads(_parse_message_body(message).decode("utf-8"))
+        # Node.js SDK が JSON.stringify() した文字列を AMQP がさらにラップするため
+        # json.loads() を 1 回すると文字列が返ってくる場合がある（二重エンコード）
+        if isinstance(body, str):
+            body = json.loads(body)
     except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as error:
         logger.error("メッセージのデコードに失敗 (破棄): %s", error)
         return
@@ -92,8 +96,29 @@ async def _handle_message(message: ServiceBusReceivedMessage) -> None:
         )
 
 
+async def _run_consumer_with_retry(connection_string: str, queue_name: str) -> None:
+    """接続失敗時に指数バックオフでリトライするコンシューマーラッパー"""
+    delay = 5
+    max_delay = 60
+    while True:
+        try:
+            consumer = ServiceBusConsumer(connection_string, queue_name)
+            await consumer.start(_handle_message)
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Service Bus コンシューマーが失敗しました、%d 秒後にリトライします: %s",
+                delay,
+                exc,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, max_delay)
+
+
 def _on_consumer_done(task: asyncio.Task) -> None:
-    # cancel 以外で終了した場合はエラーをログに残す
+    # cancel 以外で終了した場合はエラーをログに残す（リトライ外のバグ検知用）
     if not task.cancelled() and (exc := task.exception()):
         logger.error("Service Bus コンシューマーが予期せず終了しました: %s", exc)
 
@@ -124,8 +149,9 @@ async def lifespan(app: FastAPI):
         connection_string = os.getenv("AZURE_SERVICE_BUS_CONNECTION_STRING")
         if connection_string:
             queue_name = os.getenv("AZURE_SERVICE_BUS_QUEUE_NAME", _DEFAULT_QUEUE_NAME)
-            consumer = ServiceBusConsumer(connection_string, queue_name)
-            task = asyncio.create_task(consumer.start(_handle_message))
+            task = asyncio.create_task(
+                _run_consumer_with_retry(connection_string, queue_name)
+            )
             task.add_done_callback(_on_consumer_done)
         else:
             logger.warning(

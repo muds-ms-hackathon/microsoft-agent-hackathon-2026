@@ -49,6 +49,8 @@ model Meeting {
   originTasks          Task[]
   ambiguousInfos       AmbiguousInfo[]
   analysisRuns         MeetingAnalysisRun[]
+  // 当該会議を「次回会議」として紐付くユーザー入力議題群。会議削除時は議題ごと削除する。
+  topicRequests        TopicRequest[]
 
   // インデックス
   @@index([previousMeetingId])
@@ -60,7 +62,10 @@ model Meeting {
 model User {
   id          String   @id @default(cuid())
   externalId  String   @unique
-  email       String   @unique
+  // Entra External ID は email クレームを返さない設定がある。
+  // nullable にすることで email なしでもログインを通す。
+  // 招待照合（OrganizationInvitation.email との一致）は email がある場合のみ機能する。
+  email       String?  @unique
   name        String
   displayName String
   createdAt   DateTime @default(now())
@@ -77,6 +82,8 @@ model User {
   taskAssignees         TaskAssignee[]
   auditLogs             AuditLog[]
   readLogs              ReadLog[]
+  // ユーザーが起票した次回議題。User 削除時は履歴保持のため Restrict する。
+  topicRequests         TopicRequest[]
 }
 
 // 決定事項のステータス
@@ -115,6 +122,14 @@ enum TaskStatus {
 
 // タスクの必須度
 enum TaskPriority {
+  required
+  optional
+}
+
+// 次回会議の議題（TopicRequest）の必須度。
+// AI 仕様の Task.priority と意味を揃えており、required は次回会議冒頭で必ず触れる前提。
+// 将来分岐する可能性に備えて Task とは別 enum として定義する。
+enum TopicRequestPriority {
   required
   optional
 }
@@ -501,6 +516,27 @@ model AmbiguousInfo {
 
   @@index([meetingId])
   @@index([status])
+}
+
+// 次回会議に向けた、ユーザーが事前に登録する議題。
+// AI が生成する recommendedAgenda（MeetingAnalysisRun.recommendedAgenda）とは別経路で、
+// 議事録生成（フェーズ2）時にプロンプトへ user_topic_requests として注入される想定。
+// meetingId は「議題を提示する次回会議」を指す。
+model TopicRequest {
+  id          String                @id @default(cuid())
+  meetingId   String
+  requestedBy String
+  title       String
+  body        String?
+  priority    TopicRequestPriority?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  requester User    @relation(fields: [requestedBy], references: [id], onDelete: Restrict)
+
+  @@index([meetingId])
+  @@index([requestedBy])
 }
 
 // 解析ランの実行状態。queued → analyzing → completed | failed の遷移を取る。

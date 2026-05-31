@@ -50,6 +50,7 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      target: dev
     ports:
       - "5173:5173"
     volumes:
@@ -74,6 +75,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      target: dev
     ports:
       - "3001:3001"
     volumes:
@@ -86,6 +88,9 @@ services:
       # service 名で解決する。token の iss クレーム（fake-auth 側 ISSUER）と
       # 完全一致している必要があるため、両者を同一値で揃える。
       OIDC_ISSUER_URL: "http://fake-auth:3007"
+      # ai サービスと同じ値。servicebus は Docker ネットワーク上のサービス名
+      AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+      AZURE_SERVICE_BUS_QUEUE_NAME: "decision-loop"
     env_file:
       - path: .env.local
         required: false
@@ -94,11 +99,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      servicebus:
+        condition: service_started
 
   ai:
     build:
       context: .
       dockerfile: services/ai/Dockerfile
+      target: dev
     ports:
       - "8001:8001"
     volumes:
@@ -111,6 +119,7 @@ services:
       - ./services/ai/pipeline:/app/pipeline
       - ./services/ai/rag:/app/rag
       - ./services/ai/prompts:/app/prompts
+      - ./services/ai/agent:/app/agent
     environment:
       # Docker 内では servicebus コンテナ名で解決する（.env.local の localhost 指定を上書き）
       AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"

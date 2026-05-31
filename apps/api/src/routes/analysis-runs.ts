@@ -43,6 +43,14 @@ export const analysisRunsRoute = new Hono()
     // heldAt を "YYYY-MM-DD" 形式に変換する
     const meetingDate = meeting.heldAt.toISOString().split("T")[0];
 
+    // 当該会議に紐づくユーザー入力議題。古い順で渡す（フェーズ2のプロンプト注入で
+    // 順序保持が必要なため）。0 件のときは空配列で渡し、AI 側が必ずキーを取得できる状態を保つ。
+    const topicRequests = await prisma.topicRequest.findMany({
+      where: { meetingId: meeting.id },
+      orderBy: { createdAt: "asc" },
+      include: { requester: { select: { displayName: true } } },
+    });
+
     return c.json({
       analysis_run_id: id,
       meeting_id: meeting.id,
@@ -60,6 +68,12 @@ export const analysisRunsRoute = new Hono()
         resolution_status: s.resolutionStatus,
       })),
       previous_report_json: previousReportJson,
+      user_topic_requests: topicRequests.map((tr) => ({
+        title: tr.title,
+        body: tr.body,
+        priority: tr.priority,
+        requested_by_name: tr.requester.displayName,
+      })),
     });
   })
   // GET /:id/status — complete timeout 時などに AI Service が現在 status を確認する
