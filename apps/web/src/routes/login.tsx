@@ -3,10 +3,15 @@ import {
   loginAtom,
   parseToken,
   saveExpectedAuthParams,
+  userEmailAtom,
   verifyAndConsumeAuthParams,
 } from "@/lib/auth";
 import { readRequiredViteEnv } from "@/lib/env";
-import { ENTRA_SCOPES, getMsalInstance } from "@/lib/msalConfig";
+import {
+  ENTRA_SCOPES,
+  fetchUserInfoEmail,
+  getMsalInstance,
+} from "@/lib/msalConfig";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
@@ -31,6 +36,7 @@ const FAKE_AUTH_URL =
 function Login() {
   const navigate = useNavigate();
   const setLogin = useSetAtom(loginAtom);
+  const setUserEmail = useSetAtom(userEmailAtom);
   const [error, setError] = useState<string | null>(null);
   // state/nonce の検証は消費型（1 回限り）。React StrictMode の二重実行や
   // 親の再レンダリングによる useEffect 再実行で 2 回目に no_expected_params
@@ -73,6 +79,21 @@ function Login() {
           }
           // MSAL が返す idToken を既存の localStorage ベースの仕組みに橋渡しする
           setLogin(result.idToken);
+
+          // ID トークンにメールがない場合は UserInfo エンドポイントから取得する
+          const email = await fetchUserInfoEmail(result.accessToken);
+          if (email) {
+            setUserEmail(email);
+            await fetch("/api/me", {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${result.idToken}`,
+              },
+              body: JSON.stringify({ email }),
+            });
+          }
+
           navigate({ to: "/" });
           return;
         }

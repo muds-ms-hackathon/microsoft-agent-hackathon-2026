@@ -66,3 +66,24 @@ export function getMsalInstance(): PublicClientApplication {
 
 // Entra ID に要求するスコープ。ID Token の標準クレーム取得に必要な最小セット。
 export const ENTRA_SCOPES = ["openid", "profile", "email"];
+
+// Entra External ID (CIAM) の UserInfo エンドポイント。
+// discovery document の userinfo_endpoint（ciamlogin.com）は CORS 非対応のため、
+// CORS 対応の graph.microsoft.com エンドポイントを直接使用する。
+const GRAPH_USERINFO_URL = "https://graph.microsoft.com/oidc/userinfo";
+
+// アクセストークンで UserInfo を呼び出してメールアドレスを返す。
+export async function fetchUserInfoEmail(
+  accessToken: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(GRAPH_USERINFO_URL, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const info = (await res.json()) as { email?: string; preferred_username?: string };
+    return info.email ?? info.preferred_username ?? null;
+  } catch {
+    return null;
+  }
+}

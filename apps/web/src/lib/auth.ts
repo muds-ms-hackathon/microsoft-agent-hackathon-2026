@@ -173,12 +173,27 @@ const idTokenAtom = atomWithStorage<string | null>(
   { getOnInit: true },
 );
 
-// authAtom は idTokenAtom から派生する読み取り専用 atom。
-// localStorage との二重管理を構造的に排除し、storage イベントを介して
-// 他タブの変更にも追従する。
-export const authAtom: Atom<AuthState> = atom((get) =>
-  deriveAuthState(get(idTokenAtom)),
+// ID トークンにメールがない場合（Entra External ID 等）の補完用。
+// UserInfo エンドポイントから取得したメールを localStorage に永続化する。
+export const userEmailAtom = atomWithStorage<string | null>(
+  "user_email",
+  null,
+  idTokenStorage,
+  { getOnInit: true },
 );
+
+// authAtom は idTokenAtom から派生する読み取り専用 atom。
+// ID トークンにメールがない場合は userEmailAtom で補完する。
+export const authAtom: Atom<AuthState> = atom((get) => {
+  const state = deriveAuthState(get(idTokenAtom));
+  if (state.isAuthenticated && state.user && !state.user.email) {
+    const emailOverride = get(userEmailAtom);
+    if (emailOverride) {
+      return { ...state, user: { ...state.user, email: emailOverride } };
+    }
+  }
+  return state;
+});
 
 export const loginAtom = atom(null, (_get, set, token: string) => {
   set(idTokenAtom, token);
@@ -186,6 +201,7 @@ export const loginAtom = atom(null, (_get, set, token: string) => {
 
 export const logoutAtom = atom(null, (_get, set) => {
   set(idTokenAtom, null);
+  set(userEmailAtom, null);
   // 「前のユーザーが選択していた組織」が次のユーザーに引き継がれる事故を
   // 防ぐため、id_token と同じタイミングで current_organization_id も破棄する。
   set(clearCurrentOrganizationIdAtom);
