@@ -98,17 +98,17 @@ describe("parseToken", () => {
     });
   });
 
-  it("email も preferred_username もない場合は null を返す", () => {
+  it("email も preferred_username もない場合は email: null で返す", () => {
     const token = makeFakeIdToken({
       sub: "u4",
       email: undefined as unknown as string,
       name: "u4",
     });
 
-    expect(parseToken(token)).toBeNull();
+    expect(parseToken(token)).toEqual({ sub: "u4", email: null, name: "u4" });
   });
 
-  it("preferred_username がメール形式でない場合は null を返す", () => {
+  it("preferred_username がメール形式でない場合は email: null で返す", () => {
     // OIDC 仕様上 preferred_username はユーザ名でありメールとは限らない
     const token = makeFakeIdToken({
       sub: "u5",
@@ -117,7 +117,7 @@ describe("parseToken", () => {
       name: "u5",
     });
 
-    expect(parseToken(token)).toBeNull();
+    expect(parseToken(token)).toEqual({ sub: "u5", email: null, name: "u5" });
   });
 
   it("email がメール形式でない場合は preferred_username にフォールバックする", () => {
