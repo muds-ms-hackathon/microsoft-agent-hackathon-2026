@@ -20,5 +20,12 @@ RUN uv sync --no-dev
 COPY services/ai/main.py ./
 COPY services/ai/consumers ./consumers
 COPY services/ai/routers ./routers
+COPY services/ai/schemas ./schemas
+COPY services/ai/llm ./llm
+COPY services/ai/integrations ./integrations
+COPY services/ai/pipeline ./pipeline
+COPY services/ai/rag ./rag
+COPY services/ai/prompts ./prompts
+COPY services/ai/agent ./agent
 EXPOSE 8001
 CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
