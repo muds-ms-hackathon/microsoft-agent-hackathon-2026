@@ -7,6 +7,12 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+from semantic_kernel.connectors.ai.chat_completion_client_base import (
+    ChatCompletionClientBase,
+)
+
+from agent.kernel_factory import build_azure_chat_completion, is_azure_configured
+from agent.orchestrator import gather_planning_context
 from llm.client import LLMClient
 from llm.json_runner import run_llm_call
 from pipeline.continuity import (
@@ -14,7 +20,7 @@ from pipeline.continuity import (
     prepare_prev_open_issues_for_call2,
     prepare_prev_tasks_for_call3,
 )
-from pipeline.estimation import calc_alert_level, calc_estimation
+from pipeline.estimation import calc_alert_level, calc_estimation, fmt_estimation_note
 from pipeline.postprocess import (
     apply_due_date_conversions,
     assign_ids_and_resolve,
@@ -138,9 +144,14 @@ def _assemble(
 async def analyze_meeting(
     job: AnalysisJobInput,
     llm_client: LLMClient,
+    chat_service: ChatCompletionClientBase | None = None,
 ) -> AnalysisRunResult:
     """会議書き起こしを受け取り、解析結果を返す。
     apps/apiへの保存はこの関数の呼び出し側が行う。
+
+    chat_service が渡されるか Azure OpenAI が設定されている場合、次回会議計画の
+    文脈収集（見積もり・関連会議・前回変化）をエージェントに委ね、ツールを自律的に
+    呼ばせる。未設定（ローカル/CI）では直接計算でフォールバックする。
     """
     prompts = _load_prompts()
     raw_outputs: dict[str, str | None] = {
@@ -295,26 +306,56 @@ async def analyze_meeting(
                 conversions = parsed5.get("conversions", [])
                 tasks = apply_due_date_conversions(tasks, conversions)
 
-        # ── Python: 見積もり計算 ──────────────────────────────
-        estimation = calc_estimation(tasks, open_issues, decisions)
-        alert_level = calc_alert_level(estimation)
-        estimation_note = _fmt_estimation_note(estimation)
+        # ── 次回会議計画の文脈収集（エージェント or 直接計算） ──────
+        rag_retrieval["used_in_calls"] = list(
+            rag_retrieval.get("used_in_calls", [])
+        ) + ["call6"]
+        agent_meta: dict | None = None
+
+        # chat_service 未指定でも Azure 設定があれば構築してエージェント化する。
+        active_chat_service = chat_service
+        if active_chat_service is None and is_azure_configured():
+            active_chat_service = build_azure_chat_completion()
+
+        change_summary: str | None
+        if active_chat_service is not None:
+            # エージェントがツールを自律的に呼んで計画文脈を集める。
+            planning = await gather_planning_context(
+                keywords=keywords,
+                previous_report_json=job.previous_report_json,
+                recurring_meeting_id=job.recurring_meeting_id,
+                tasks=tasks,
+                open_issues=open_issues,
+                decisions=decisions,
+                chat_service=active_chat_service,
+            )
+            estimation = planning.estimation
+            alert_level = planning.alert_level
+            estimation_note = planning.estimation_note
+            suggested_participants = planning.suggested_participants
+            change_summary = planning.change_summary
+            # Agentic な振る舞いを説明可能にするため、ツール呼び出し履歴を残す。
+            agent_meta = {
+                "tool_calls": planning.tool_call_log,
+                "tool_call_counts": planning.tool_calls,
+            }
+        else:
+            # 直接計算（Azure 未設定/ローカル/CI）。
+            estimation = calc_estimation(tasks, open_issues, decisions)
+            alert_level = calc_alert_level(estimation)
+            estimation_note = fmt_estimation_note(estimation)
+            suggested_participants = build_suggested_participants_context(rag_retrieval)
+            change_summary = None
+            if job.previous_report_json:
+                change_summary = prepare_change_summary_for_call6(
+                    job.previous_report_json
+                )
+
         logger.info(
             "[estimation] 合計: %d分、アラート: %s",
             estimation["total_minutes"],
             alert_level,
         )
-
-        # ── RAG検索② ──────────────────────────────────────────
-        rag_retrieval["used_in_calls"] = list(
-            rag_retrieval.get("used_in_calls", [])
-        ) + ["call6"]
-        suggested_participants = build_suggested_participants_context(rag_retrieval)
-
-        # ── Call 6: サマリー・推奨アジェンダ生成 ─────────────────
-        change_summary: str | None = None
-        if job.previous_report_json:
-            change_summary = prepare_change_summary_for_call6(job.previous_report_json)
 
         prompt6 = build_call6_prompt(
             prompts,
@@ -327,6 +368,7 @@ async def analyze_meeting(
             estimation_note=estimation_note,
             suggested_participants=suggested_participants,
             change_summary=change_summary,
+            user_topic_requests=job.user_topic_requests,
         )
         raw6, parsed6 = await run_llm_call(llm_client, "call6", prompt6)
         raw_outputs["call6"] = raw6
@@ -374,6 +416,10 @@ async def analyze_meeting(
             estimation_note=estimation_note,
         )
 
+        # エージェントが文脈収集した場合、ツール履歴を追加（既存スキーマに非破壊）。
+        if agent_meta is not None:
+            report_json["agent"] = agent_meta
+
         completed_at = datetime.now(timezone.utc).isoformat()
         return AnalysisRunResult(
             status="completed",
@@ -413,32 +459,6 @@ def _failed(
         error_message=f"{step}: JSONパースエラー: {parsed.get('_parse_error', '')}",
         failed_at=datetime.now(timezone.utc).isoformat(),
     )
-
-
-def _fmt_estimation_note(estimation: dict) -> str:
-    """見積もり内訳を人間が読めるテキストに変換する。"""
-    total = estimation.get("total_minutes", 0)
-    breakdown = estimation.get("breakdown", {})
-    lines = [f"次回会議の想定所要時間: 約{total}分"]
-    label_map = {
-        "required_task_check": "必須タスク確認",
-        "open_issue_new": "新規未決事項",
-        "open_issue_recurring": "継続未決事項",
-        "overdue_task": "期限超過タスク",
-        "tentative_reconfirm": "仮決定の再確認",
-        "buffer": "バッファ",
-    }
-    for key, val in breakdown.items():
-        label = label_map.get(key, key)
-        count = val.get("count", 0)
-        minutes = val.get("minutes", 0)
-        if count <= 0:
-            # 件数 0 のカテゴリは「N分」のみ表示し、ZeroDivisionError を回避する。
-            lines.append(f"  - {label}: 0件 = {minutes}分")
-            continue
-        per = minutes // count
-        lines.append(f"  - {label}: {count}件 × {per}分 = {minutes}分")
-    return "\n".join(lines)
 
 
 def _inherit_recurrence_counts(new_issues: list[dict], prev_issues: list[dict]) -> None:

@@ -36,6 +36,7 @@ import {
   taskListInclude,
   taskListOrderBy,
 } from "../lib/task-serialization.js";
+import { buildDecisionGraph } from "../lib/decision-graph-serialization.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
 import { requireMeetingAccess } from "../middleware/meeting-access.js";
 
@@ -224,6 +225,29 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
     });
     return c.json(topicRequests);
   })
+  .get("/:id/agenda-history", async (c) => {
+    const id = c.req.param("id");
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議で過去に生成された推奨アジェンダの履歴。完了した解析ランのうち
+    // recommendedAgenda を持つものを新しい順に返す（専用テーブルは設けず派生で扱う）。
+    // JSON null のフィルタは取りこぼしを避けるため取得後に JS 側で行う。
+    const runs = await prisma.meetingAnalysisRun.findMany({
+      where: { meetingId: id, status: "completed" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        recommendedAgenda: true,
+        createdAt: true,
+        completedAt: true,
+      },
+    });
+    const history = runs.filter(
+      (r) => r.recommendedAgenda != null && r.recommendedAgenda !== undefined,
+    );
+    return c.json(history);
+  })
   .post(
     "/:id/topic-requests",
     zValidator("json", topicRequestCreateSchema),
@@ -290,6 +314,137 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(infos);
     },
   )
+
+  .get("/:id/decision-graph", async (c) => {
+    const id = c.req.param("id");
+
+    const access = await requireMeetingAccess(c, id);
+    if (!access.ok) return access.response;
+
+    // 当該会議スコープで、来歴をたどるのに必要なノード素材を一括取得する。
+    // 会議は前回/次回のチェーン、決定・タスク・未決・次回議題は当該会議に紐付くもの。
+    const [meeting, decisionItems, tasks, ambiguousInfos, topicRequests] =
+      await Promise.all([
+        prisma.meeting.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            title: true,
+            heldAt: true,
+            previousMeeting: { select: { id: true, title: true } },
+            nextMeetings: { select: { id: true, title: true } },
+          },
+        }),
+        prisma.decisionItem.findMany({
+          where: { meetingId: id },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            decisionState: true,
+            blockingItemId: true,
+            plannedMeeting: { select: { id: true, title: true } },
+          },
+        }),
+        prisma.task.findMany({
+          where: { originMeetingId: id },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            decisionItemId: true,
+            blockingItemId: true,
+          },
+        }),
+        prisma.ambiguousInfo.findMany({
+          where: { meetingId: id },
+          select: {
+            id: true,
+            body: true,
+            status: true,
+            resolvedToTaskId: true,
+            resolvedToDecisionItemId: true,
+          },
+        }),
+        prisma.topicRequest.findMany({
+          where: { meetingId: id },
+          select: { id: true, title: true, priority: true },
+        }),
+      ]);
+
+    // requireMeetingAccess 通過直後なので存在は保証されるが、型ナローイングのため再判定
+    if (!meeting) {
+      return c.json({ error: "会議が見つかりません" }, 404);
+    }
+
+    const graph = buildDecisionGraph({
+      meeting,
+      decisionItems,
+      tasks,
+      ambiguousInfos,
+      topicRequests,
+    });
+    return c.json(graph);
+  })
+  // TODO: 動作確認用のため削除する
+  .post(
+    "/:id/review-items",
+    zValidator("json", reviewItemCreateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+
+      const access = await requireMeetingAccess(c, id);
+      if (!access.ok) return access.response;
+
+      const { organizationId } = access.meeting.recurringMeeting;
+
+      if (input.type === "task_candidate") {
+        const task = await prisma.task.create({
+          data: {
+            organizationId,
+            title: input.title,
+            body: input.body,
+            sourceContext: input.sourceContext,
+            status: "draft",
+            originMeetingId: id,
+          },
+          select: { id: true, title: true, status: true },
+        });
+        return c.json(task, 201);
+      }
+
+      if (input.type === "ambiguity") {
+        const item = await prisma.ambiguousInfo.create({
+          data: {
+            meetingId: id,
+            body: input.title,
+            sourceContext: input.sourceContext,
+            status: "draft",
+          },
+          select: { id: true, body: true, status: true },
+        });
+        return c.json(item, 201);
+      }
+
+      // decision / open_issue → DecisionItem
+      const decisionState =
+        input.type === "decision" ? ("confirmed" as const) : ("open" as const);
+      const item = await prisma.decisionItem.create({
+        data: {
+          meetingId: id,
+          title: input.title,
+          body: input.body,
+          sourceContext: input.sourceContext,
+          status: "draft",
+          decisionState,
+        },
+        select: { id: true, title: true, status: true, decisionState: true },
+      });
+      return c.json(item, 201);
+    },
+  )
+
   .patch("/:id", zValidator("json", meetingUpdateSchema), async (c) => {
     const id = c.req.param("id");
     const data = c.req.valid("json");

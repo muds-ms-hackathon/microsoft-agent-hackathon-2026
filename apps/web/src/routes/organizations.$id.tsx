@@ -3,6 +3,8 @@ import { DeleteMemberDialog } from "@/features/organizations/components/DeleteMe
 import { DeleteOrganizationDialog } from "@/features/organizations/components/DeleteOrganizationDialog";
 import { EditOrganizationDialog } from "@/features/organizations/components/EditOrganizationDialog";
 import { InviteMemberDialog } from "@/features/organizations/components/InviteMemberDialog";
+import { LeaveOrganizationDialog } from "@/features/organizations/components/LeaveOrganizationDialog";
+import { MemberRoleSelect } from "@/features/organizations/components/MemberRoleSelect";
 import { PendingInvitationsList } from "@/features/organizations/components/PendingInvitationsList";
 import { RoleBadge } from "@/features/organizations/components/RoleBadge";
 import type {
@@ -141,7 +143,19 @@ export function OrganizationDetailView({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <RoleBadge role={m.role} />
+                  {/* owner は他メンバー（owner 以外・自分以外）のロールを変更できる（#124）。
+                      それ以外はバッジ表示のみ。 */}
+                  {org.role === "owner" &&
+                  m.role !== "owner" &&
+                  m.email !== currentUserEmail ? (
+                    <MemberRoleSelect
+                      orgId={id}
+                      targetUserId={m.userId}
+                      role={m.role}
+                    />
+                  ) : (
+                    <RoleBadge role={m.role} />
+                  )}
                   {org.role === "owner" && m.email !== currentUserEmail && (
                     <DeleteMemberDialog orgId={id} member={m} />
                   )}
@@ -191,21 +205,32 @@ export function OrganizationDetailView({
         )}
       </section>
 
-      {org.role === "owner" && (
-        <section
-          aria-label="危険な操作"
-          className="space-y-3 rounded-md border border-destructive/30 p-4"
-        >
-          <h2 className="text-lg font-semibold text-destructive">危険な操作</h2>
-          <p className="text-sm text-muted-foreground">
-            組織を削除すると、関連する定例とメンバーシップもすべて失われます。
-          </p>
-          <DeleteOrganizationDialog
-            org={org}
-            onDeleted={onOrganizationDeleted}
-          />
-        </section>
-      )}
+      {/* 危険な操作: owner は組織削除、それ以外のメンバーは退会（#125）。 */}
+      <section
+        aria-label="危険な操作"
+        className="space-y-3 rounded-md border border-destructive/30 p-4"
+      >
+        <h2 className="text-lg font-semibold text-destructive">危険な操作</h2>
+        {org.role === "owner" ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              組織を削除すると、関連する定例とメンバーシップもすべて失われます。
+              owner は退会できないため、組織を抜けるには削除してください。
+            </p>
+            <DeleteOrganizationDialog
+              org={org}
+              onDeleted={onOrganizationDeleted}
+            />
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              この組織から退会します。再び参加するには新しい招待が必要です。
+            </p>
+            <LeaveOrganizationDialog org={org} onLeft={onOrganizationDeleted} />
+          </>
+        )}
+      </section>
     </section>
   );
 }

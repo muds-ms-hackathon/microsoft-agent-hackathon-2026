@@ -12,8 +12,11 @@ vi.mock("@/lib/api", () => ({
     meetings: {
       ":id": {
         $get: vi.fn(),
+        $patch: vi.fn(),
+        analyze: { $post: vi.fn() },
         tasks: { $get: vi.fn() },
         "review-items": { $get: vi.fn() },
+        "agenda-history": { $get: vi.fn() },
       },
     },
     organizations: {
@@ -54,6 +57,7 @@ const detail: MeetingDetail = {
   previousMeetingId: null,
   transcriptionQuality: null,
   supplementaryMemo: null,
+  transcriptText: null,
   meetingType: "recurring_meeting",
   recurringMeetingId: "rmtg-1",
   createdAt: "2026-05-01T00:00:00.000Z",
@@ -105,6 +109,9 @@ beforeEach(() => {
   vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
     mockJson([]),
   );
+  vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
+    mockJson([]),
+  );
   // AssigneeFilter のメンバー取得はデフォルトで空配列。個別テストで上書きしない想定。
   vi.mocked(api.organizations[":id"].members.$get).mockResolvedValue(
     mockJson([]),
@@ -130,6 +137,14 @@ describe("MeetingDetailView", () => {
       name: /週次定例 に戻る/,
     });
     expect(link).toHaveAttribute("href", "/recurring-meetings/rmtg-1");
+  });
+
+  it("意思決定グラフへの導線が /meetings/$id/decision-graph を指す", async () => {
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const link = await screen.findByRole("link", {
+      name: /意思決定グラフを見る/,
+    });
+    expect(link).toHaveAttribute("href", "/meetings/mtg-1/decision-graph");
   });
 
   it("タスク 1 件を行として表示する", async () => {
@@ -200,8 +215,10 @@ describe("MeetingDetailView", () => {
   });
 
   it("AI抽出結果取得失敗時はエラーメッセージと再試行ボタンを表示する", async () => {
-    // review-items は過去の会議のみ取得されるため detailPast を使う
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    // review-items は解析完了済みの過去の会議のみ取得されるため detailCompleted を使う
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
     vi.mocked(api.meetings[":id"]["review-items"].$get).mockRejectedValue(
       new Error("network"),
     );
@@ -284,21 +301,42 @@ describe("MeetingDetailView", () => {
   });
 });
 
-// NOW より前の heldAt を持つ過去の会議
+// NOW より前の heldAt を持つ過去の会議（解析未完了）
 const detailPast: MeetingDetail = {
   ...detail,
   heldAt: "2026-05-16T01:00:00.000Z",
 };
 
+// 解析完了済みの過去の会議
+const completedRun = {
+  id: "run-1",
+  status: "completed" as const,
+  currentStep: null,
+  summary: null,
+  alertLevel: null,
+  completedAt: "2026-05-16T02:00:00.000Z",
+  failedAt: null,
+  errorMessage: null,
+  recommendedAgenda: null,
+};
+const detailCompleted: MeetingDetail = {
+  ...detailPast,
+  latestAnalysisRun: completedRun,
+};
+
 describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
-  it("過去の会議では「会議要約」カードが表示される", async () => {
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+  it("過去の会議で解析完了時に「会議要約」カードが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByLabelText("会議要約")).toBeInTheDocument();
   });
 
-  it("過去の会議では「AI抽出結果」カードが表示される", async () => {
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+  it("過去の会議で解析完了時に「AI抽出結果」カードが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByLabelText("AI抽出結果")).toBeInTheDocument();
   });
@@ -319,10 +357,9 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
   it("latestAnalysisRun.summary があればサマリーテキストが表示される", async () => {
     vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
       mockJson({
-        ...detailPast,
+        ...detailCompleted,
         latestAnalysisRun: {
-          id: "run-1",
-          status: "completed",
+          ...completedRun,
           summary: "今回の会議では予算について合意しました。",
           recommendedAgenda: null,
           alertLevel: null,
@@ -336,12 +373,61 @@ describe("MeetingDetailView - 会議要約・AI抽出結果", () => {
     ).toBeInTheDocument();
   });
 
-  it("latestAnalysisRun が null のとき「要約はまだありません」が表示される", async () => {
+  it("解析完了で summary が null のとき「要約はまだありません」が表示される", async () => {
     vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
-      mockJson({ ...detailPast, latestAnalysisRun: null }),
+      mockJson(detailCompleted),
     );
     renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
     expect(await screen.findByText("要約はまだありません")).toBeInTheDocument();
+  });
+
+  it("未解析のとき「議事録」カードの textarea が表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByLabelText("議事録")).toBeInTheDocument();
+  });
+
+  it("queued のとき「議事録」カードが表示され textarea は表示されない", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...detailPast,
+        latestAnalysisRun: {
+          ...completedRun,
+          status: "queued" as const,
+          completedAt: null,
+        },
+      }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByLabelText("議事録")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("failed のとき「解析失敗」とエラーメッセージが表示される", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson({
+        ...detailPast,
+        latestAnalysisRun: {
+          ...completedRun,
+          status: "failed" as const,
+          completedAt: null,
+          errorMessage: "OpenAI呼び出しに失敗しました",
+        },
+      }),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(await screen.findByText("解析失敗")).toBeInTheDocument();
+    expect(
+      await screen.findByText("OpenAI呼び出しに失敗しました"),
+    ).toBeInTheDocument();
+  });
+
+  it("テキストが空のとき「解析を実行」ボタンが disabled", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    expect(
+      await screen.findByRole("button", { name: "解析を実行" }),
+    ).toBeDisabled();
   });
 });
 
@@ -418,6 +504,56 @@ describe("MeetingDetailView - 次回会議の推奨アジェンダ", () => {
   });
 });
 
+describe("MeetingDetailView - アジェンダ生成履歴", () => {
+  it("履歴が2件以上あれば履歴カードが表示され、展開すると各版が出る", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "run-2",
+          recommendedAgenda: [{ title: "最新版の議題" }],
+          createdAt: "2026-05-16T11:00:00.000Z",
+          completedAt: "2026-05-16T11:05:00.000Z",
+        },
+        {
+          id: "run-1",
+          recommendedAgenda: [{ title: "旧版の議題" }],
+          createdAt: "2026-05-16T09:00:00.000Z",
+          completedAt: "2026-05-16T09:05:00.000Z",
+        },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+
+    const toggle = await screen.findByRole("button", {
+      name: /アジェンダ生成履歴/,
+    });
+    await user.click(toggle);
+    expect(await screen.findByText("最新版の議題")).toBeInTheDocument();
+    expect(screen.getByText("旧版の議題")).toBeInTheDocument();
+  });
+
+  it("履歴が1件以下のときは履歴カードを表示しない", async () => {
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    vi.mocked(api.meetings[":id"]["agenda-history"].$get).mockResolvedValue(
+      mockJson([
+        {
+          id: "run-1",
+          recommendedAgenda: [{ title: "唯一の議題" }],
+          createdAt: "2026-05-16T09:00:00.000Z",
+          completedAt: "2026-05-16T09:05:00.000Z",
+        },
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    await screen.findByText("第3回");
+    expect(
+      screen.queryByLabelText("アジェンダ生成履歴"),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("MeetingDetailView - 参加者アバター", () => {
   it("members があればアバターグループが表示される", async () => {
     vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
@@ -491,7 +627,10 @@ function makeReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
 
 describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
   beforeEach(() => {
-    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(mockJson(detailPast));
+    // アコーディオンは解析完了後の AI抽出結果カード内に表示されるため detailCompleted を使う
+    vi.mocked(api.meetings[":id"].$get).mockResolvedValue(
+      mockJson(detailCompleted),
+    );
   });
 
   it("確定済みアイテムに ⋯ メニューボタンが表示される", async () => {
@@ -535,6 +674,82 @@ describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
     expect(
       screen.queryByRole("button", { name: "メニュー" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("task_candidate で taskStatus=in_progress のとき ⋯ メニューボタンが表示されない", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "in_progress" as ReviewItem["status"],
+          taskStatus: "in_progress",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.queryByRole("button", { name: "メニュー" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("task_candidate で taskStatus=done のとき ⋯ メニューボタンが表示されない", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "done" as ReviewItem["status"],
+          taskStatus: "done",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.queryByRole("button", { name: "メニュー" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("task_candidate で taskStatus=todo のとき ⋯ メニューボタンが表示される", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "todo" as ReviewItem["status"],
+          taskStatus: "todo",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.getByRole("button", { name: "メニュー" }),
+    ).toBeInTheDocument();
+  });
+
+  it("task_candidate で taskStatus=rejected のとき ⋯ メニューボタンが表示される", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "rejected" as ReviewItem["status"],
+          taskStatus: "rejected",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.getByRole("button", { name: "メニュー" }),
+    ).toBeInTheDocument();
   });
 
   it("「レビュー待ちに戻す」クリックで decision-items PATCH が呼ばれる", async () => {

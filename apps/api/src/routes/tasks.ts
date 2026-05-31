@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { prisma } from "../lib/prisma.js";
+import { buildTaskUnreadMap, markTaskRead } from "../lib/read-log.js";
 import {
   buildTaskListWhere,
   taskCreateSchema,
@@ -94,7 +95,15 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
       orderBy: taskListOrderBy,
       include: taskListInclude,
     });
-    return c.json(tasks.map(serializeTask));
+
+    // 各タスクの未読判定を 1 クエリで取得し、レスポンスに unread を付与する。
+    const unreadMap = await buildTaskUnreadMap(user.id, tasks);
+    return c.json(
+      tasks.map((task) => ({
+        ...serializeTask(task),
+        unread: unreadMap.get(task.id) ?? true,
+      })),
+    );
   })
   .post("/", zValidator("json", taskCreateSchema), async (c) => {
     const input = c.req.valid("json");
@@ -316,5 +325,14 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
     // 配下の TaskAssignee / TaskRecurringMeeting は schema 側で onDelete: Cascade のため
     // delete 一発で連鎖削除される。削除済みボディは返さず 204 で統一。
     await prisma.task.delete({ where: { id } });
+    return c.body(null, 204);
+  })
+  .post("/:id/read", async (c) => {
+    const id = c.req.param("id");
+    // 既読化は組織メンバーのみ許可。不存在・非所属は 404 で統一する。
+    const guard = await requireTaskAccess(c, id);
+    if (!guard.ok) return guard.res;
+
+    await markTaskRead(c.var.user.id, id);
     return c.body(null, 204);
   });

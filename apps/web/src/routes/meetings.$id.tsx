@@ -7,7 +7,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TranscriptCard } from "@/features/meetings/components/TranscriptCard";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
+import { AgendaHistorySection } from "@/features/meetings/components/AgendaHistorySection";
 import { RecommendedAgendaSection } from "@/features/meetings/components/RecommendedAgendaSection";
 import { TopicRequestSection } from "@/features/topic-requests/components/TopicRequestSection";
 import {
@@ -213,11 +215,29 @@ export function MeetingDetailView({
               extraCount={detail.memberCount - detail.members.length}
             />
           )}
+          {/* 意思決定の文脈グラフ（決定→タスク→次回議題の来歴）への導線 */}
+          <Link
+            to="/meetings/$id/decision-graph"
+            params={{ id }}
+            className="text-primary hover:underline"
+          >
+            意思決定グラフを見る →
+          </Link>
         </div>
       </header>
 
-      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（過去の会議のみ） */}
-      {isPastMeeting && (
+      {/* 議事録入力 + 解析実行（過去の会議かつ解析完了前のみ表示） */}
+      {isPastMeeting && detail.latestAnalysisRun?.status !== "completed" && (
+        <TranscriptCard
+          meetingId={id}
+          initialText={detail.transcriptText}
+          analysisStatus={detail.latestAnalysisRun?.status ?? null}
+          errorMessage={detail.latestAnalysisRun?.errorMessage}
+        />
+      )}
+
+      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（解析完了後のみ） */}
+      {isPastMeeting && detail.latestAnalysisRun?.status === "completed" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card
             aria-label="会議要約"
@@ -297,6 +317,11 @@ export function MeetingDetailView({
         <RecommendedAgendaSection
           agenda={detail.latestAnalysisRun?.recommendedAgenda ?? null}
         />
+      )}
+
+      {/* アジェンダ生成履歴（過去に複数回生成された場合のみ表示）。過去の会議のみ。 */}
+      {isPastMeeting && (
+        <AgendaHistorySection meetingId={id} enabled={isPastMeeting} />
       )}
 
       {/* 下段: タスク（フルwidth） */}
@@ -526,10 +551,12 @@ function ReviewAccordionItem({
           <ul className="border-t divide-y">
             {items.map((item) => {
               const isPending = isReviewPending(item.status);
-              // TODO: task の in_progress/done は API が 400 を返すが UI はボタンを出す。
-              // ReviewItem に元の task.status を持たせて除外するか、API ガードを緩めるか要検討。
               const canReset =
-                !isPending && item.sourceTable !== "ambiguous_info";
+                !isPending &&
+                item.sourceTable !== "ambiguous_info" &&
+                (item.sourceTable !== "task" ||
+                  item.taskStatus === "todo" ||
+                  item.taskStatus === "rejected");
               return (
                 <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
                   <div className="flex items-start justify-between gap-2">

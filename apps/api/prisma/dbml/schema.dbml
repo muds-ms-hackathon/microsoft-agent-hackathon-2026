@@ -35,7 +35,7 @@ Table Meeting {
 Table User {
   id String [pk]
   externalId String [unique, not null]
-  email String [unique, not null]
+  email String [unique]
   name String [not null]
   displayName String [not null]
   createdAt DateTime [default: `now()`, not null]

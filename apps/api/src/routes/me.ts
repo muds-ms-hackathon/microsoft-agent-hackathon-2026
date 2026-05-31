@@ -6,10 +6,15 @@ import { auth, type AuthVariables } from "../middleware/auth.js";
 // 招待は自分宛 (= user.email と一致) の pending かつ非期限切れのもののみ返す。
 // 期限切れの自動 status 遷移はバッチジョブ前提のため、ここでは status=pending の
 // うち expiresAt > now でフィルタする（DB 側の status は変えない）。
+// email が null のユーザー（Entra で email クレームが返らなかった場合）は
+// 招待照合の前提となるメールが存在しないため、空配列を返す。
 export const meRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
   .get("/invitations", async (c) => {
     const user = c.var.user;
+    if (!user.email) {
+      return c.json([]);
+    }
     const invitations = await prisma.organizationInvitation.findMany({
       where: {
         email: user.email,

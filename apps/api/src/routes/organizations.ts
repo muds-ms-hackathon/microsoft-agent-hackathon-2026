@@ -66,6 +66,11 @@ const inviteSchema = z.object({
   expiresInDays: z.number().int().positive().max(365).nullable().optional(),
 });
 
+// メンバーのロール変更（#124）。owner への変更・降格は不可（owner は組織作成者のみ）。
+const memberRoleUpdateSchema = z.object({
+  role: z.enum(["admin", "member"]),
+});
+
 // 認可ガードは `middleware/authz.ts` に集約済み。
 // 旧 requireMembership / requireRole はそちらの requireOrgMembership /
 // requireOrgRole に統合した。
@@ -217,6 +222,86 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
           userId: targetUserId,
           organizationId: id,
         },
+      },
+    });
+    return c.body(null, 204);
+  })
+  // メンバーのロール変更（#124）。owner のみ実行可。
+  .patch(
+    "/:id/members/:userId",
+    zValidator("json", memberRoleUpdateSchema),
+    async (c) => {
+      const id = c.req.param("id");
+      const targetUserId = c.req.param("userId");
+      const callerUserId = c.var.user.id;
+      const { role } = c.req.valid("json");
+
+      const guard = await requireOrgRole(
+        c,
+        id,
+        ["owner"],
+        "ロール変更権限がありません",
+      );
+      if (!guard.ok) return guard.res;
+
+      // 自分自身のロール変更は不可（owner が自分を降格するとロックアウトするため）。
+      if (callerUserId === targetUserId) {
+        return c.json({ error: "自分自身のロールは変更できません" }, 400);
+      }
+
+      const target = await prisma.organizationMembership.findUnique({
+        where: {
+          userId_organizationId: { userId: targetUserId, organizationId: id },
+        },
+      });
+      if (!target) {
+        return c.json({ error: "対象メンバーが見つかりません" }, 404);
+      }
+      // owner は組織作成者のみという仕様を維持するため、owner の降格は許可しない。
+      if (target.role === "owner") {
+        return c.json({ error: "owner のロールは変更できません" }, 400);
+      }
+
+      const updated = await prisma.organizationMembership.update({
+        where: {
+          userId_organizationId: { userId: targetUserId, organizationId: id },
+        },
+        data: { role },
+        include: { user: true },
+      });
+      return c.json({
+        userId: updated.userId,
+        name: updated.user.name,
+        displayName: updated.user.displayName,
+        email: updated.user.email,
+        role: updated.role,
+        joinedAt: updated.joinedAt,
+      });
+    },
+  )
+  // 認証ユーザー自身が組織から退会する（#125）。owner は退会不可。
+  .delete("/:id/membership", async (c) => {
+    const id = c.req.param("id");
+    const callerUserId = c.var.user.id;
+
+    const guard = await requireOrgMembership(c, id);
+    if (!guard.ok) return guard.res;
+
+    // owner は退会不可。組織を抜けるには組織削除 or owner 譲渡（別 Issue）が必要。
+    if (guard.membership.role === "owner") {
+      return c.json(
+        {
+          error:
+            "owner は退会できません。組織を削除するか所有権を移譲してください",
+        },
+        403,
+      );
+    }
+
+    // MeetingMember は schema 側で onDelete: Cascade のため連鎖削除される。
+    await prisma.organizationMembership.delete({
+      where: {
+        userId_organizationId: { userId: callerUserId, organizationId: id },
       },
     });
     return c.body(null, 204);
@@ -521,6 +606,14 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "既にこの組織に参加しています" }, 409);
     }
 
+    // email が null のユーザーは招待照合ができないため 404 を返す。
+    // 招待は email 一致で突き合わせる設計であり、email なしでは招待を受け取れない。
+    // user.email を変数に抜き出して async コールバック内で string 型が確定するようにする。
+    const userEmail = user.email;
+    if (!userEmail) {
+      return c.json({ error: "有効な招待が見つかりません" }, 404);
+    }
+
     // 招待検索 → status 更新 → membership 作成を一貫させる。
     // 期限切れ招待は status=pending のまま残るが now と比較してスキップする
     // （expired への自動遷移はバッチジョブ前提）。
@@ -538,7 +631,7 @@ export const organizationsRoute = new Hono<{ Variables: AuthVariables }>()
         const invitation = await tx.organizationInvitation.findFirst({
           where: {
             organizationId: id,
-            email: user.email,
+            email: userEmail,
             status: "pending",
             expiresAt: { gt: new Date() },
           },
