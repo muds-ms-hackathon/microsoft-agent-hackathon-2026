@@ -29,11 +29,16 @@ function UserAvatar() {
   const handleLogout = async () => {
     logout();
     if (AUTH_PROVIDER === "entra") {
-      const msal = getMsalInstance();
-      await msal.initialize();
-      await msal.logoutRedirect({
-        postLogoutRedirectUri: window.location.origin + "/login",
-      });
+      try {
+        const msal = getMsalInstance();
+        await msal.initialize();
+        await msal.logoutRedirect({
+          postLogoutRedirectUri: window.location.origin + "/login",
+        });
+      } catch (e) {
+        console.error("[logout] Entra ログアウトエラー:", e);
+        navigate({ to: "/login" });
+      }
     } else {
       navigate({ to: "/login" });
     }
