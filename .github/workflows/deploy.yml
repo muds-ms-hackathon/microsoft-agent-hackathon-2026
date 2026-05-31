@@ -10,11 +10,13 @@ concurrency:
   cancel-in-progress: false
 
 # 必要な GitHub Secrets:
-#   AZURE_CLIENT_ID      - OIDC 用 Service Principal の Application ID
-#   AZURE_TENANT_ID      - Azure AD テナント ID
-#   AZURE_SUBSCRIPTION_ID - サブスクリプション ID
-#   VITE_FAKE_AUTH_URL   - 【暫定】issue-177（Entra フロント対応）マージ後に VITE_ENTRA_* へ置き換え・削除
-#   DATABASE_URL         - マイグレーション用 PostgreSQL 接続文字列
+#   AZURE_CLIENT_ID        - OIDC 用 Service Principal の Application ID
+#   AZURE_TENANT_ID        - Azure AD テナント ID
+#   AZURE_SUBSCRIPTION_ID  - サブスクリプション ID
+#   DATABASE_URL           - マイグレーション用 PostgreSQL 接続文字列
+#   VITE_ENTRA_CLIENT_ID   - Entra External ID アプリの Application ID
+#   VITE_ENTRA_AUTHORITY   - Entra External ID の Authority URL
+#   VITE_ENTRA_REDIRECT_URI - Entra External ID のリダイレクト URI
 #
 # 必要な GitHub Variables（Settings > Variables > Actions）:
 #   INTERNAL_API_BASE_URL - ai → api の内部通信 URL（例: https://decision-loop-api.azurewebsites.net）
@@ -46,7 +48,10 @@ jobs:
       - name: web イメージビルド & プッシュ
         run: |
           docker build --target prod \
-            --build-arg "VITE_FAKE_AUTH_URL=${{ secrets.VITE_FAKE_AUTH_URL }}" \
+            --build-arg "VITE_AUTH_PROVIDER=entra" \
+            --build-arg "VITE_ENTRA_CLIENT_ID=${{ secrets.VITE_ENTRA_CLIENT_ID }}" \
+            --build-arg "VITE_ENTRA_AUTHORITY=${{ secrets.VITE_ENTRA_AUTHORITY }}" \
+            --build-arg "VITE_ENTRA_REDIRECT_URI=${{ secrets.VITE_ENTRA_REDIRECT_URI }}" \
             -f apps/web/Dockerfile \
             -t decisionloopacr.azurecr.io/web:${{ github.sha }} \
             -t decisionloopacr.azurecr.io/web:latest \
