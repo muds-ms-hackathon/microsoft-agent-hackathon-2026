@@ -7,8 +7,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { authAtom, logoutAtom } from "@/lib/auth";
+import { getMsalInstance } from "@/lib/msalConfig";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Link, useNavigate } from "@tanstack/react-router";
+
+const AUTH_PROVIDER =
+  (import.meta.env.VITE_AUTH_PROVIDER as string) || "fake-auth";
 import { Mail, Settings } from "lucide-react";
 
 // 名前の頭文字を取り出す。サロゲートペアを Array.from で正しく扱う。
@@ -22,9 +26,17 @@ function UserAvatar() {
   const navigate = useNavigate();
   const { user } = useAtomValue(authAtom);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     logout();
-    navigate({ to: "/login" });
+    if (AUTH_PROVIDER === "entra") {
+      const msal = getMsalInstance();
+      await msal.initialize();
+      await msal.logoutRedirect({
+        postLogoutRedirectUri: window.location.origin + "/login",
+      });
+    } else {
+      navigate({ to: "/login" });
+    }
   };
 
   return (
