@@ -21,7 +21,11 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/api/package.json ./apps/api/
 COPY apps/api/src ./apps/api/src
+COPY apps/api/prisma ./apps/api/prisma
+COPY apps/api/prisma.config.ts ./apps/api/
 RUN pnpm install --frozen-lockfile
+# web が api の型（@prisma/client）を参照するため事前に生成する
+RUN pnpm --filter api exec prisma generate --generator client
 COPY apps/web ./apps/web
 WORKDIR /app/apps/web
 # VITE_* 環境変数はビルド時に静的ファイルへ埋め込まれるため ARG で受け取る
