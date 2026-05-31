@@ -83,7 +83,7 @@ async function fetchAuthorityMetadata(
 export async function getMsalInstance(): Promise<PublicClientApplication> {
   if (_msalInstance) return _msalInstance;
   const authority = (
-    import.meta.env.VITE_ENTRA_AUTHORITY as string ?? ""
+    (import.meta.env.VITE_ENTRA_AUTHORITY as string) ?? ""
   ).replace(/\/+$/, "");
   const authorityMetadata = await fetchAuthorityMetadata(authority);
   const instance = new PublicClientApplication(
