@@ -17,6 +17,7 @@ concurrency:
 #   VITE_ENTRA_CLIENT_ID   - Entra External ID アプリの Application ID
 #   VITE_ENTRA_AUTHORITY   - Entra External ID の Authority URL
 #   VITE_ENTRA_REDIRECT_URI - Entra External ID のリダイレクト URI
+#   VITE_ENTRA_TENANT_ID   - Entra External ID テナントの GUID（MSAL knownAuthorities 用）
 #
 # 必要な GitHub Variables（Settings > Variables > Actions）:
 #   INTERNAL_API_BASE_URL - ai → api の内部通信 URL（例: https://decision-loop-api.azurewebsites.net）
@@ -52,6 +53,7 @@ jobs:
             --build-arg "VITE_ENTRA_CLIENT_ID=${{ secrets.VITE_ENTRA_CLIENT_ID }}" \
             --build-arg "VITE_ENTRA_AUTHORITY=${{ secrets.VITE_ENTRA_AUTHORITY }}" \
             --build-arg "VITE_ENTRA_REDIRECT_URI=${{ secrets.VITE_ENTRA_REDIRECT_URI }}" \
+            --build-arg "VITE_ENTRA_TENANT_ID=${{ secrets.VITE_ENTRA_TENANT_ID }}" \
             -f apps/web/Dockerfile \
             -t decisionloopacr.azurecr.io/web:${{ github.sha }} \
             -t decisionloopacr.azurecr.io/web:latest \
