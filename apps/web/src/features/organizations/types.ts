@@ -13,7 +13,7 @@ export type Member = {
   userId: string;
   name: string;
   displayName: string;
-  email: string;
+  email: string | null;
   role: OrgRole;
   joinedAt: string;
 };

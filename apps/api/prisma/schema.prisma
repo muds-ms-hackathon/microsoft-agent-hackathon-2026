@@ -62,7 +62,10 @@ model Meeting {
 model User {
   id          String   @id @default(cuid())
   externalId  String   @unique
-  email       String   @unique
+  // Entra External ID は email クレームを返さない設定がある。
+  // nullable にすることで email なしでもログインを通す。
+  // 招待照合（OrganizationInvitation.email との一致）は email がある場合のみ機能する。
+  email       String?  @unique
   name        String
   displayName String
   createdAt   DateTime @default(now())

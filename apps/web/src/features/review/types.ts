@@ -20,7 +20,7 @@ export type ReviewAssignee = {
   id: string;
   name: string;
   displayName: string;
-  email: string;
+  email: string | null;
 };
 
 export type AmbiguityResolutionType = "task" | "decision_item" | "discarded";
