@@ -165,7 +165,9 @@ describe("Login コンポーネント (AUTH_PROVIDER=entra)", () => {
 
     await waitFor(() => {
       expect(
-        document.body.textContent?.includes("認証トークンにメールアドレスが含まれていません"),
+        document.body.textContent?.includes(
+          "認証トークンにメールアドレスが含まれていません",
+        ),
       ).toBe(true);
     });
     expect(loginSpy).not.toHaveBeenCalled();
