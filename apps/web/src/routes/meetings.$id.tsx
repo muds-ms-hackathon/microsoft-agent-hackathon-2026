@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TranscriptCard } from "@/features/meetings/components/TranscriptCard";
 import { useMeetingDetail } from "@/features/meetings/hooks/useMeetingDetail";
 import { AgendaHistorySection } from "@/features/meetings/components/AgendaHistorySection";
 import { RecommendedAgendaSection } from "@/features/meetings/components/RecommendedAgendaSection";
@@ -225,8 +226,18 @@ export function MeetingDetailView({
         </div>
       </header>
 
-      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（過去の会議のみ） */}
-      {isPastMeeting && (
+      {/* 議事録入力 + 解析実行（過去の会議かつ解析完了前のみ表示） */}
+      {isPastMeeting && detail.latestAnalysisRun?.status !== "completed" && (
+        <TranscriptCard
+          meetingId={id}
+          initialText={detail.transcriptText}
+          analysisStatus={detail.latestAnalysisRun?.status ?? null}
+          errorMessage={detail.latestAnalysisRun?.errorMessage}
+        />
+      )}
+
+      {/* 上段: 会議要約 ＋ AI抽出結果 を2カラムで並べる（解析完了後のみ） */}
+      {isPastMeeting && detail.latestAnalysisRun?.status === "completed" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card
             aria-label="会議要約"
