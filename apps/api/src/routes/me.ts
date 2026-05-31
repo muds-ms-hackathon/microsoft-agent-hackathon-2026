@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { Prisma } from "@prisma/client";
 import { Hono } from "hono";
 import { z } from "zod";
 import { normalizeEmail } from "../lib/email.js";
@@ -51,10 +52,20 @@ export const meRoute = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const { email } = c.req.valid("json");
       const user = c.var.user;
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { email: normalizeEmail(email) },
-      });
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { email: normalizeEmail(email) },
+        });
+      } catch (e) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === "P2002"
+        ) {
+          return c.json({ error: "このメールアドレスは既に使用されています" }, 409);
+        }
+        throw e;
+      }
       return c.json({ success: true });
     },
   );

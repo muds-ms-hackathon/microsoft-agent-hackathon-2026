@@ -9,11 +9,11 @@ import {
 import { authAtom, logoutAtom } from "@/lib/auth";
 import { getMsalInstance } from "@/lib/msalConfig";
 import { useAtomValue, useSetAtom } from "jotai";
+import { Mail, Settings } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 const AUTH_PROVIDER =
   (import.meta.env.VITE_AUTH_PROVIDER as string) || "fake-auth";
-import { Mail, Settings } from "lucide-react";
 
 // 名前の頭文字を取り出す。サロゲートペアを Array.from で正しく扱う。
 function initial(name: string | null | undefined): string {
