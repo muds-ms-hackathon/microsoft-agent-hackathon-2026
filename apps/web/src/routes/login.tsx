@@ -56,9 +56,7 @@ function Login() {
 
     async function handleEntraLogin() {
       try {
-        const msal = getMsalInstance();
-        // MSAL は initialize() 完了後でないと他の API を呼べない
-        await msal.initialize();
+        const msal = await getMsalInstance();
 
         // リダイレクト後のコールバック処理。result が null の場合は認証前。
         // navigateToLoginRequestUrl: false でリダイレクト完了後に元 URL へ戻る動作を抑制する。

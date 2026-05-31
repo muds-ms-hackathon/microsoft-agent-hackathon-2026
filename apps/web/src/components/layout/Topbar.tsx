@@ -30,8 +30,7 @@ function UserAvatar() {
     logout();
     if (AUTH_PROVIDER === "entra") {
       try {
-        const msal = getMsalInstance();
-        await msal.initialize();
+        const msal = await getMsalInstance();
         await msal.logoutRedirect({
           postLogoutRedirectUri: window.location.origin + "/login",
         });
