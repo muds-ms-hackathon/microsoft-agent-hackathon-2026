@@ -81,7 +81,10 @@ export async function fetchUserInfoEmail(
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return null;
-    const info = (await res.json()) as { email?: string; preferred_username?: string };
+    const info = (await res.json()) as {
+      email?: string;
+      preferred_username?: string;
+    };
     return info.email ?? info.preferred_username ?? null;
   } catch {
     return null;

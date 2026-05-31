@@ -73,7 +73,9 @@ function Login() {
           // /login → / → /login の無限ループが発生する。
           const parsed = parseToken(result.idToken);
           if (!parsed) {
-            setError("認証トークンが無効または期限切れです。管理者に連絡してください。");
+            setError(
+              "認証トークンが無効または期限切れです。管理者に連絡してください。",
+            );
             return;
           }
           // MSAL が返す idToken を既存の localStorage ベースの仕組みに橋渡しする
@@ -163,7 +165,7 @@ function Login() {
 
       window.location.href = authUrl.toString();
     }
-  }, [navigate, setLogin]);
+  }, [navigate, setLogin, setUserEmail]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

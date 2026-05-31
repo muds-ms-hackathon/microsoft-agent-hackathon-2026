@@ -62,7 +62,10 @@ export const meRoute = new Hono<{ Variables: AuthVariables }>()
           e instanceof Prisma.PrismaClientKnownRequestError &&
           e.code === "P2002"
         ) {
-          return c.json({ error: "このメールアドレスは既に使用されています" }, 409);
+          return c.json(
+            { error: "このメールアドレスは既に使用されています" },
+            409,
+          );
         }
         throw e;
       }
