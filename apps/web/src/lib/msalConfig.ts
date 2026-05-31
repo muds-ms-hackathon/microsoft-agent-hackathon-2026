@@ -31,13 +31,21 @@ function getEntraConfig(): Configuration {
     );
   }
 
+  const tenantId = import.meta.env.VITE_ENTRA_TENANT_ID as string | undefined;
+
   const resolvedAuthority = (authority ?? "").replace(/\/+$/, "");
 
   // CIAM エンドポイント (*.ciamlogin.com) は MSAL の既定の信頼済みホストではないため、
   // knownAuthorities に明示する必要がある。
-  const knownAuthorities = resolvedAuthority
-    ? [new URL(resolvedAuthority).hostname]
-    : [];
+  // CIAM の OIDC discovery issuer はテナント名ベースではなく GUID ベースのホスト名
+  // （{tenantId}.ciamlogin.com）を返すため、両方を登録しないと endpoints_resolution_error になる。
+  const knownAuthorities: string[] = [];
+  if (resolvedAuthority) {
+    knownAuthorities.push(new URL(resolvedAuthority).hostname);
+  }
+  if (tenantId) {
+    knownAuthorities.push(`${tenantId}.ciamlogin.com`);
+  }
 
   return {
     auth: {
