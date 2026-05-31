@@ -26,6 +26,7 @@ const mockMsal = {
 vi.mock("@/lib/msalConfig", () => ({
   getMsalInstance: () => mockMsal,
   ENTRA_SCOPES: ["openid", "profile", "email"],
+  fetchUserInfoEmail: vi.fn().mockResolvedValue(null),
 }));
 
 // @/lib/auth は atomWithStorage を使い module load 時に localStorage を参照するため、
@@ -42,10 +43,16 @@ const authAtom = atom({
   user: null,
 });
 
+const setUserEmailSpy = vi.fn();
+const userEmailAtom = atom(null, (_get, _set, email: string | null) => {
+  setUserEmailSpy(email);
+});
+
 vi.mock("@/lib/auth", () => ({
   loginAtom,
   logoutAtom,
   authAtom,
+  userEmailAtom,
   getIdToken: vi.fn(),
   saveExpectedAuthParams: vi.fn(),
   verifyAndConsumeAuthParams: vi.fn(),
@@ -166,7 +173,7 @@ describe("Login コンポーネント (AUTH_PROVIDER=entra)", () => {
     await waitFor(() => {
       expect(
         document.body.textContent?.includes(
-          "認証トークンにメールアドレスが含まれていません",
+          "認証トークンが無効または期限切れです",
         ),
       ).toBe(true);
     });
