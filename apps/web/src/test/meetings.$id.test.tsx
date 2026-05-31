@@ -378,6 +378,25 @@ describe("MeetingDetailView — AI抽出結果 3点メニュー", () => {
     ).toBeInTheDocument();
   });
 
+  it("task_candidate で taskStatus=rejected のとき ⋯ メニューボタンが表示される", async () => {
+    vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(
+      mockJson([
+        makeReviewItem({
+          sourceTable: "task",
+          type: "task_candidate",
+          status: "rejected" as ReviewItem["status"],
+          taskStatus: "rejected",
+        }),
+      ]),
+    );
+    renderWithQuery(<MeetingDetailView id="mtg-1" now={NOW} />);
+    const accordion = await screen.findByRole("button", { name: /タスク候補/ });
+    await userEvent.click(accordion);
+    expect(
+      screen.getByRole("button", { name: "メニュー" }),
+    ).toBeInTheDocument();
+  });
+
   it("「レビュー待ちに戻す」クリックで decision-items PATCH が呼ばれる", async () => {
     const item = makeReviewItem({ id: "di-1", status: "decided", version: 2 });
     vi.mocked(api.meetings[":id"]["review-items"].$get).mockResolvedValue(

@@ -478,8 +478,9 @@ function ReviewAccordionItem({
               const canReset =
                 !isPending &&
                 item.sourceTable !== "ambiguous_info" &&
-                item.taskStatus !== "in_progress" &&
-                item.taskStatus !== "done";
+                (item.sourceTable !== "task" ||
+                  item.taskStatus === "todo" ||
+                  item.taskStatus === "rejected");
               return (
                 <li key={item.id} className="px-4 py-3 flex flex-col gap-1">
                   <div className="flex items-start justify-between gap-2">
