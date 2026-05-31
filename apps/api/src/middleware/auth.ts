@@ -69,11 +69,12 @@ export const auth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
   const rawEmail = extractEmail(payload);
   const name = typeof payload.name === "string" ? payload.name : undefined;
 
-  // preferred_username が存在するがメール形式でない場合は明示的に拒否する。
-  // email も preferred_username もない場合は email: null として許容する。
+  // preferred_username が存在するがメール形式でなく、かつ email からも取得できない場合は拒否する。
+  // email が有効であれば preferred_username の形式は問わない。
   if (
     typeof payload.preferred_username === "string" &&
-    !looksLikeEmail(payload.preferred_username.trim())
+    !looksLikeEmail(payload.preferred_username.trim()) &&
+    !rawEmail
   ) {
     return c.json(
       { error: "preferred_username がメール形式ではありません" },
