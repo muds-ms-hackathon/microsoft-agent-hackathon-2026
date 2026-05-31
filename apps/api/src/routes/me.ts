@@ -1,6 +1,10 @@
+import { zValidator } from "@hono/zod-validator";
+import { Prisma } from "@prisma/client";
 import { Hono } from "hono";
-import { prisma } from "../lib/prisma.js";
+import { z } from "zod";
+import { normalizeEmail } from "../lib/email.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+import { prisma } from "../lib/prisma.js";
 
 // 認証ユーザー個人のリソース（招待・通知・プロフィール等）を集約するルート。
 // 招待は自分宛 (= user.email と一致) の pending かつ非期限切れのもののみ返す。
@@ -41,4 +45,30 @@ export const meRoute = new Hono<{ Variables: AuthVariables }>()
       inviter: inv.inviter,
     }));
     return c.json(result);
-  });
+  })
+  .patch(
+    "/",
+    zValidator("json", z.object({ email: z.string().email() })),
+    async (c) => {
+      const { email } = c.req.valid("json");
+      const user = c.var.user;
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { email: normalizeEmail(email) },
+        });
+      } catch (e) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === "P2002"
+        ) {
+          return c.json(
+            { error: "このメールアドレスは既に使用されています" },
+            409,
+          );
+        }
+        throw e;
+      }
+      return c.json({ success: true });
+    },
+  );

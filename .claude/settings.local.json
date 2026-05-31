@@ -38,7 +38,15 @@
       "Bash(curl -s -X POST http://localhost:8002/analyze -H 'Content-Type: application/json' -d @/tmp/meeting03_input.json --max-time 300 -o /tmp/meeting03_result.json)",
       "Bash(python3 -c ' *)",
       "Bash(curl -s -X POST http://localhost:8002/analyze -H 'Content-Type: application/json' -d @/tmp/meeting_empty_input.json --max-time 120 -o /tmp/meeting_empty_result.json)",
-      "Bash(PGPASSWORD=postgres psql *)"
+      "Bash(PGPASSWORD=postgres psql *)",
+      "Bash(pnpm turbo *)",
+      "Bash(pnpm --filter web exec biome check .)",
+      "Bash(pnpm --filter web exec biome check --write .)",
+      "Bash(pnpm --filter api exec biome check .)",
+      "Bash(pnpm --filter api exec biome check --write .)",
+      "Bash(pnpm --filter api test)",
+      "Bash(pnpm --filter web test)",
+      "Bash(pnpm --filter api test -- --reporter=verbose test/docker-compose.test.ts)"
     ]
   }
 }

@@ -80,6 +80,60 @@ describe("parseToken", () => {
       name: "u2",
     });
   });
+
+  it("email がなく preferred_username がある場合は preferred_username を email として返す（Entra External ID 対応）", () => {
+    // Entra External ID は email クレームを省略し preferred_username に格納することがある。
+    // JSON.stringify は undefined を省略するため、email キー自体がペイロードから除外される。
+    const token = makeFakeIdToken({
+      sub: "u3",
+      email: undefined as unknown as string,
+      preferred_username: "u3-pref@example.com",
+      name: "u3",
+    });
+
+    expect(parseToken(token)).toEqual({
+      sub: "u3",
+      email: "u3-pref@example.com",
+      name: "u3",
+    });
+  });
+
+  it("email も preferred_username もない場合は email: null で返す", () => {
+    const token = makeFakeIdToken({
+      sub: "u4",
+      email: undefined as unknown as string,
+      name: "u4",
+    });
+
+    expect(parseToken(token)).toEqual({ sub: "u4", email: null, name: "u4" });
+  });
+
+  it("preferred_username がメール形式でない場合は email: null で返す", () => {
+    // OIDC 仕様上 preferred_username はユーザ名でありメールとは限らない
+    const token = makeFakeIdToken({
+      sub: "u5",
+      email: undefined as unknown as string,
+      preferred_username: "just-a-username",
+      name: "u5",
+    });
+
+    expect(parseToken(token)).toEqual({ sub: "u5", email: null, name: "u5" });
+  });
+
+  it("email がメール形式でない場合は preferred_username にフォールバックする", () => {
+    const token = makeFakeIdToken({
+      sub: "u6",
+      email: "not-an-email" as string,
+      preferred_username: "u6@example.com",
+      name: "u6",
+    });
+
+    expect(parseToken(token)).toEqual({
+      sub: "u6",
+      email: "u6@example.com",
+      name: "u6",
+    });
+  });
 });
 
 describe("getInitialState", () => {

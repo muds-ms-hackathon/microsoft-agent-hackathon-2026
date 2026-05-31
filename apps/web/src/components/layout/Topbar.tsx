@@ -7,9 +7,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { authAtom, logoutAtom } from "@/lib/auth";
+import { getMsalInstance } from "@/lib/msalConfig";
 import { useAtomValue, useSetAtom } from "jotai";
-import { Link, useNavigate } from "@tanstack/react-router";
 import { Mail, Settings } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+
+const AUTH_PROVIDER =
+  (import.meta.env.VITE_AUTH_PROVIDER as string) || "fake-auth";
 
 // 名前の頭文字を取り出す。サロゲートペアを Array.from で正しく扱う。
 function initial(name: string | null | undefined): string {
@@ -22,9 +26,22 @@ function UserAvatar() {
   const navigate = useNavigate();
   const { user } = useAtomValue(authAtom);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     logout();
-    navigate({ to: "/login" });
+    if (AUTH_PROVIDER === "entra") {
+      try {
+        const msal = getMsalInstance();
+        await msal.initialize();
+        await msal.logoutRedirect({
+          postLogoutRedirectUri: window.location.origin + "/login",
+        });
+      } catch (e) {
+        console.error("[logout] Entra ログアウトエラー:", e);
+        navigate({ to: "/login" });
+      }
+    } else {
+      navigate({ to: "/login" });
+    }
   };
 
   return (
