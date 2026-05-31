@@ -74,7 +74,7 @@ jobs:
   migrate:
     name: DB マイグレーション
     runs-on: ubuntu-latest
-    needs: build-push
+    needs: ci  # build-push と並列実行可能（スキーマさえあれば migrate deploy は実行できる）
     steps:
       - uses: actions/checkout@v6
 
