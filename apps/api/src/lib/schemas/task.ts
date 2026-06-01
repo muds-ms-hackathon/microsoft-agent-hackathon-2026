@@ -104,6 +104,7 @@ const taskStatusValuesSchema = z
 
 export const taskListQuerySchema = z.object({
   status: taskStatusValuesSchema.optional(),
+  organizationId: z.string().min(1).optional(),
   // assigneeId は通常 userId（任意の非空文字列）だが、特殊値 "none" を許容する。
   // "none" は「未アサインのタスクだけ」を意味するセンチネルで、where 構築時に
   // `assignees: { none: {} }` に展開される。

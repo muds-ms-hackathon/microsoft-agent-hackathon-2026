@@ -289,7 +289,7 @@ function ReviewPendingCard({ orgId }: { orgId: string }) {
 
 // ===== リマインド集約バナー =====
 
-// 未完了タスクの取得フィルタ。バナーとカードで同一キーを使い fetch を共有する。
+// 未完了タスクの基本フィルタ。organizationId はコンポーネント側で付与する。
 const INCOMPLETE_SEARCH_FILTER: TaskListFilters = {
   status: ["todo", "in_progress"],
 };
@@ -333,12 +333,12 @@ const REMINDER_ITEMS = [
 
 // 期限超過・今週期限・着手予定日超過・未読を件数付きで集約表示するバナー。
 // 見落とし防止が目的のため、件数 0 のカテゴリは出さず、全て 0 なら非表示にする。
-function RemindersBanner() {
+function RemindersBanner({ orgId }: { orgId: string }) {
   const {
     data = [],
     isLoading,
     isError,
-  } = useMyTasks(INCOMPLETE_SEARCH_FILTER);
+  } = useMyTasks({ ...INCOMPLETE_SEARCH_FILTER, organizationId: orgId });
 
   if (isLoading || isError) return null;
 
@@ -374,14 +374,14 @@ function RemindersBanner() {
 
 // ===== 未完了タスクカード =====
 
-function IncompleteTasksCard() {
+function IncompleteTasksCard({ orgId }: { orgId: string }) {
   const markRead = useMarkTaskRead();
   const {
     data = [],
     isLoading,
     isError,
     refetch,
-  } = useMyTasks(INCOMPLETE_SEARCH_FILTER);
+  } = useMyTasks({ ...INCOMPLETE_SEARCH_FILTER, organizationId: orgId });
 
   return (
     <Card className="gap-0 py-0 overflow-hidden h-90">
@@ -504,7 +504,7 @@ export function Dashboard() {
       ) : (
         <div className="flex flex-col gap-4">
           {/* 最上段：未達・期限超過・未読のリマインド集約バナー */}
-          <RemindersBanner />
+          <RemindersBanner orgId={orgId} />
 
           {/* 上段：次回会議（横スクロール） */}
           <NextMeetingsSection orgId={orgId} />
@@ -512,7 +512,7 @@ export function Dashboard() {
           {/* 下段：レビュー待ち（左）・未完了タスク（右） */}
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4">
             <ReviewPendingCard orgId={orgId} />
-            <IncompleteTasksCard />
+            <IncompleteTasksCard orgId={orgId} />
           </div>
         </div>
       )}

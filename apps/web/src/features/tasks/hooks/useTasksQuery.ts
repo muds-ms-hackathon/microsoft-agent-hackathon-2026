@@ -10,6 +10,7 @@ export function toTaskListQueryParams(
   if (filters.status && filters.status.length > 0) {
     params.status = filters.status.join(",");
   }
+  if (filters.organizationId) params.organizationId = filters.organizationId;
   if (filters.assigneeId) params.assigneeId = filters.assigneeId;
   if (filters.dueBefore) params.dueBefore = filters.dueBefore;
   if (filters.dueAfter) params.dueAfter = filters.dueAfter;
