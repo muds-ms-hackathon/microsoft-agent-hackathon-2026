@@ -166,6 +166,7 @@ jobs:
               OIDC_AUDIENCE="${{ secrets.OIDC_AUDIENCE }}" \
               NODE_ENV="production" \
               AZURE_SERVICE_BUS_CONNECTION_STRING="@Microsoft.KeyVault(VaultName=kv-ms-hackathon-dev;SecretName=service-bus-connection-string)" \
+              AZURE_SERVICE_BUS_QUEUE_NAME="decision-loop" \
             --output none
           az webapp config container set \
             --resource-group rg-ms-hackathon-dev \
