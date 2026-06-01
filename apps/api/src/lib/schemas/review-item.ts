@@ -182,3 +182,11 @@ export function buildReviewItemStatusFilter(
     ambiguousInfoStatusWhere: {},
   };
 }
+
+// POST /:id/review-items（動作確認用）のリクエストボディスキーマ。
+export const reviewItemCreateSchema = z.object({
+  type: z.enum(["decision", "open_issue", "task_candidate", "ambiguity"]),
+  title: z.string().min(1),
+  body: z.string().optional(),
+  sourceContext: z.string().optional(),
+});
