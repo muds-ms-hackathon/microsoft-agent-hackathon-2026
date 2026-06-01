@@ -18,6 +18,8 @@ concurrency:
 #   VITE_ENTRA_AUTHORITY   - Entra External ID の Authority URL
 #   VITE_ENTRA_REDIRECT_URI - Entra External ID のリダイレクト URI
 #   VITE_ENTRA_TENANT_ID   - Entra External ID テナントの GUID（MSAL knownAuthorities 用）
+#   OIDC_ISSUER_URL        - Entra External ID の issuer URL（APIトークン検証用）
+#   OIDC_AUDIENCE          - Entra External ID のクライアント ID（APIトークン検証用）
 #
 # 必要な GitHub Variables（Settings > Variables > Actions）:
 #   INTERNAL_API_BASE_URL - ai → api の内部通信 URL（例: https://decision-loop-api.azurewebsites.net）
@@ -150,6 +152,19 @@ jobs:
 
       - name: api デプロイ
         run: |
+          test -n "${{ secrets.OIDC_ISSUER_URL }}" || \
+            (echo "::error::OIDC_ISSUER_URL が GitHub Secrets に設定されていません" && exit 1)
+          test -n "${{ secrets.OIDC_AUDIENCE }}" || \
+            (echo "::error::OIDC_AUDIENCE が GitHub Secrets に設定されていません" && exit 1)
+          # シークレット未設定時にデプロイへ進まないようガードし、関連処理を同一ステップに集約する
+          az webapp config appsettings set \
+            --resource-group rg-ms-hackathon-dev \
+            --name decision-loop-api \
+            --settings \
+              OIDC_ISSUER_URL="${{ secrets.OIDC_ISSUER_URL }}" \
+              OIDC_AUDIENCE="${{ secrets.OIDC_AUDIENCE }}" \
+              NODE_ENV="production" \
+            --output none
           az webapp config container set \
             --resource-group rg-ms-hackathon-dev \
             --name decision-loop-api \
