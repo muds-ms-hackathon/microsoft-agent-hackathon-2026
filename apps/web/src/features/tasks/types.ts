@@ -94,6 +94,7 @@ export type Task = Omit<TaskListItem, "assignees"> & {
 // 一覧 API の共通フィルタ。
 export type TaskListFilters = {
   status?: TaskStatus[];
+  organizationId?: string;
   assigneeId?: string;
   dueBefore?: string;
   dueAfter?: string;

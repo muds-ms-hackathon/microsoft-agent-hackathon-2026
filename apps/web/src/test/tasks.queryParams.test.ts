@@ -23,6 +23,12 @@ describe("toTaskListQueryParams", () => {
     expect(toTaskListQueryParams({ status: [] })).toEqual({});
   });
 
+  it("organizationId を含める", () => {
+    expect(toTaskListQueryParams({ organizationId: "org-1" })).toEqual({
+      organizationId: "org-1",
+    });
+  });
+
   it("assigneeId / dueBefore / dueAfter を含める", () => {
     expect(
       toTaskListQueryParams({

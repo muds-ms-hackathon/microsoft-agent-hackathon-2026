@@ -737,6 +737,23 @@ describe("GET /tasks/me", () => {
     );
   });
 
+  it("organizationId フィルタが where に反映される", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request("/tasks/me?organizationId=org-1");
+    expect(mockTaskFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: "org-1" }),
+      }),
+    );
+  });
+
+  it("organizationId 未指定のとき where に organizationId が含まれない", async () => {
+    mockTaskFindMany.mockResolvedValue([]);
+    await app.request("/tasks/me");
+    const where = mockTaskFindMany.mock.calls[0][0].where as Record<string, unknown>;
+    expect(where.organizationId).toBeUndefined();
+  });
+
   it("不正な status は 400", async () => {
     const res = await app.request("/tasks/me?status=invalid_status");
     expect(res.status).toBe(400);
