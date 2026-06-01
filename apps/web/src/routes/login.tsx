@@ -84,7 +84,7 @@ function Login() {
             const email = await fetchUserInfoEmail(result.accessToken);
             if (email) {
               setUserEmail(email);
-              const res = await fetch("/api/me", {
+              const res = await fetch("/api/me/email", {
                 method: "PATCH",
                 headers: {
                   "Content-Type": "application/json",
@@ -93,7 +93,7 @@ function Login() {
                 body: JSON.stringify({ email }),
               });
               if (!res.ok) {
-                console.warn("[login] PATCH /me failed:", res.status);
+                console.warn("[login] PATCH /me/email failed:", res.status);
               }
             }
           }
