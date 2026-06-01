@@ -21,6 +21,8 @@ concurrency:
 #
 # 必要な GitHub Variables（Settings > Variables > Actions）:
 #   INTERNAL_API_BASE_URL - ai → api の内部通信 URL（例: https://decision-loop-api.azurewebsites.net）
+#   VITE_API_URL          - Web フロントエンドの API 接続先（例: https://decision-loop-api.azurewebsites.net）
+#   AI_WS_URL             - nginx の WebSocket プロキシ先（例: https://decision-loop-ai.azurewebsites.net）
 
 jobs:
   ci:
@@ -46,6 +48,13 @@ jobs:
       - name: ACR ログイン
         run: az acr login --name decisionloopacr
 
+      - name: 必須変数の検証
+        run: |
+          test -n "${{ vars.VITE_API_URL }}" || \
+            (echo "::error::VITE_API_URL が GitHub Variables に設定されていません" && exit 1)
+          test -n "${{ vars.AI_WS_URL }}" || \
+            (echo "::error::AI_WS_URL が GitHub Variables に設定されていません" && exit 1)
+
       - name: web イメージビルド & プッシュ
         run: |
           docker build --target prod \
@@ -54,6 +63,7 @@ jobs:
             --build-arg "VITE_ENTRA_AUTHORITY=${{ secrets.VITE_ENTRA_AUTHORITY }}" \
             --build-arg "VITE_ENTRA_REDIRECT_URI=${{ secrets.VITE_ENTRA_REDIRECT_URI }}" \
             --build-arg "VITE_ENTRA_TENANT_ID=${{ secrets.VITE_ENTRA_TENANT_ID }}" \
+            --build-arg "VITE_API_URL=${{ vars.VITE_API_URL }}" \
             -f apps/web/Dockerfile \
             -t decisionloopacr.azurecr.io/web:${{ github.sha }} \
             -t decisionloopacr.azurecr.io/web:latest \
@@ -126,6 +136,13 @@ jobs:
 
       - name: web デプロイ
         run: |
+          # API_URL / AI_WS_URL は nginx の envsubst でランタイムに差し込まれるため、コンテナ起動前にセットする
+          az webapp config appsettings set \
+            --resource-group rg-ms-hackathon-dev \
+            --name decision-loop-web \
+            --settings \
+              API_URL="${{ vars.VITE_API_URL }}" \
+              AI_WS_URL="${{ vars.AI_WS_URL }}"
           az webapp config container set \
             --resource-group rg-ms-hackathon-dev \
             --name decision-loop-web \
