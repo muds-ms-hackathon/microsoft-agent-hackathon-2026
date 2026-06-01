@@ -315,6 +315,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(infos);
     },
   )
+
   .get("/:id/decision-graph", async (c) => {
     const id = c.req.param("id");
 
@@ -444,6 +445,7 @@ export const meetingsRoute = new Hono<{ Variables: AuthVariables }>()
       return c.json(item, 201);
     },
   )
+
   .patch("/:id", zValidator("json", meetingUpdateSchema), async (c) => {
     const id = c.req.param("id");
     const data = c.req.valid("json");

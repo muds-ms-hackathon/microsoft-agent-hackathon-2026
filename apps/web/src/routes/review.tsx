@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { SectionError } from "@/components/ui/SectionError";
-import { AddReviewItemDialog } from "@/features/review/components/AddReviewItemDialog";
 import { ReviewItemCard } from "@/features/review/components/ReviewItemCard";
 import {
   REVIEWABLE_TYPES,
@@ -133,22 +132,13 @@ export function ReviewView({
             ← {rmName ?? "定例ハブ"}に戻る
           </Link>
         )}
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 id="review-title" className="text-2xl font-bold">
-              レビュー
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              AIが抽出した結果を確認・確定します
-            </p>
-          </div>
-          {currentOrgId && (
-            <AddReviewItemDialog
-              orgId={currentOrgId}
-              initialRmId={selectedRmId}
-              initialMeetingId={search.meetingId}
-            />
-          )}
+        <div>
+          <h1 id="review-title" className="text-2xl font-bold">
+            レビュー
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            AIが抽出した結果を確認・確定します
+          </p>
         </div>
       </header>
 
