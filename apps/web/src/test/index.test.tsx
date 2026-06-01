@@ -654,6 +654,19 @@ describe("Dashboard - RemindersBanner", () => {
     Date.now() + 3 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
+  it("選択中の organizationId がクエリに含まれる", async () => {
+    vi.mocked(api.tasks.me.$get).mockResolvedValue(mockJson([]));
+    renderDashboard();
+    // バナーが非表示でも fetch は実行されるため、クエリパラメータを検証する。
+    await screen.findByText("未完了のタスクはありません");
+    expect(api.tasks.me.$get).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ organizationId: "org-1" }),
+      }),
+      expect.anything(),
+    );
+  });
+
   it("期限超過・今週期限の件数が表示され、該当一覧へ遷移するリンクがある", async () => {
     vi.mocked(api.tasks.me.$get).mockResolvedValue(
       mockJson([

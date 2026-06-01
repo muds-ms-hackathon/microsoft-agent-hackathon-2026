@@ -86,13 +86,12 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
     const filters = c.req.valid("query");
 
     // 自分が assignee のタスクを返す。organizationId が指定された場合はその組織に絞る。
+    // Prisma は where 値が undefined のフィールドを無視するため条件分岐不要。
     const tasks = await prisma.task.findMany({
       where: {
         ...buildTaskListWhere(filters),
         assignees: { some: { userId: user.id } },
-        ...(filters.organizationId
-          ? { organizationId: filters.organizationId }
-          : {}),
+        organizationId: filters.organizationId,
       },
       orderBy: taskListOrderBy,
       include: taskListInclude,

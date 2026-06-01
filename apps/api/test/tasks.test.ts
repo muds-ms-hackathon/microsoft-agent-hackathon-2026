@@ -750,7 +750,10 @@ describe("GET /tasks/me", () => {
   it("organizationId 未指定のとき where に organizationId が含まれない", async () => {
     mockTaskFindMany.mockResolvedValue([]);
     await app.request("/tasks/me");
-    const where = mockTaskFindMany.mock.calls[0][0].where as Record<string, unknown>;
+    const where = mockTaskFindMany.mock.calls[0][0].where as Record<
+      string,
+      unknown
+    >;
     expect(where.organizationId).toBeUndefined();
   });
 

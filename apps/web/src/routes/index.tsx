@@ -289,7 +289,7 @@ function ReviewPendingCard({ orgId }: { orgId: string }) {
 
 // ===== リマインド集約バナー =====
 
-// 未完了タスクの取得フィルタ。バナーとカードで同一キーを使い fetch を共有する。
+// 未完了タスクの基本フィルタ。organizationId はコンポーネント側で付与する。
 const INCOMPLETE_SEARCH_FILTER: TaskListFilters = {
   status: ["todo", "in_progress"],
 };

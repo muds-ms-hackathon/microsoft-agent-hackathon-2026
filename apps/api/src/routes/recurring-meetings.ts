@@ -317,7 +317,7 @@ export const recurringMeetingsRoute = new Hono<{ Variables: AuthVariables }>()
         },
       },
     });
-    if (!member || member.role !== "owner") {
+    if (member?.role !== "owner") {
       return c.json({ error: "定例の削除権限がありません" }, 403);
     }
 
