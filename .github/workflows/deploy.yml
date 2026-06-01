@@ -18,6 +18,8 @@ concurrency:
 #   VITE_ENTRA_AUTHORITY   - Entra External ID の Authority URL
 #   VITE_ENTRA_REDIRECT_URI - Entra External ID のリダイレクト URI
 #   VITE_ENTRA_TENANT_ID   - Entra External ID テナントの GUID（MSAL knownAuthorities 用）
+#   OIDC_ISSUER_URL        - Entra External ID の issuer URL（APIトークン検証用）
+#   OIDC_AUDIENCE          - Entra External ID のクライアント ID（APIトークン検証用）
 #
 # 必要な GitHub Variables（Settings > Variables > Actions）:
 #   INTERNAL_API_BASE_URL - ai → api の内部通信 URL（例: https://decision-loop-api.azurewebsites.net）
@@ -147,6 +149,17 @@ jobs:
             --resource-group rg-ms-hackathon-dev \
             --name decision-loop-web \
             --container-image-name decisionloopacr.azurecr.io/web:${{ github.sha }}
+
+      - name: api 環境変数設定
+        run: |
+          az webapp config appsettings set \
+            --resource-group rg-ms-hackathon-dev \
+            --name decision-loop-api \
+            --settings \
+              OIDC_ISSUER_URL="${{ secrets.OIDC_ISSUER_URL }}" \
+              OIDC_AUDIENCE="${{ secrets.OIDC_AUDIENCE }}" \
+              NODE_ENV="production" \
+            --output none
 
       - name: api デプロイ
         run: |
