@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readRequiredViteEnv } from "../lib/env";
+import { readRequiredViteEnv, resolveApiBaseUrl } from "../lib/env";
 
 // vitest は `import.meta.env` の差し替えが面倒なため、関数引数として
 // 任意の env を注入できる API に対し、必要最小限のオブジェクトを
@@ -73,5 +73,43 @@ describe("readRequiredViteEnv", () => {
     expect(
       readRequiredViteEnv("VITE_FAKE_AUTH_URL", "http://localhost:3007", env),
     ).toBe("http://localhost:3007");
+  });
+});
+
+describe("resolveApiBaseUrl", () => {
+  it("undefined は /api を返す", () => {
+    expect(resolveApiBaseUrl(undefined)).toBe("/api");
+  });
+
+  it("空文字は /api を返す", () => {
+    expect(resolveApiBaseUrl("")).toBe("/api");
+  });
+
+  it("空白のみは /api を返す", () => {
+    expect(resolveApiBaseUrl("   ")).toBe("/api");
+  });
+
+  it("末尾スラッシュを除去する", () => {
+    expect(resolveApiBaseUrl("https://example.com/")).toBe(
+      "https://example.com",
+    );
+  });
+
+  it("末尾スラッシュが複数あっても除去する", () => {
+    expect(resolveApiBaseUrl("https://example.com///")).toBe(
+      "https://example.com",
+    );
+  });
+
+  it("正常な URL はそのまま返す", () => {
+    expect(resolveApiBaseUrl("https://example.com")).toBe(
+      "https://example.com",
+    );
+  });
+
+  it("前後の空白を trim してから解決する", () => {
+    expect(resolveApiBaseUrl("  https://example.com  ")).toBe(
+      "https://example.com",
+    );
   });
 });
