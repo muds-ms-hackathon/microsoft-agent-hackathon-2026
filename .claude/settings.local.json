@@ -46,7 +46,11 @@
       "Bash(pnpm --filter api exec biome check --write .)",
       "Bash(pnpm --filter api test)",
       "Bash(pnpm --filter web test)",
-      "Bash(pnpm --filter api test -- --reporter=verbose test/docker-compose.test.ts)"
+      "Bash(pnpm --filter api test -- --reporter=verbose test/docker-compose.test.ts)",
+      "Bash(xargs ls -la)",
+      "Bash(xargs cat)",
+      "Bash(grep -E \"^src/|error TS|^$\")",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }
