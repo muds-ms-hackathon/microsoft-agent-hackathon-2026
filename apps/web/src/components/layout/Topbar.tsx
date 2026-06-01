@@ -13,9 +13,6 @@ import {
 import { SettingsDialog } from "@/features/settings/components/SettingsDialog";
 import { authAtom, logoutAtom } from "@/lib/auth";
 import { getMsalInstance } from "@/lib/msalConfig";
-import { useAtomValue, useSetAtom } from "jotai";
-import { Mail, Settings } from "lucide-react";
-import { Link, useNavigate } from "@tanstack/react-router";
 
 const AUTH_PROVIDER =
   (import.meta.env.VITE_AUTH_PROVIDER as string) || "fake-auth";
@@ -84,7 +81,9 @@ export function Topbar() {
   return (
     <header className="h-12 border-b border-border/50 flex items-center px-5 bg-background shadow-sm shrink-0 z-10">
       {/* アプリ名: index.tsx の h1 と重複するため "Decision Loop" は使わない */}
-      <span className="font-semibold text-base tracking-tight">Decision Loop</span>
+      <span className="font-semibold text-base tracking-tight">
+        Decision Loop
+      </span>
       <div className="ml-auto flex items-center gap-1">
         {/* 自分宛の招待一覧への導線。未受諾招待数バッジ表示は follow-up 予定。 */}
         <Link
