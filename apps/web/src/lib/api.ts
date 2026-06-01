@@ -2,11 +2,12 @@ import { hcWithType } from "api/types";
 import { getIdToken } from "./auth";
 
 // 本番: VITE_API_URL=https://decision-loop-api.azurewebsites.net を参照する。
-// 未設定時（ローカル開発）は "/api" にフォールバックし、vite.config.ts の
+// 未設定・空文字（ローカル開発）は "/api" にフォールバックし、vite.config.ts の
 // dev server proxy が /api -> localhost:3001 に転送する。
-const rawApiBaseUrl =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
-const apiBaseUrl = rawApiBaseUrl.replace(/\/+$/, "");
+const apiBaseUrl = (import.meta.env.VITE_API_URL?.trim() || "/api").replace(
+  /\/+$/,
+  "",
+);
 
 export const api = hcWithType(apiBaseUrl);
 

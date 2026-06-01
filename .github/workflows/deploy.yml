@@ -21,6 +21,7 @@ concurrency:
 #
 # 必要な GitHub Variables（Settings > Variables > Actions）:
 #   INTERNAL_API_BASE_URL - ai → api の内部通信 URL（例: https://decision-loop-api.azurewebsites.net）
+#   VITE_API_URL          - Web フロントエンドの API 接続先（例: https://decision-loop-api.azurewebsites.net）
 
 jobs:
   ci:
@@ -54,6 +55,7 @@ jobs:
             --build-arg "VITE_ENTRA_AUTHORITY=${{ secrets.VITE_ENTRA_AUTHORITY }}" \
             --build-arg "VITE_ENTRA_REDIRECT_URI=${{ secrets.VITE_ENTRA_REDIRECT_URI }}" \
             --build-arg "VITE_ENTRA_TENANT_ID=${{ secrets.VITE_ENTRA_TENANT_ID }}" \
+            --build-arg "VITE_API_URL=${{ vars.VITE_API_URL }}" \
             -f apps/web/Dockerfile \
             -t decisionloopacr.azurecr.io/web:${{ github.sha }} \
             -t decisionloopacr.azurecr.io/web:latest \
