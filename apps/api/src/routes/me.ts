@@ -85,7 +85,7 @@ export const meRoute = new Hono<{ Variables: AuthVariables }>()
     return c.json(result);
   })
   .patch(
-    "/",
+    "/email",
     zValidator("json", z.object({ email: z.string().email() })),
     async (c) => {
       const { email } = c.req.valid("json");
