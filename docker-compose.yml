@@ -50,6 +50,7 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      target: dev
     ports:
       - "5173:5173"
     volumes:
@@ -74,6 +75,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      target: dev
     ports:
       - "3001:3001"
     volumes:
@@ -82,15 +84,15 @@ services:
     environment:
       # Docker 内では db コンテナ名で解決する（.env.local の localhost 指定を上書き）
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/decision_loop"
-      # Docker network 上で fake-auth コンテナの JWKS を取得するため、
-      # service 名で解決する。token の iss クレーム（fake-auth 側 ISSUER）と
-      # 完全一致している必要があるため、両者を同一値で揃える。
-      OIDC_ISSUER_URL: "http://fake-auth:3007"
+      # OIDC_ISSUER_URL は .env.docker（fake-auth デフォルト）または
+      # .env.local（Entra 等に上書き）で設定する
       # ai サービスと同じ値。servicebus は Docker ネットワーク上のサービス名
       AZURE_SERVICE_BUS_CONNECTION_STRING: "Endpoint=sb://servicebus;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
       AZURE_SERVICE_BUS_QUEUE_NAME: "decision-loop"
     env_file:
-      - path: .env.local
+      - path: .env.docker   # fake-auth デフォルト（コミット済み）
+        required: false
+      - path: .env.local    # ユーザー上書き（Entra 等・gitignore）
         required: false
     # db 起動タイミング依存の接続失敗に備えたフォールバック
     restart: on-failure
@@ -104,6 +106,7 @@ services:
     build:
       context: .
       dockerfile: services/ai/Dockerfile
+      target: dev
     ports:
       - "8001:8001"
     volumes:

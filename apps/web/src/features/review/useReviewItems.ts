@@ -212,7 +212,7 @@ export function useReviewItems({
           id: string;
           name: string;
           displayName: string;
-          email: string;
+          email: string | null;
         }[];
         dueDate: string | null;
         version: number;

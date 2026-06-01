@@ -1,8 +1,10 @@
 import { zValidator } from "@hono/zod-validator";
+import { Prisma } from "@prisma/client";
 import { Hono } from "hono";
 import { z } from "zod";
-import { prisma } from "../lib/prisma.js";
+import { normalizeEmail } from "../lib/email.js";
 import { auth, type AuthVariables } from "../middleware/auth.js";
+import { prisma } from "../lib/prisma.js";
 
 // 表示用に公開するプロフィールのフィールド。秘匿情報 (externalId 等) は含めない。
 const profileSelect = {
@@ -24,6 +26,8 @@ const updateProfileSchema = z.object({
 // 招待は自分宛 (= user.email と一致) の pending かつ非期限切れのもののみ返す。
 // 期限切れの自動 status 遷移はバッチジョブ前提のため、ここでは status=pending の
 // うち expiresAt > now でフィルタする（DB 側の status は変えない）。
+// email が null のユーザー（Entra で email クレームが返らなかった場合）は
+// 招待照合の前提となるメールが存在しないため、空配列を返す。
 export const meRoute = new Hono<{ Variables: AuthVariables }>()
   .use("*", auth)
   .get("/", async (c) => {
@@ -50,6 +54,9 @@ export const meRoute = new Hono<{ Variables: AuthVariables }>()
   })
   .get("/invitations", async (c) => {
     const user = c.var.user;
+    if (!user.email) {
+      return c.json([]);
+    }
     const invitations = await prisma.organizationInvitation.findMany({
       where: {
         email: user.email,
@@ -76,4 +83,30 @@ export const meRoute = new Hono<{ Variables: AuthVariables }>()
       inviter: inv.inviter,
     }));
     return c.json(result);
-  });
+  })
+  .patch(
+    "/",
+    zValidator("json", z.object({ email: z.string().email() })),
+    async (c) => {
+      const { email } = c.req.valid("json");
+      const user = c.var.user;
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { email: normalizeEmail(email) },
+        });
+      } catch (e) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === "P2002"
+        ) {
+          return c.json(
+            { error: "このメールアドレスは既に使用されています" },
+            409,
+          );
+        }
+        throw e;
+      }
+      return c.json({ success: true });
+    },
+  );

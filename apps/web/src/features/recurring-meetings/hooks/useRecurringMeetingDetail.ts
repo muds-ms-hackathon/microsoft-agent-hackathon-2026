@@ -9,7 +9,7 @@ export type RecurringMeetingDetail = RecurringMeeting & {
     userId: string;
     name: string;
     displayName: string;
-    email: string;
+    email: string | null;
     role: "owner" | "member";
     joinedAt: string;
   }>;

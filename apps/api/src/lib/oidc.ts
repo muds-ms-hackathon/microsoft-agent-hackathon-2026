@@ -14,22 +14,54 @@ export function getAudience(): string {
   return requireEnv("OIDC_AUDIENCE", DEFAULT_AUDIENCE);
 }
 
+// 後方互換 / フォールバック用: issuer から推測した JWKS URL を返す（同期）。
+// fake-auth のように /.well-known/jwks.json が標準パスのプロバイダで使用する。
 export function getJwksUrl(): URL {
-  // issuer の末尾スラッシュ有無に依存しないよう、URL 結合は固定パスで実施する
   const issuer = getIssuerUrl().replace(/\/+$/, "");
   return new URL(`${issuer}/.well-known/jwks.json`);
 }
 
-let jwksCache: ReturnType<typeof createRemoteJWKSet> | undefined;
+// openid-configuration の jwks_uri を優先的に使用する。
+// プロバイダによって JWKS エンドポイントのパスが異なるため（例: Entra External ID は
+// /discovery/v2.0/keys）、ディスカバリドキュメントから jwks_uri を取得する。
+// ディスカバリ失敗時は getJwksUrl() の推測パスにフォールバックする。
+// Promise としてキャッシュし、複数リクエストで重複フェッチしない。
+let jwksCachePromise:
+  | Promise<ReturnType<typeof createRemoteJWKSet>>
+  | undefined;
 
-export function getJwks(): ReturnType<typeof createRemoteJWKSet> {
-  if (!jwksCache) {
-    jwksCache = createRemoteJWKSet(getJwksUrl());
+export async function getJwks(): Promise<
+  ReturnType<typeof createRemoteJWKSet>
+> {
+  if (!jwksCachePromise) {
+    jwksCachePromise = (async () => {
+      const issuer = getIssuerUrl().replace(/\/+$/, "");
+      const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
+      try {
+        const res = await fetch(discoveryUrl, {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (res.ok) {
+          const config = (await res.json()) as { jwks_uri?: string };
+          if (typeof config.jwks_uri === "string") {
+            return createRemoteJWKSet(new URL(config.jwks_uri));
+          }
+        }
+      } catch {
+        // ネットワーク不達・タイムアウト等のディスカバリ失敗はフォールバックで継続
+      }
+      return createRemoteJWKSet(getJwksUrl());
+    })().catch((e) => {
+      // reject された Promise がキャッシュされると以降のリクエストが永遠に同じ
+      // エラーを受け取り続けるため、失敗時はキャッシュを破棄して再試行可能にする。
+      jwksCachePromise = undefined;
+      throw e;
+    });
   }
-  return jwksCache;
+  return jwksCachePromise;
 }
 
 // テスト・env 切り替え時のキャッシュ破棄用
 export function resetJwksCache(): void {
-  jwksCache = undefined;
+  jwksCachePromise = undefined;
 }
