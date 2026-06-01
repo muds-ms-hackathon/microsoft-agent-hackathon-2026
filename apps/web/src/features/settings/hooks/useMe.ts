@@ -14,7 +14,7 @@ export function useMe() {
   return useQuery({
     queryKey: ["me", "profile"],
     queryFn: async () => {
-      const res = await api.me.$get(authHeaders());
+      const res = await api.me.$get(undefined, authHeaders());
       if (!res.ok) {
         throw new Error(`Failed to fetch profile: ${res.status}`);
       }
