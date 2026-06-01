@@ -9,6 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { RecurringMeeting } from "@/features/organizations/types";
+import { taskQueryKeys } from "@/features/tasks/queryKeys";
 import { api, authHeaders } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -47,6 +48,8 @@ export function DeleteRecurringMeetingDialog({
       queryClient.invalidateQueries({
         queryKey: ["organizations", meeting.organizationId, "meetings"],
       });
+      // 削除した定例に紐づくタスクがダッシュボードに残らないよう全タスクキャッシュを破棄する。
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all });
       setOpen(false);
     },
   });

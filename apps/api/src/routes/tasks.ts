@@ -85,12 +85,14 @@ export const tasksRoute = new Hono<{ Variables: AuthVariables }>()
     const user = c.var.user;
     const filters = c.req.valid("query");
 
-    // 自分が assignee の全組織横断タスクを返す。組織所属確認は不要
-    // （assignees 経由のスコープでユーザー自身に閉じている）。
+    // 自分が assignee のタスクを返す。organizationId が指定された場合はその組織に絞る。
     const tasks = await prisma.task.findMany({
       where: {
         ...buildTaskListWhere(filters),
         assignees: { some: { userId: user.id } },
+        ...(filters.organizationId
+          ? { organizationId: filters.organizationId }
+          : {}),
       },
       orderBy: taskListOrderBy,
       include: taskListInclude,
