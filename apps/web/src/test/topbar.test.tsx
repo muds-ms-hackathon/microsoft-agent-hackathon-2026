@@ -47,11 +47,12 @@ function renderTopbar(name = "田中太郎", email = "tanaka@example.com") {
 }
 
 describe("Topbar", () => {
-  it("アバターに名前の頭文字が表示される", () => {
+  it("アバターに displayName の頭文字が表示される", () => {
+    // useMe が返す displayName（"現在の名前"）の頭文字 "現" が使われる。
     renderTopbar("田中太郎");
     expect(
       screen.getByRole("button", { name: "ユーザーメニュー" }),
-    ).toHaveTextContent("田");
+    ).toHaveTextContent("現");
   });
 
   it("招待一覧へのリンクが /invitations を指して表示される", () => {
@@ -71,17 +72,17 @@ describe("Topbar", () => {
     });
   });
 
-  it("設定ボタンが表示される", () => {
-    renderTopbar();
-    expect(screen.getByRole("button", { name: "設定" })).toBeInTheDocument();
+  it("アバターのドロップダウンに「表示名の変更」が表示される", async () => {
+    const { user } = renderTopbar();
+    await user.click(screen.getByRole("button", { name: "ユーザーメニュー" }));
+    expect(screen.getByText("表示名の変更")).toBeInTheDocument();
   });
 
-  it("設定ボタンを押すと設定ダイアログが開く", async () => {
+  it("「表示名の変更」をクリックすると設定ダイアログが開く", async () => {
     const { user } = renderTopbar();
-    // 初期状態ではダイアログは閉じている。
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "設定" }));
-    // 開くと表示名の入力欄を持つダイアログが現れる。
+    await user.click(screen.getByRole("button", { name: "ユーザーメニュー" }));
+    await user.click(screen.getByText("表示名の変更"));
     const dialog = await screen.findByRole("dialog", { name: "設定" });
     expect(dialog).toBeInTheDocument();
     expect(screen.getByLabelText("表示名")).toBeInTheDocument();
