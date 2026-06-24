@@ -39,7 +39,7 @@ jobs:
       id-token: write  # OIDC トークン取得に必要
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Azure ログイン (OIDC)
         uses: azure/login@v2
@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ci  # build-push と並列実行可能（スキーマさえあれば migrate deploy は実行できる）
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with:
